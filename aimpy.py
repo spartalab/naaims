@@ -1,5 +1,5 @@
 class AIMPy:
-    timestep = -1
-    
+    timeStep = -1
+
     def __init__(self):
-        timestep = 0
+        self.timeStep = 0
