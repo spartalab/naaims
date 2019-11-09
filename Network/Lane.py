@@ -1,7 +1,7 @@
 from Network.Intersection import Intersection
+from Network.AbstractLane import AbstractLane
 
-
-class Lane():
+class Lane(AbstractLane):
     def __init__(self, incomingNode, outgoingNode, length, enteringIntersection=False):
         self.incoming = incomingNode
         self.outgoing = outgoingNode
