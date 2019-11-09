@@ -7,7 +7,7 @@ class Intersection():
         self.outgoingLanes = dict() # maps trajectory to outgoing lane
 
     def enter_vehicle(self, vehicle, lane_in, lane_out):
-        trajectory = self.incomingLanes[(lane_in, lane_out)]
+        trajectory = self.trajectories[(lane_in, lane_out)]
         trajectory.enter_vehicle(vehicle)
 
 
