@@ -1,9 +1,8 @@
-from Network.Intersection import Intersection
 from Network.AbstractLane import AbstractLane
 
 class Lane(AbstractLane):
-    def __init__(self, incomingNode, outgoingNode, length, enteringIntersection=False):
-        super().__init__(incomingNode, outgoingNode, length, enteringIntersection=False)
+    def __init__(self, incomingNode, outgoingNode, length, trajectory, enteringIntersection=False):
+        super().__init__(incomingNode, outgoingNode, length, trajectory, enteringIntersection=False)
     
     def progress_time(self):
         # for each vehicle at completion percentage, see if we can move it forward
