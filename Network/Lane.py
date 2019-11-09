@@ -3,12 +3,8 @@ from Network.AbstractLane import AbstractLane
 
 class Lane(AbstractLane):
     def __init__(self, incomingNode, outgoingNode, length, enteringIntersection=False):
-        self.incoming = incomingNode
-        self.outgoing = outgoingNode
-        self.length = length
-        if enteringIntersection and type(outgoingNode) != Intersection:
-            raise BaseException
-        self.vehicles = dict() # Maps completion percentage to vehicle
+        super().__init__(incomingNode, outgoingNode, length, enteringIntersection=False)
+    
     def progress_time(self):
         # for each vehicle at completion percentage, see if we can move it forward
         # If head vehicle can get a reservation given an approximate arrival time then
