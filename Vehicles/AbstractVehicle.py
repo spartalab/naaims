@@ -2,7 +2,7 @@ class AbstractVehicle():
     def __init__(self):
         pass
 
-    def reservation_width(self) -> float:
+    def reservation_width(self):
         pass
 
     def get_intersection_origin(self):

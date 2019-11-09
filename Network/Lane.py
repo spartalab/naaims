@@ -19,4 +19,5 @@ class Lane():
         else:
             self.vehicles[0] = vehicle
     def exit_vehicle(self):
-        self.outgoing.enter_vehicle(self.vehicles.pop(1), self)
+        vehicle = self.vehicles.pop(1)
+        self.outgoing.enter_vehicle(vehicle, self, vehicle.get_intersection_destination())
