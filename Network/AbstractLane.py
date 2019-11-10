@@ -4,12 +4,7 @@ from Network.Intersection import Intersection
 class AbstractLane:
 
     # Abstract this function
-    def __init__(self, incomingNode, outgoingNode, length, trajectory ,enteringIntersection=False):
-        self.incoming = incomingNode
-        self.outgoing = outgoingNode
-        self.length = length
-        if enteringIntersection and type(outgoingNode) != Intersection:
-            raise BaseException
+    def __init__(self, trajectory ,enteringIntersection=False):
         self.vehicles = dict() # Maps completion percentage to vehicle
         self.trajectory = trajectory
 
