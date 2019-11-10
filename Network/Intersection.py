@@ -7,19 +7,19 @@ class Intersection():
         pass
 
     def add_incoming_lane(self, incoming_lane, intersection_lane):
-    	if incoming_lane not in self.incomingLanes:
-    		self.incomingLanes[incoming_lane] = [intersection_lane]
-    	else:
-    		self.incomingLanes[incoming_lane].append(intersection_lane)
+        if incoming_lane not in self.incomingLanes:
+            self.incomingLanes[incoming_lane] = [intersection_lane]
+        else:
+            self.incomingLanes[incoming_lane].append(intersection_lane)
 
     def add_outgoing_lane(self, outgoing_lane, intersection_lane):
-    	if outgoing_lane not in self.outgoingLanes:
-    		self.outgoingLanes[outgoing_lane] = [intersection_lane]
-    	else:
-    		self.outgoingLanes[outgoing_lane].append(intersection_lane)
+        if outgoing_lane not in self.outgoingLanes:
+            self.outgoingLanes[outgoing_lane] = [intersection_lane]
+        else:
+            self.outgoingLanes[outgoing_lane].append(intersection_lane)
 
     def add_trajectory(self):
-    	pass
+        pass
 
 
 
