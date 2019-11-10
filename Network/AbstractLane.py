@@ -1,6 +1,3 @@
-from Network.Intersection import Intersection
-
-
 class AbstractLane:
 
     # Abstract this function
