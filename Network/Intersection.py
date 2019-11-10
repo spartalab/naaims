@@ -1,7 +1,6 @@
 from Util.BezierTrajectory import BezierTrajectory
 from Network.IntersectionLane import IntersectionLane
 from Network.Lane import Lane
-import pandas as pd
 
 class Intersection():
     def __init__(self, manager="FCFS"):
@@ -45,8 +44,8 @@ class Intersection():
             traj = BezierTrajectory(tail_traj.p2[0], tail_traj.p2[1], row['MID_X'], row['MID_Y'], head_traj.p0[0], head_traj.p0[1])
             intersection_lane = IntersectionLane(traj)
 
-            self.intersection.add_incoming_lane(incoming_lanes[row['TAIL_ID']], intersection_lane)
-            self.intersection.add_outgoing_lane(outgoing_lanes[row['HEAD_ID']], intersection_lane)
+            self.add_incoming_lane(incoming_lanes[row['TAIL_ID']], intersection_lane)
+            self.add_outgoing_lane(outgoing_lanes[row['HEAD_ID']], intersection_lane)
 
 
 
