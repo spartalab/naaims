@@ -5,6 +5,7 @@ from Network.Lane import Lane
 
 
 import pandas as pd
+from Network.Intersection import Intersection
 
 
 class ArcAim:
@@ -27,6 +28,10 @@ class ArcAim:
                 outgoing_lanes[row['ID']] = Lane(traj)
             else:
                 print("Unexpected lane type in build_intersection.")
+        self.intersection = Intersection.Intersection()
+        self.intersection.build_intersection(intersection_traj_file, lanes_file)
+
+
 
         for index, row in self.intersection_traj_df.iterrows():
             tail_traj = incoming_lanes[row['TAIL_ID']].trajectory
@@ -36,6 +41,7 @@ class ArcAim:
 
             self.intersection.add_incoming_lane(incoming_lanes[row['TAIL_ID']], intersection_lane)
             self.intersection.add_outgoing_lane(outgoing_lanes[row['HEAD_ID']], intersection_lane)
+
 
 
 

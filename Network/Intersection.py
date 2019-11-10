@@ -1,3 +1,8 @@
+from Util.BezierTrajectory import BezierTrajectory
+from Network.IntersectionLane import IntersectionLane
+from Network.Lane import Lane
+import pandas as pd
+
 class Intersection():
     def __init__(self, manager="FCFS"):
         self.incomingLanes = dict() # incoming lane to list of intersection lane
@@ -20,6 +25,28 @@ class Intersection():
 
     def add_trajectory(self):
         pass
+
+    def build_intersection(self, intersection_traj_df, lanes_df):
+        incoming_lanes = {}
+        outgoing_lanes = {}
+
+        for index, row in lanes_df.iterrows():
+            traj = BezierTrajectory(row['TAIL_X'], row['TAIL_Y'], row['MID_X'], row['MID_Y'], row['HEAD_X'], row['HEAD_Y'])
+            if row['IO'] == 'I':
+                incoming_lanes[row['ID']] = Lane(traj)
+            elif row['IO'] == 'O':
+                outgoing_lanes[row['ID']] = Lane(traj)
+            else:
+                print("Unexpected lane type in build_intersection.")
+
+        for index, row in intersection_traj_df.iterrows():
+            tail_traj = incoming_lanes[row['TAIL_ID']].trajectory
+            head_traj = outgoing_lanes[row['HEAD_ID']].trajectory
+            traj = BezierTrajectory(tail_traj.p2[0], tail_traj.p2[1], row['MID_X'], row['MID_Y'], head_traj.p0[0], head_traj.p0[1])
+            intersection_lane = IntersectionLane(traj)
+
+            self.intersection.add_incoming_lane(incoming_lanes[row['TAIL_ID']], intersection_lane)
+            self.intersection.add_outgoing_lane(outgoing_lanes[row['HEAD_ID']], intersection_lane)
 
 
 
