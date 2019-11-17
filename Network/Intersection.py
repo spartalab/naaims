@@ -3,7 +3,11 @@ from Network.IntersectionLane import IntersectionLane
 from Network.Lane import Lane
 
 class Intersection():
-    def __init__(self, manager="FCFS"):
+
+    def __init__(self, 
+        manager="FCFS", # what priority policy does this intersection use?
+        v_max=70 # speed limit, in m/s
+        ):
         self.incomingLanes = dict() # incoming lane to list of intersection lane
         self.outgoingLanes = dict() # maps intersection lane to outgoing lane
 
@@ -29,7 +33,7 @@ class Intersection():
         incoming_lanes = {}
         outgoing_lanes = {}
 
-        for index, row in lanes_df.iterrows():
+        for _, row in lanes_df.iterrows():
             traj = BezierTrajectory(row['TAIL_X'], row['TAIL_Y'], row['MID_X'], row['MID_Y'], row['HEAD_X'], row['HEAD_Y'])
             if row['IO'] == 'I':
                 incoming_lanes[row['ID']] = Lane(traj)
@@ -38,7 +42,7 @@ class Intersection():
             else:
                 print("Unexpected lane type in build_intersection.")
 
-        for index, row in intersection_traj_df.iterrows():
+        for _, row in intersection_traj_df.iterrows():
             tail_traj = incoming_lanes[row['TAIL_ID']].trajectory
             head_traj = outgoing_lanes[row['HEAD_ID']].trajectory
             traj = BezierTrajectory(tail_traj.p2[0], tail_traj.p2[1], row['MID_X'], row['MID_Y'], head_traj.p0[0], head_traj.p0[1])
