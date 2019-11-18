@@ -1,9 +1,5 @@
 class AbstractVehicle():
 
-    # initialize some vehicle properties not in the constructor
-    a = 0 # zero m/s^2
-    p = 0 # progress
-
     def __init__(self,
         origin_lane, # lane in which this vehicle originates
         destination_lane, # lane that this vehicle wants to exit from
@@ -24,6 +20,10 @@ class AbstractVehicle():
         self.l = l
         self.w = w
         self.v = v
+
+        self.a = 0 # zero m/s^2
+        self.p = 0 # progress
+        self.enter_intersection = False
 
     def reservation_width(self):
         pass
