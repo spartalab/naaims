@@ -1,15 +1,19 @@
+from Network.ConflictRegion import ConflictRegion
 from Util.BezierTrajectory import BezierTrajectory
 from Network.IntersectionLane import IntersectionLane
 from Network.Lane import Lane
+import itertools
 
 class Intersection():
 
-    def __init__(self, 
+    def __init__(self,
         manager="FCFS", # what priority policy does this intersection use?
         v_max=70 # speed limit, in m/s
         ):
         self.incomingLanes = dict() # incoming lane to list of intersection lane
         self.outgoingLanes = dict() # maps intersection lane to outgoing lane
+        self.intersection_lanes = set()
+        self.conflicts = set()
 
     def enter_vehicle(self, vehicle, lane_in, lane_out):
         pass
@@ -46,9 +50,15 @@ class Intersection():
             #TODO: determine the proper length of the lane
             intersection_lane = IntersectionLane(traj, 0)
 
+            self.intersection_lanes.add(intersection_lane)
             self.add_incoming_lane(incoming_lanes[row['TAIL_ID']], intersection_lane)
             self.add_outgoing_lane(outgoing_lanes[row['HEAD_ID']], intersection_lane)
+        # self.find_conflicts()
 
-
-
-
+    def find_conflicts(self):
+        for l1, l2 in itertools.combinations(self.intersection_lanes, 2):
+            t1, t2, point = l1.trajectory.get_intersection_point(l2.trajectory)
+            if point == None:
+                continue
+            angle = l1.trajectory.get_intersection_angle(l2.trajectory, t1, t2)
+            self.conflicts.add(ConflictRegion(point, angle, l1, l2, t1,t2))
