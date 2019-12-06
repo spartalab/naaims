@@ -61,4 +61,4 @@ class Intersection():
             if point == None:
                 continue
             angle = l1.trajectory.get_intersection_angle(l2.trajectory, t1, t2)
-            self.conflicts.add(ConflictRegion(point, angle, l1, l2, t1,t2))
+            self.conflicts.add(ConflictRegion(l1, l2, point, angle, t1,t2))

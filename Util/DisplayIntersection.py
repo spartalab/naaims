@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from Network.Intersection import Intersection
 
 
-def display(intersection: Intersection):
+def display(intersection: Intersection, plot_lim=20, figname=None):
     lanes = list(intersection.incomingLanes.keys())
     for ls in intersection.outgoingLanes.values():
         for l in ls:
@@ -11,9 +11,9 @@ def display(intersection: Intersection):
     print(lanes)
     plt.figure(figsize=(15, 16))
     ax = plt.gca()
+    plt.xlim(-plot_lim, plot_lim)
+    plt.ylim(-plot_lim, plot_lim)
     for i, r in enumerate(lanes):
-        plt.xlim(-70, 70)
-        plt.ylim(-60, 70)
         if r not in intersection.intersection_lanes:
             plt.arrow(r.trajectory.p0[0], r.trajectory.p0[1], r.trajectory.p2[0] - r.trajectory.p0[0], r.trajectory.p2[1] - r.trajectory.p0[1], head_width=1,
                   overhang=.5)
@@ -31,4 +31,6 @@ def display(intersection: Intersection):
     x = [cp.point[0] for cp in intersection.conflicts]
     y = [cp.point[1] for cp in intersection.conflicts]
     ax.scatter(x,y)
+    if figname:
+        plt.savefig(figname)
     plt.show()
