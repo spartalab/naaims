@@ -6,3 +6,4 @@ out/
 *.pyc
 *.DS_Store
 *.png
+**/.mypy_cache/*
