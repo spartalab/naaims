@@ -44,10 +44,12 @@ class VehicleTransfer:
 
 
 class CollisionError(Exception):
+    """Raised when vehicles collide."""
     pass
 
 
-class DownstreamError(Exception):
+class LinkError(Exception):
+    """Raised when a road doesn't find an upstream or downstream object."""
     pass
 
 

@@ -8,26 +8,69 @@ The `trajectories` module implements several different ways of doing so.
 """
 
 from collections import deque
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from math import acos, sqrt
-from typing import TYPE_CHECKING, Tuple, Optional
+from typing import TYPE_CHECKING, Tuple, Optional, Iterable, Dict, Any
+from __future__ import annotations
 
 import bezier
 import numpy as np
 import scipy.optimize
 
+from ..archetypes import Configurable
 from ..util import Coord
 from ..vehicles import Vehicle
 
 
-class Trajectory:
+class Trajectory(Configurable):
 
-    def __init__(self, length: float,
+    def __init__(self,
                  start_coord: Coord,
-                 end_coord: Coord) -> None:
-        self.length = length
+                 end_coord: Coord,
+                 reference_coords: Iterable[Coord],
+                 traversibility_factors: Iterable[float] = []) -> None:
+        """Create a new trajectory.
+
+        Parameters
+            start_coord: Coord
+            end_coord: Coord
+            reference_coords: Iterable[Coord]
+                A series of n coords that can be used for reference for any
+                trajectory type. Preferred length depends on trajectory type.
+            traversibility_factor: Iterable[float]
+                A series of floats between 0 and 1 that denote how difficult
+                it is to traverse this trajectory. 1 is default. Perhaps
+                singleton or (n-1).
+        """
         self.start_coord = start_coord
         self.end_coord = end_coord
+        self.reference_coords = reference_coords
+        self.traversibility_factors = traversibility_factors
+
+    @staticmethod
+    def spec_from_str(spec_str: str) -> Dict[str, Any]:
+        """Reads a spec string into a trajectory spec dict."""
+
+        spec: Dict[str, Any] = {}
+
+        # TODO: interpret the string into the spec dict
+        raise NotImplementedError("TODO")
+
+        return spec
+
+    @classmethod
+    def from_spec(cls, spec: Dict[str, Any]) -> Trajectory:
+        """Create a new Trajectory from the output of spec_from_str.
+
+        Trajectories are static so they don't need post-processing between
+        spec_from_str and this function, unlike other Configurables.
+        """
+        return cls(
+            start_coord=spec['start_coord'],
+            end_coord=spec['end_coord'],
+            reference_coords=spec['reference_coords'],
+            traversibility_factors=spec['traversibility_factors']
+        )
 
     @abstractmethod
     def get_position(self, proportion: float) -> Coord:
@@ -77,7 +120,7 @@ class Trajectory:
         raise NotImplementedError("TODO")
 
 
-class Bezier(Trajectory):
+class BezierTrajectory(Trajectory):
     def __init__(self, x0, y0, x1, y1, x2, y2):
         super().__init__()
         self.p0 = (x0, y0)

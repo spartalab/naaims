@@ -6,7 +6,11 @@ Lane changes are modeled as a single vehicle occupying two parallel links
 simultaneously.
 '''
 
-from abc import ABC
+from abc import abstractmethod
+from typing import Iterable, Dict, Any, TypeVar, Type
+
+from ..archetypes import Configurable
+from ..lanes import RoadLane
 
 # [Implementation notes]
 # Helper function progresses vehicles normally along a path, either per vehicle or for all
@@ -23,10 +27,51 @@ from abc import ABC
 
 # Lcmanager is given self.lanes by road
 
+M = TypeVar('M', bound='LaneChangeManager')
 
-class LaneChangeManager(ABC):
-    raise NotImplementedError("TODO")
+
+class LaneChangeManager(Configurable):
+
+    @abstractmethod
+    def __init__(self,
+                 lanes: Iterable[RoadLane]
+                 ):
+        self.lanes = lanes
+        raise NotImplementedError("TODO")
+
+    @classmethod
+    def spec_from_str(cls, spec_str: str) -> Dict[str, Any]:
+        """Reads a spec string into a manager spec dict."""
+
+        spec: Dict[str, Any] = {}
+
+        # TODO: interpret the string into the spec dict.
+        raise NotImplementedError("TODO")
+
+        # TODO: consider if children need to do any additional processing
+        #       of the inputs, if there are any custom inputs? maybe this could
+        #       be solved by calling an abstract class function, or we simply
+        #       enforce that no every manager type has exactly the same input
+        #       arguments
+
+        return spec
+
+    @classmethod
+    def from_spec(cls: Type[M], spec: Dict[str, Any]) -> M:
+        """Should interpret a spec dict to call the manager's init."""
+        return cls(
+            lanes=spec['lanes']
+        )
 
 
 class DummyManager(LaneChangeManager):
-    raise NotImplementedError("TODO")
+
+    def __init__(self,
+                 lanes: Iterable[RoadLane]
+                 ):
+        """Create a LaneChangeManager that doesn't allow lane changes.
+
+        Used roads that leave from a spawner or end at a remover.
+        (All roads in one intersection simulations.)
+        """
+        pass

@@ -1,6 +1,12 @@
 """
 Archetypes are abstract classes (interfaces) that road objects implement in
 order to ensure consistent communication between each other.
+
+These archetypes enforce the main simulation loop:
+    1. update_speeds (Facilities)
+    2. step (Upstreams)
+    3. process_transfers (Downstreams)
+    4. handle_logic (Facilities)
 """
 
 from abc import ABC, abstractmethod
@@ -15,8 +21,18 @@ class Configurable(ABC):
 
     @staticmethod
     @abstractmethod
-    def create_from_spec(self, spec) -> Configurable:
-        """Should create an instance of itself from a (portion of a) file."""
+    def spec_from_str(spec_str: str) -> Dict[str, Any]:
+        """Should interpret a string representation into an usable dict."""
+        raise NotImplementedError("Must be implemented in child class.")
+
+    @classmethod
+    @abstractmethod
+    def from_spec(cls, spec: Dict[str, Any]) -> Configurable:
+        """Should interpret a spec dict to call the Configurable's init.
+
+        NOTE: most Configurables' specs need additional processing between
+              creation in spec_from_str and ingestion here.
+        """
         # TODO: will spec be a filename, JSON, or string?
         raise NotImplementedError("Must be implemented in child classes.")
 
@@ -45,23 +61,6 @@ class Upstream(ABC):
     """
 
     @abstractmethod
-    def __init__(self):
-        """Init a Downstream property."""
-        self.downstream: Optional[Union[
-            Dict[Coord, Downstream], Downstream
-        ]] = None
-
-    @abstractmethod
-    def unconnected_downstreams(self) -> Optional[Iterable[Coord]]:
-        """Should return unconnected downstream coordinates, if any."""
-        raise NotImplementedError("Must be implemented in child class.")
-
-    @abstractmethod
-    def connect_downstreams(self, upstreams: Iterable[Upstream]) -> None:
-        """Finalize connecting downstream object(s)."""
-        raise NotImplementedError("Must be implemented in child class.")
-
-    @abstractmethod
     def step(self) -> Optional[Vehicle]:
         """Should progress all vehicles over one timestep.
 
@@ -81,21 +80,9 @@ class Downstream(ABC):
     def __init__(self) -> None:
         """Init an empty transfer buffer and an upstream property."""
         self.entering_vehicle_buffer: List[VehicleTransfer] = []
-        self.upstream: Optional[Union[
-            Dict[Coord, Downstream], Downstream
-        ]] = None
-
-    @abstractmethod
-    def unconnected_upstreams(self) -> Optional[Iterable[Coord]]:
-        """Should return unconnected upstream coordinates, if any."""
-        raise NotImplementedError("Must be implemented in child class.")
-
-    @abstractmethod
-    def connect_upstreams(self, upstreams: Iterable[Downstream]) -> None:
-        """Finalize connecting upstream object(s)."""
-        raise NotImplementedError("Must be implemented in child class.")
 
     def transfer_vehicle(self, transfer: VehicleTransfer) -> None:
+        """Called by Upstream objects to transfer a vehicle to this object."""
         self.entering_vehicle_buffer.append(transfer)
 
     @abstractmethod

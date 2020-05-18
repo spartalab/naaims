@@ -17,10 +17,12 @@ The tiling handles how the manager checks for upcoming conflicts.
 """
 
 import itertools
-from typing import Iterable, Type, Dict, Union, Set
+from typing import Iterable, Type, Dict, Union, Set, Any
+from __future__ import annotations
 
 from pandas import DataFrame
 
+import aimsim.settings as SETTINGS
 from ..archetypes import Configurable, Facility, Upstream, Downstream
 from ..util import Coord, VehicleTransfer
 from ..trajectories import Trajectory, Bezier
@@ -28,102 +30,137 @@ from ..lanes import IntersectionLane
 from ..roads import Road
 from ..endpoints import VehicleRemover
 from .managers import IntersectionManager, FCFSManager
-from .tilings import Tiling, ArcTiling
 
 
 class Intersection(Configurable, Facility, Upstream, Downstream):
 
     def __init__(self,
-                 intersection_traj_df: DataFrame,
-                 lanes_df: DataFrame,
-                 trajectory: Type[Trajectory] = Bezier,
-                 manager: Type[IntersectionManager] = FCFSManager,
-                 tiling: Type[Tiling] = ArcTiling,
-                 v_max: int = 70  # speed limit, in m/s
+                 upstream_roads: Iterable[Road],
+                 downstream_roads: Iterable[Road],
+                 connectivity: Iterable[Iterable],
+                 manager_type: IntersectionManager,
+                 manager_spec: Dict[str, Any],
+                 v_max: int = SETTINGS.speed_limit
                  ) -> None:
         """Create a new intersection.
 
-        Keyword arguments:
-        TODO
+        Keyword arguments
+            connectivity: Iterable[Iterable] # TODO: finalize structure
+                Describes which lanes connect to each other.
+            manager_spec: Dict[str, Any]
+                Specifications to create the manager with.
+            v_max: int = SETTINGS.speed_limit
+                The speed limit.
         """
 
-        # TODO: roads are set up as a trajectory with offsets for lanes, but
-        #       intersections need lanes to be given explicitly. how to handle?
+        # Index the upstream and downstream roads by their lanes' Coords
+        self.road_by_coord: Dict[Coord, Road] = {}
+        self.upstream_road_by_coord: Dict[Coord, Road] = {}
+        self.downstream_road_by_coord: Dict[Coord, Road] = {}
+        for r in upstream_roads:
+            for coord in r.lanes_by_end:
+                self.road_by_coord[coord] = r
+                self.upstream_road_by_coord[coord] = r
+        for r in downstream_roads:
+            for coord in r.lanes_by_start:
+                self.road_by_coord[coord] = r
+                self.downstream_road_by_coord[coord] = r
 
-        # given init, build all intersection lanes
-        # self.lanes : Iterable[IntersectionLane] = {some logic}
+        # Given the upstream and downstream roads and connectivity matrix,
+        # connect the road endpoints together by creating new lanes, curving
+        # if necessary based on the difference in heading between the endpoints
+        # self.lanes = blah
         raise NotImplementedError("TODO")
 
-        # collect IntersectionLane start coords into a set for stitching later
-        self.upstream_road_coords: Set[Coord] = {
-            l.start_coord for l in self.lanes
-        }
+        # Index the IntersectionLanes by their Coord
+        self.lane_coords: Set[Coord] = {**{
+            l.start_coord: l for l in self.lanes
+        }, **{
+            l.end_coord: l for l in self.lanes
+        }}
 
-        # do the same for the downstream coords
-        self.downstream_road_coords: Set[Coord] = {
-            l.end_coord for l in self.lanes
-        }
+        # Finish the spec for the manager by providing the roads and lanes
+        manager_spec['upstream_road_by_coord'] = self.upstream_road_by_coord
+        manager_spec['downstream_road_by_coord'
+                     ] = self.downstream_road_by_coord
+        manager_spec['lanes'] = self.lanes  # TODO: should this be lane_coords?
 
-        # initialize set of outgoing roads
-        self.upstream: Dict[Coord, Road] = {}
-        self.downstream: Dict[Coord, Road] = {}
-
-        # pass the entire setup to the Tiling since it needs to set up with it
-        self.tiling = tiling(self.lanes)
-
-        # (wait on initializing the manager until we have the incoming roads)
-        self.manager_type = manager
+        # Create the manager
+        self.manager = manager_type.from_spec(manager_spec)
 
         # TODO: old code. rewrite or replace.
-        for _, row in lanes_df.iterrows():
-            traj = trajectory(
-                row['TAIL_X'],
-                row['TAIL_Y'],
-                row['MID_X'],
-                row['MID_Y'],
-                row['HEAD_X'],
-                row['HEAD_Y'])
-            if row['IO'] == 'I':
-                incoming_lanes[row['ID']] = RoadLane(traj, 0)
-            elif row['IO'] == 'O':
-                outgoing_lanes[row['ID']] = RoadLane(traj, 0)
-            else:
-                raise ValueError("Unexpected lane type.")
+        # for _, row in lanes_df.iterrows():
+        #     traj = trajectory(
+        #         row['TAIL_X'],
+        #         row['TAIL_Y'],
+        #         row['MID_X'],
+        #         row['MID_Y'],
+        #         row['HEAD_X'],
+        #         row['HEAD_Y'])
+        #     if row['IO'] == 'I':
+        #         incoming_lanes[row['ID']] = RoadLane(traj, 0)
+        #     elif row['IO'] == 'O':
+        #         outgoing_lanes[row['ID']] = RoadLane(traj, 0)
+        #     else:
+        #         raise ValueError("Unexpected lane type.")
 
-        for _, row in intersection_traj_df.iterrows():
-            tail_traj = incoming_lanes[row['TAIL_ID']].trajectory
-            head_traj = outgoing_lanes[row['HEAD_ID']].trajectory
-            traj = Bezier(
-                tail_traj.p2[0],
-                tail_traj.p2[1],
-                row['MID_X'],
-                row['MID_Y'],
-                head_traj.p0[0],
-                head_traj.p0[1])
-            # TODO: determine the proper length of the lane
-            intersection_lane = IntersectionLane(traj, 0)
+        # for _, row in intersection_traj_df.iterrows():
+        #     tail_traj = incoming_lanes[row['TAIL_ID']].trajectory
+        #     head_traj = outgoing_lanes[row['HEAD_ID']].trajectory
+        #     traj = Bezier(
+        #         tail_traj.p2[0],
+        #         tail_traj.p2[1],
+        #         row['MID_X'],
+        #         row['MID_Y'],
+        #         head_traj.p0[0],
+        #         head_traj.p0[1])
+        #     # TODO: determine the proper length of the lane
+        #     intersection_lane = IntersectionLane(traj, 0)
 
-            self.intersection_lanes.add(intersection_lane)
-            self.add_incoming_lane(
-                incoming_lanes[row['TAIL_ID']], intersection_lane)
-            self.add_outgoing_lane(
-                outgoing_lanes[row['HEAD_ID']], intersection_lane)
+        #     self.intersection_lanes.add(intersection_lane)
+        #     self.add_incoming_lane(
+        #         incoming_lanes[row['TAIL_ID']], intersection_lane)
+        #     self.add_outgoing_lane(
+        #         outgoing_lanes[row['HEAD_ID']], intersection_lane)
 
-    def finish_setup(self, incoming_roads: Iterable[Road],
-                     outgoing_roads: Iterable[Road]) -> None:
-        """Given the """
-        # TODO: how will setup finish with the intersection? once all the Road
-        #       objects are finalized, we need to tie them to the coords and
-        #       then pass them to the manager.
+    @staticmethod
+    def spec_from_str(spec_str: str) -> Dict[str, Any]:
+        """Reads a spec string into a intersection spec dict."""
 
-        # tie incoming and outgoing roads to this object by coords
-        # for road in
-        # self.upstream[] =
-        # self.downstream[] =
+        spec: Dict[str, Any] = {}
 
-        # finish by instantiating the manager
-        self.manager = self.manager_type(tiling=self.tiling,
-                                         incoming_roads=incoming_roads)
+        # TODO: interpret the string into the spec dict
+        raise NotImplementedError("TODO")
+
+        # TODO: enforce provision of separate manager_type and manager_config
+        #       fields in intersection spec string
+
+        # Based on the spec, identify the correct manager type
+        if manager_type.lower() in {'fcfs', 'fcfsmanager'}:
+            spec['manager_type'] = FCFSManager
+        else:
+            raise ValueError("Unsupported IntersectionManager type.")
+
+        return spec
+
+    @classmethod
+    def from_spec(cls, spec: Dict[str, Any]) -> Intersection:
+        """Create a new Intersection from a processed spec.
+
+        Note that what spec_from_str returns needs additional processing before
+        it can be handled by this method.
+        """
+        # TODO: make sure that road objects are provided
+        return cls(
+            upstream_roads=spec['upstream_roads'],
+            downstream_roads=spec['downstream_roads'],
+            connectivity=spec['connectivity'],
+            manager_type=spec['manager_type'],
+            manager_spec=spec['manager_spec'],
+            v_max=spec['v_max']
+        )
+
+    # Begin simulation cycle methods
 
     def step(self) -> None:
         """Progress vehicles currently in intersection."""
@@ -177,11 +214,11 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         # reservations to reflect resolved stochasticities (probably a TODO
         # future feature, this will likely only be used by a stochastic
         # manager)
-        self.tiling.update_active_reservations()
+        self.manager.update_active_reservations()
 
         # Have tiling peel off the layer of reservations that correspond to
         # this passing timestep (i.e., zero the tiling at this step)
-        self.tiling.step()
+        self.manager.step()
 
         # have manager look for new requests and at those in the queue to see
         # which ones to accept

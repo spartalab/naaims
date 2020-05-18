@@ -4,21 +4,21 @@ vehicle and uses the lane `LeavingInterface` to send the vehicle onto a lane
 in the network.
 """
 
-from typing import TYPE_CHECKING, Dict, Optional, Iterable
+from typing import TYPE_CHECKING, Dict, Optional, Iterable, Any
 from __future__ import annotations
 
 import aimsim.settings as SETTINGS
-from ..archetypes import Upstream
-from ..util import VehicleTransfer, DownstreamError, Coord
+from ..archetypes import Configurable, Upstream
+from ..util import VehicleTransfer, LinkError, Coord
 from ..vehicles import Vehicle
 from ..roads import Road
 
 
-class VehicleSpawner(Upstream):
+class VehicleSpawner(Configurable, Upstream):
 
     def __init__(self,
-                 rates: Dict[Vehicle, float],
-                 lane_coords: Iterable[Coord]
+                 downstream: Road,
+                 rates: Dict[Vehicle, float]
                  ):
         """Create a new vehicle spawner.
 
@@ -30,6 +30,7 @@ class VehicleSpawner(Upstream):
             if rate < 0:
                 raise ValueError('Negative spawning rate encountered.')
 
+        self.downstream = downstream
         self.rates = rates
 
         # TODO: finish implementation. How to attach lanes? How to make the
@@ -37,13 +38,36 @@ class VehicleSpawner(Upstream):
 
         raise NotImplementedError("TODO")
 
+    @staticmethod
+    def spec_from_str(spec_str: str) -> Dict[str, Any]:
+        """Reads a spec string into a remover spec dict."""
+
+        spec: Dict[str, Any] = {}
+
+        # TODO: interpret the string into the spec dict
+        raise NotImplementedError("TODO")
+
+        return spec
+
+    @classmethod
+    def from_spec(cls, spec: Dict[str, Any]) -> VehicleSpawner:
+        """Create a new VehicleSpawner from the given spec.
+
+        The output of spec_from_str needs to get the actual downstream Road
+        after it's created.
+        """
+        return cls(
+            downstream=spec['downstream'],
+            rates=spec['rates']
+        )
+
     def step(self) -> Optional[Vehicle]:
         """Decides if to spawn a vehicle. If so, processes and returns it."""
 
         if self.downstream is None:
-            raise DownstreamError("No downstream object.")
+            raise LinkError("No downstream object.")
         elif self.downstream is not Road:
-            raise DownstreamError("Downstream object is not RoadLane.")
+            raise LinkError("Downstream object is not RoadLane.")
 
         # roll a number and compare it to rates to see if and which vehicle(s?)
         # should be spawned in this timestep.

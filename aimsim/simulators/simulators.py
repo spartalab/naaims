@@ -4,7 +4,7 @@ including visualizations if enabled.
 """
 
 from abc import ABC, abstractmethod
-from typing import Iterable, Tuple, Dict, Optional, Set
+from typing import Iterable, Tuple, Dict, Optional, Set, Any
 from __future__ import annotations
 
 from pandas import DataFrame
@@ -36,10 +36,10 @@ class Simulator(ABC):
 
     @abstractmethod
     def __init__(self,
-                 intersections: Iterable[Intersection],
-                 roads: Iterable[Road],
-                 vehicle_spawners: Iterable[VehicleSpawner],
-                 vehicle_removers: Iterable[VehicleRemover],
+                 road_strs: Iterable[str],
+                 intersection_strs: Iterable[str],
+                 spawner_strs: Iterable[str],
+                 remover_strs: Iterable[str],
                  config_filename: str = './config.ini',
                  display: bool = False) -> None:
         """Should create all roads, intersections, and suppport structures.
@@ -48,69 +48,187 @@ class Simulator(ABC):
         initialize data structures for lookup, calls, and visualization.
         """
 
-        # First, read in the config file.
+        # 1. Read in the config file.
         SETTINGS.read(config_filename)
 
-        # Next, save every collection of first level objects. That is,
-        # intersections, roads, vehicle_spawners, and vehicle_removers.
-        self.intersections: Iterable[Intersection] = intersections
-        self.roads: Iterable[Road] = roads
-        self.vehicle_spawners: Iterable[VehicleSpawner] = vehicle_spawners
-        self.vehicle_removers: Iterable[VehicleRemover] = vehicle_removers
-        # TODO note: road entrance region length should be determined by (but
-        #            likely won't be for sake of convenience) the vehicle with
-        #            the longest length+(speed_limit)**2/(2*braking)
+        # 2. Process the specs for every Upstream and Downstream object
+        road_specs: Iterable[Dict[str, Any]] = [
+            Road.spec_from_str(r) for r in road_strs]
+        intersection_specs: Iterable[Dict[str, Any]] = [
+            Intersection.spec_from_str(i) for i in intersection_strs]
+        spawner_specs: Iterable[Dict[str, Any]] = [
+            VehicleSpawner.spec_from_str(s) for s in spawner_strs]
+        remover_specs: Iterable[Dict[str, Any]] = [
+            VehicleRemover.spec_from_str(r) for r in remover_strs]
 
-        # Initialize an empty list of vehicles
+        # 3. Create the Upstream and Downstream objects
+        #   a. Create the roads and organize by intersection and road to be
+        #      created.
+        self.roads: Dict[int, Road] = {}
+        for_intersection_upstream: Dict[int, Set[int]] = {}
+        for_intersection_downstream: Dict[int, Set[int]] = {}
+        for_spawner: Dict[int, int] = {}
+        for_remover: Dict[int, int] = {}
+        for spec in road_specs:
+            self.roads[spec['id']] = Road.from_spec(spec)
+            # TODO: finish this pseudocode, figure out how info is stored
+            #       and if spec['upstream/downstream'] needs processing
+            # if spec['upstream'] is an intersection:
+            #     for_intersection_upstream.setdefault([spec['upstream'], []
+            #       ]) = self.roads[spec['id']]
+            # else: upstream better be a spawner, throw if not
+            #       TODO: also throw if it has a spawner that already exists
+            # if spec['downstream'] is an intersection:
+            #     for_intersection_downstreamsetdefault([spec['downstream'], []
+            #       ]) = self.roads[spec['id']]
+            raise NotImplementedError("TODO")
+
+        #   b. Create intersections, spawners, and removers given the
+        #      roads. Connect the intersection, spawner, and removers to the
+        #      relevant roads.
+        #   TODO: make sure actual spec fields match what's expected here
+        self.intersections: Dict[int, Intersection] = {}
+        for spec in intersection_specs:
+
+            # cache intersection ID
+            iid = spec['id']
+
+            # Check that there are roads that lead to this intersection from
+            # both upstream and downstream
+            if (iid not in for_intersection_upstream
+                    or iid not in for_intersection_downstream):
+                raise ValueError(
+                    f"Spec has intersection {iid} but no road does.")
+
+            # Put the upstream and downstream roads in this spec
+            # TODO: error check that every road the spec expects exists
+            spec['upstream_roads'] = {}
+            for rid in spec['upstream_road_ids']:
+                spec['upstream_roads'][rid] = self.roads[rid]
+            spec['downstream_roads'] = {}
+            for rid in spec['downstream_road_ids']:
+                spec['downstream_roads'][rid] = self.roads[rid]
+
+            # Create the intersection
+            self.intersections[iid] = Intersection.from_spec(spec)
+
+            # Attach the intersection to the up and downstream roads
+            while len(for_intersection_downstream[iid]) > 0:
+                rid = for_intersection_downstream[iid].pop()
+                self.roads[rid].connect_downstream(self.intersections[iid])
+            while len(for_intersection_upstream[iid]) > 0:
+                rid = for_intersection_upstream[iid].pop()
+                self.roads[rid].connect_upstream(self.intersections[iid])
+
+            # On the road side, track which intersections we've confirmed exist
+            del for_intersection_upstream[iid]
+            del for_intersection_downstream[iid]
+
+        # Check if every road's intersection has been created
+        if (bool(for_intersection_upstream)
+                or bool(for_intersection_downstream)):
+            raise ValueError(
+                f"Roads have at least one intersection that the spec doesn't.")
+
+        self.spawners: Dict[int, VehicleSpawner] = {}
+        for spec in spawner_specs:
+
+            # Cache spawner ID
+            sid = spec['id']
+
+            # Check that a road leaves this spawner
+            if sid not in for_spawner:
+                raise ValueError(f"Spec has spawner {sid} but no road does.")
+
+            # Check that the road the spawner thinks is connected to agrees
+            # that the spawner is connected to it
+            rid = spec['road_id']
+            try:
+                assert rid == for_spawner[sid]
+            except AssertionError:
+                raise ValueError(f"Spawner {sid} thinks it's connected to road"
+                                 f" {rid} but road {for_spawner[sid]} thinks"
+                                 " it's the one.")
+
+            # Put the road in the spec
+            spec['road'] = self.roads[rid]
+
+            # Create the spawner
+            self.spawners[sid] = VehicleSpawner.from_spec(spec)
+
+            # Attach the spawner to the road
+            self.roads[rid].connect_upstream(self.spawners[sid])
+
+            # On the road side, track that we've created this spawner
+            del for_spawner[rid]
+
+        # Check if every road's spawner (if it has one) has been created
+        if bool(for_spawner):
+            raise ValueError(
+                f"Roads have at least one spawner that the spec doesn't.")
+
+        self.removers: Dict[int, VehicleRemover] = {}
+        for spec in remover_specs:
+
+            # Cache remover ID
+            vid = spec['id']
+
+            # Check that a road enters this remover
+            if vid not in for_remover:
+                raise ValueError(f"Spec has remover {vid} but no road does.")
+
+            # Check that the road the remover thinks is connected to agrees
+            # that the remover is connected to it
+            rid = spec['road_id']
+            try:
+                assert rid == for_remover[vid]
+            except AssertionError:
+                raise ValueError(f"Remover {vid} thinks it's connected to road"
+                                 f" {rid} but road {for_remover[vid]} thinks"
+                                 " it's the one.")
+
+            # Put the road in the spec
+            spec['road'] = self.roads[rid]
+
+            # Create the remover
+            self.removers[vid] = VehicleRemover.from_spec(spec)
+
+            # Attach the remover to the road
+            self.roads[rid].connect_downstream(self.removers[vid])
+
+            # On the road side, track that we've created this remover
+            del for_remover[rid]
+
+        # Check if every road's remover (if it has one) has been created
+        if bool(for_remover):
+            raise ValueError(
+                f"Roads have at least one remover that the spec doesn't.")
+
+        # 4. Group them into common sets so it's neater to loop through
+        self.facilities: Tuple[Dict[int, Facility], ...] = (
+            self.intersections,
+            self.roads
+        )
+        self.upstreams: Tuple[Dict[int, Upstream], ...] = (
+            self.spawners,
+            self.intersections,
+            self.roads
+        )
+        self.downstreams: Tuple[Dict[int, Downstream], ...] = (
+            self.intersections,
+            self.roads,
+            self.removers
+        )
+
+        # 5. Initialize an empty list of vehicles
         # self.vehicles: Dict[int, Vehicle] = {}
         self.vehicles: Set[Vehicle] = set()
 
-        # Group them into common sets so it's quicker to loop through them all
-        self.facilities: Tuple[Iterable[Facility], ...] = (
-            self.intersections,
-            self.roads
-        )
-        self.upstreams: Tuple[Iterable[Upstream], ...] = (
-            self.vehicle_spawners,
-            self.intersections,
-            self.roads
-        )
-        self.downstreams: Tuple[Iterable[Downstream], ...] = (
-            self.intersections,
-            self.roads,
-            self.vehicle_removers
-        )
-
-        # Given these, verify that the intersections and roads are compatible
-        # (i.e., that the endpoints all match), and stitch them together.
-        # TODO: implement this, making sure to create lookup dicts
-        self.upstream_lookup: Dict[Coord, Upstream] = {}
-        self.downstream_lookup: Dict[Coord, Downstream] = {}
-        # for i in self.intersections + self.roads:
-        #     to_merge = i.upstream_connection_coords
-        #     # merge lookup with self.upstream_lookup
-        #     to_merge = i.downstream_connection_coords
-        #     # merge lookup with self.downstream_lookup
-        # for s in self.vehicle_spawners:
-        #     to_merge = s.downstream_connection_coords
-        # for r in self.vehicle_removers:
-        #     to_merge = r.upstream_connection_coords
-
-        # Stitch the roads together
-        for spawner in vehicle_spawners:
-            spawner.finish_setup()
-        for road in roads:
-            road.finish_setup()
-        for intersection in intersections:
-            intersection.finish_setup()
-        for remover in vehicle_removers:
-            vehicle_removers.finish_setup()
-
-        # Finally, if the visualize flag is enabled, draw the basemap image of
-        # roads+intersection and save for later
+        # 6. If the visualize flag is enabled, draw the basemap image of
+        #    roads and intersections for use later.
         if display:
-            # loop through all roads and visualize their length, width, lane
-            # markings, etc. using their trajectory
+            # 6a. loop through all roads and visualize their length, width,
+            #     and lane markings, etc. using their trajectory.
             for road in self.roads:
                 raise NotImplementedError("TODO")
                 # road.display()
@@ -166,13 +284,7 @@ class Simulator(ABC):
             # plt.show()
 
     def step(self) -> None:
-        """Execute one simulation step.
-
-        1. update_speeds (Facilities)
-        2. step (Upstreams)
-        3. process_transfers (Downstreams)
-        4. handle_logic (Facilities)
-        """
+        """Execute one simulation step."""
 
         # TODO: The double for loops in each step are parallelizable. Each pass
         #       can be implemented as a parallel worker. It'd probably be

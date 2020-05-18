@@ -14,30 +14,39 @@ where the entire intersection is divided into tiles that can be reserved
 """
 
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import (Optional, Union, Iterable, Set, Deque, NamedTuple, Dict,
-                    Tuple)
+                    Tuple, Type, TypeVar, Any)
 from collections import deque
 
-from ..archetypes import Upstream
+from ..archetypes import Configurable, Upstream, Downstream
+from ..util import Coord
 from ..lanes import IntersectionLane
 from ..vehicles import Vehicle
+from ..roads import Road
 from .reservations import ReservationRequest, Reservation
 from .tiles import Tile, DeterministicTile
 
+T = TypeVar('T', bound='Tiling')
 
-class Tiling(ABC):
+
+class Tiling(Configurable):
 
     @abstractmethod
-    def __init__(self, lanes: Iterable[IntersectionLane],
+    def __init__(self,
+                 upstream_road_by_coord: Dict[Coord, Road],
+                 downstream_road_by_coord: Dict[Coord, Road],
+                 lanes: Dict[Coord, IntersectionLane],
+                 tile_type: Type[Tile] = Tile,
+                 granularity: Optional[int] = None,
                  cycle: Optional[
-        Iterable[
-            Tuple[
-                Iterable[IntersectionLane], int
-            ]
-        ]
-    ] = None
-    ) -> None:
+                     Iterable[
+                         Tuple[
+                             Iterable[IntersectionLane], int
+                         ]
+                     ]
+                 ] = None
+                 ) -> None:
         """Should instantiate a new Tiling.
 
         Takes the lanes from the Intersection and figures out how to tile them.
@@ -47,9 +56,55 @@ class Tiling(ABC):
         should have their associated tiles marked, for the amount of timesteps
         described by the second item, an int.
         """
-        # TODO: change so it generically takes a dict of misc settings
-        # TODO: figure out types
+        # TODO: figure out cycle typing, and if it should be moved up to
+        #       manager
+
+        self.upstream_road_by_coord = upstream_road_by_coord
+        self.downstream_road_by_coord = downstream_road_by_coord
+        self.lanes = lanes
+        # only save granularity in SquareTiling
+        self.cycle = cycle
+
+        # initiate reservations dict
         self.reservations: Dict[Vehicle, Reservation] = {}
+
+        # Child tilings should call this for initial setup, then continue in
+        # their own init to set up whatever they need to.
+
+    @staticmethod
+    def spec_from_str(spec_str: str) -> Dict[str, Any]:
+        """Reads a spec string into a tiling spec dict."""
+
+        spec: Dict[str, Any] = {}
+
+        # TODO: interpret the string into the spec dict
+        raise NotImplementedError("TODO")
+
+        # TODO: enforce provision of tile_type field in manager spec string
+
+        # Based on the spec, identify the correct tiling type
+        if tile_type.lower() in {'', 'stochastic', 'stochastictile'}:
+            spec['tile_type'] = Tile
+        elif tile_type.lower() in {'deterministic', 'deterministictile'}:
+            spec['tile_type'] = DeterministicTile
+        else:
+            raise ValueError("Unsupported Tile type.")
+
+        return spec
+
+    @classmethod
+    def from_spec(cls: Type[T], spec: Dict[str, Any]) -> T:
+        """Should interpret a spec dict to call the manager's init."""
+        return cls(
+            upstream_road_by_coord=spec['upstream_road_by_coord'],
+            downstream_road_by_coord=spec['downstream_road_by_coord'],
+            lanes=spec['lanes'],
+            tile_type=spec['tile_type'],
+            granularity=spec['granularity'],
+            cycle=spec['cycle']
+        )
+
+    # Begin simulation cycle methods
 
     @abstractmethod
     def reserve_lanes(self, lanes: Iterable[IntersectionLane],
@@ -186,12 +241,32 @@ class ArcTiling(Tiling):
     #       conflict object even if they aren't literally a conflict point,
     #       so we can enforce spacing between vehicles.
 
-    def __init__(self, lanes: Iterable[IntersectionLane]) -> None:
+    def __init__(self,
+                 upstream_road_by_coord: Dict[Coord, Road],
+                 downstream_road_by_coord: Dict[Coord, Road],
+                 lanes: Dict[Coord, IntersectionLane],
+                 tile_type: Type[Tile] = Tile,
+                 granularity: Optional[int] = None,
+                 cycle: Optional[
+                     Iterable[
+                         Tuple[
+                             Iterable[IntersectionLane], int
+                         ]
+                     ]
+                 ] = None
+                 ) -> None:
         # TODO: does arctiling need a buffer argument? anything else?
-        super().__init__(policy=policy)
+        super().__init__(
+            upstream_road_by_coord=upstream_road_by_coord,
+            downstream_road_by_coord=downstream_road_by_coord,
+            lanes=lanes,
+            tile_type=tile_type,
+            granularity=granularity,
+            cycle=cycle
+        )
         raise NotImplementedError("TODO")
 
-        # TODO: old code, fix or replace
+    # TODO: old code, fix or replace
         # # TODO: figure out how to find lane conflicts
         # # find conflicts
         # for l1, l2 in itertools.combinations(self.intersection_lanes, 2):
@@ -201,18 +276,18 @@ class ArcTiling(Tiling):
         #     angle = l1.trajectory.get_intersection_angle(l2.trajectory, t1, t2)
         #     self.conflicts.add(ConflictRegion(l1, l2, point, angle, t1, t2))
 
-    class ConflictRegion:
+    # class ConflictRegion:
 
-        def __init__(self, traj1, traj2, point, angle, t1, t2):
-            self.point = point
-            self.angle = angle
-            self.traj1 = traj1
-            self.traj2 = traj2
-            self.t1 = t1
-            self.t2 = t2
+    #     def __init__(self, traj1, traj2, point, angle, t1, t2):
+    #         self.point = point
+    #         self.angle = angle
+    #         self.traj1 = traj1
+    #         self.traj2 = traj2
+    #         self.t1 = t1
+    #         self.t2 = t2
 
-        def get_conflict_region(self, vehicle):
-            pass
+    #     def get_conflict_region(self, vehicle):
+    #         pass
 
 
 class SquareTiling(Tiling):

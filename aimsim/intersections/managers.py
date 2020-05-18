@@ -6,29 +6,87 @@ Different policies need different amounts of information.
 """
 
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import (Iterable, Dict, List, TypedDict, NamedTuple, Optional,
-                    Tuple, Set)
+                    Tuple, Set, Type, Any, TypeVar)
+from __future__ import annotations
 
+from ..archetypes import Configurable
 from ..util import Coord
-from .tilings import Tiling
-from .reservations import ReservationRequest, Reservation
 from ..roads import Road
+from ..lanes import IntersectionLane
+from .tilings import Tiling, SquareTiling, ArcTiling
+from .reservations import ReservationRequest, Reservation
+
+M = TypeVar('M', bound='IntersectionManager')
 
 
-class IntersectionManager(ABC):
+class IntersectionManager(Configurable):
 
-    def __init__(self, tiling: Tiling,
-                 incoming_roads: Dict[Road, Tuple[Coord]]) -> None:
-        self.tiling = tiling
-        self.incoming_roads = incoming_roads
+    @abstractmethod
+    def __init__(self,
+                 upstream_road_by_coord: Dict[Coord, Road],
+                 downstream_road_by_coord: Dict[Coord, Road],
+                 lanes: Dict[Coord, IntersectionLane],
+                 tiling_type: Type[Tiling],
+                 tiling_spec: Dict[str, Any]
+                 ) -> None:
+        self.upstream_road_by_coord = upstream_road_by_coord
+        self.downstream_road_by_coord = downstream_road_by_coord
+        self.lanes = lanes
 
-    def handle_logic(self) -> None:
-        """Do everything the manager needs to do in a single step."""
+        # Finish the spec for the manager by providing the roads and lanes
+        tiling_spec['upstream_road_by_coord'] = self.upstream_road_by_coord
+        tiling_spec['downstream_road_by_coord'] = self.downstream_road_by_coord
+        tiling_spec['lanes'] = self.lanes  # TODO: should this be lane_coords?
 
-        # have manager check for new reservation requests and process them
-        # once done, clear its cache
-        self.handle_requests()
+        # Create the tiling
+        self.tiling = tiling_type.from_spec(tiling_spec)
+
+        # Child managers should call this for initial setup, then continue in
+        # their own init to set up whatever they need to.
+
+    @staticmethod
+    def spec_from_str(spec_str: str) -> Dict[str, Any]:
+        """Reads a spec string into a manager spec dict."""
+
+        spec: Dict[str, Any] = {}
+
+        # TODO: interpret the string into the spec dict. cycle especially will
+        #       be quite complicated!
+        raise NotImplementedError("TODO")
+
+        # TODO: enforce provision of separate tiling_type and tiling_config
+        #       fields in intersection spec string
+
+        # Based on the spec, identify the correct tiling type
+        if tiling_type.lower() in {'square', 'squaretiling'}:
+            spec['tiling_type'] = SquareTiling
+        elif tiling_type.lower() in {'arc', 'arctiling'}:
+            spec['tiling_type'] = ArcTiling
+        else:
+            raise ValueError("Unsupported Tiling type.")
+
+        # TODO: consider if children need to do any additional processing
+        #       of the inputs, if there are any custom inputs? maybe this could
+        #       be solved by calling an abstract class function, or we simply
+        #       enforce that no every manager type has exactly the same input
+        #       arguments
+
+        return spec
+
+    @classmethod
+    def from_spec(cls: Type[M], spec: Dict[str, Any]) -> M:
+        """Should interpret a spec dict to call the manager's init."""
+        return cls(
+            upstream_road_by_coord=spec['upstream_road_by_coord'],
+            downstream_road_by_coord=spec['downstream_road_by_coord'],
+            lanes=spec['lanes'],
+            tiling_type=spec['tiling_type'],
+            tiling_spec=spec['tiling_config']
+        )
+
+    # Begin simulation cycle methods
 
     @abstractmethod
     def handle_requests(self) -> None:
@@ -68,10 +126,6 @@ class FCFSManager(IntersectionManager):
     """
     FCFS is a first come first served priority policy.
     """
-
-    def __init__(self, tiling: Tiling,
-                 incoming_roads: Dict[Road, Tuple[Coord]]) -> None:
-        super().__init__(tiling, incoming_roads)
 
     def handle_requests(self) -> None:
         # FCFS can keep polling lanes until they’re out of reservations or the
@@ -173,9 +227,18 @@ class RequestWithFlag(NamedTuple):
 
 class AuctionManager(IntersectionManager):
 
-    def __init__(self, tiling: Tiling,
-                 incoming_roads: Dict[Road, Tuple[Coord]]) -> None:
-        super().__init__(tiling, incoming_roads)
+    def __init__(self,
+                 upstream_road_by_coord: Dict[Coord, Road],
+                 downstream_road_by_coord: Dict[Coord, Road],
+                 lanes: Dict[Coord, IntersectionLane],
+                 tiling_type: Type[Tiling],
+                 tiling_spec: Dict[str, Any]
+                 ) -> None:
+        super().__init__(upstream_road_by_coord,
+                         downstream_road_by_coord,
+                         lanes,
+                         tiling_type,
+                         tiling_spec)
         self.pending_reservations: Dict[Road,
                                         Dict[Coord, RequestWithFlag]
                                         ] = {

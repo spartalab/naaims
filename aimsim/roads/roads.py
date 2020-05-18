@@ -35,9 +35,9 @@ from __future__ import annotations
 
 import aimsim.settings as SETTINGS
 from ..vehicles import Vehicle
-from ..trajectories import Trajectory
+from ..trajectories import Trajectory, BezierTrajectory
 from ..lanes import RoadLane
-from ..util import (Coord, CollisionError, DownstreamError, VehicleTransfer,
+from ..util import (Coord, CollisionError, LinkError, VehicleTransfer,
                     TooManyProgressionsError)
 from ..archetypes import Configurable, Facility, Upstream, Downstream
 from ..intersections.reservations import ReservationRequest
@@ -65,15 +65,16 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
     """
 
-    def __init__(self, trajectory: Trajectory,
+    def __init__(self,
+                 trajectory: Trajectory,
+                 manager_type: Type[LaneChangeManager],
+                 manager_spec: Dict[str, Any],
                  num_lanes: int = 1,
                  lane_width: float = 4,  # meters
                  lane_offset_angle: Optional[float] = None,  # degrees
                  len_entrance_region: float = SETTINGS.min_entrance_length,
                  len_approach_region: float = 100,  # meters
-                 speed_limit: int = settings.speed_limit,
-                 manager: Optional[Type[LaneChangeManager]] = None,
-                 manager_config: Optional[Dict[str, Any]] = None) -> None:
+                 v_max: int = SETTINGS.speed_limit) -> None:
         """Create a new road.
 
         Parameters:
@@ -87,7 +88,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
                 How long the entrance region is
             len_approach_region: float
                 How long the approach region is
-            speed_limit: int
+            v_max: int
                 Speed limit on this road in km/h
             manager: Optional[Type[LaneChangeManager]]
                 What type of LaneChangeManager to use to handle lane changes.
@@ -103,14 +104,14 @@ class Road(Configurable, Facility, Upstream, Downstream):
         # error checking
         if num_lanes < 1:
             raise ValueError('Must have more than one lane.')
-        elif (num_lanes > 1) and (lane_offset_angle is None):
+        if (num_lanes > 1) and (lane_offset_angle is None):
             raise ValueError(
                 'Need lane_offset if there\'s more than one lane.')
-        elif ((lane_offset_angle is not None) and
-              (lane_offset_angle < 0 or lane_offset_angle >= 360)):
+        if ((lane_offset_angle is not None) and
+                (lane_offset_angle < 0 or lane_offset_angle >= 360)):
             raise ValueError('lane_offset_angle must be between [0,360) deg')
-        elif (
-            (manager is None) and (trajectory.length < max(
+        if (
+            (manager_type is DummyManager) and (trajectory.length < max(
                 len_entrance_region, len_approach_region
             ))
         ) or (
@@ -122,57 +123,96 @@ class Road(Configurable, Facility, Upstream, Downstream):
             # TODO: the lane change region, if it exists, also has to be some
             #       min length to allow for a vehicle to accelerate from 0 and
             #       pass
-        elif lane_width <= 0:
+        if lane_width <= 0:
             # TODO: maybe more stringent lane width check
             raise ValueError('Need positive lane width.')
         if len_entrance_region + len_approach_region > trajectory.length:
             raise ValueError('Sum of regions longer than trajectory.')
 
         self.trajectory = trajectory
-        # may not be necessary to store the following explicitly
         self.num_lanes = num_lanes
         self.lane_width = lane_width
         self.lane_offset_angle = lane_offset_angle
-        self.speed_limit = speed_limit
+        self.v_max = v_max
 
-        # initialize data structures
-        self.lanes: Tuple[RoadLane] = tuple([RoadLane(
+        # Create support structures
+        self.lanes: Tuple[RoadLane, ...] = tuple([RoadLane(
             trajectory=trajectory,
             offset=Coord(0, 0)  # TODO: calculate this correctly
         ) for i in range(num_lanes)])
-        if manager is not None:
-            self.manager = manager(self.lanes, manager_config)
-        else:
-            self.manager = None
+        self.manager: LaneChangeManager = manager_type.from_spec(manager_spec)
 
-        self.lanes_by_downstream_coord: Dict[Coord, RoadLane] = {
+        # Organize lanes
+        self.lanes_by_start: Dict[Coord, RoadLane] = {
             l.trajectory.start_coord: l for l in self.lanes
         }
+        self.lanes_by_end: Dict[Coord, RoadLane] = {
+            l.trajectory.end_coord: l for l in self.lanes
+        }
 
-        raise NotImplementedError("TODO")
-
-        # init buffer for incoming vehicles
-        Upstream.__init__(self)
+        # Init buffer for incoming vehicles
         Downstream.__init__(self)
 
-    # TODO: finish stitching
-    def unconnected_upstreams(self) -> Optional[Iterable[Coord]]:
-        """Return unconnected upstream coordinates, if any."""
-        return (None if (self.upstream is not None) else None)
-        # TODO: fix
+    @staticmethod
+    def spec_from_str(spec_str: str) -> Dict[str, Any]:
+        """Reads a spec string into a road spec dict."""
 
-    def connect_upstreams(self, upstreams: Iterable[Downstream]) -> None:
-        """Finalize connecting upstream object(s)."""
-        # if upstream don't match the lanes we expect, raise value error
-        # else link it up
-        raise NotImplementedError("Must be implemented in child class.")
+        spec: Dict[str, Any] = {}
 
-    # TODO delete
-    def finish_setup(self, incoming: Upstream, outgoing: Downstream) -> None:
-        """Connect up and downstream objects to this road after creation."""
-        self.upstream = incoming
-        self.downstream = outgoing
+        # TODO: interpret the string into the spec dict
         raise NotImplementedError("TODO")
+
+        # TODO: enforce provision of separate trajectory_type and
+        #       trajectory_config fields in road spec string
+
+        if trajectory_type.lower() in {'', 'bezier', 'beziertrajectory'}:
+            spec['trajectory'] = BezierTrajectory.from_spec(
+                BezierTrajectory.spec_from_str(trajectory_config)
+            )
+        else:
+            raise ValueError("Unsupported Trajectory type.")
+
+        # TODO: enforce provision of separate manager_type and manager_config
+        #       fields in road spec string
+
+        # Based on the spec, identify the correct manager type
+        if manager_type.lower() in {'', 'dummy', 'dummymanager'}:
+            spec['manager_type'] = DummyManager
+        else:
+            raise ValueError("Unsupported LaneChangeManager type.")
+
+        return spec
+
+    @classmethod
+    def from_spec(cls, spec: Dict[str, Any]) -> Road:
+        """Create a new Road from the output of spec_from_str.
+
+        Roads are constructed first so no post-processing necessary between
+        spec_from_str and this function, unlike other Configurables.
+        """
+        return cls(
+            trajectory=spec['trajectory'],
+            manager_type=spec['manager_type'],
+            manager_spec=spec['manager_spec'],
+            num_lanes=spec['num_lanes'],
+            lane_width=spec['lane_width'],
+            lane_offset_angle=spec['lane_offset_angle'],
+            len_entrance_region=spec['len_entrance_region'],
+            len_approach_region=spec['len_approach_region'],
+            v_max=spec['v_max']
+        )
+
+    def connect_upstream(self, upstream: Upstream) -> None:
+        """Finalize connecting upstream object."""
+        # TODO: check that the upstream thing matches what we expect
+        self.upstream = upstream
+
+    def connect_downstream(self, downstream: Downstream) -> None:
+        """Finalize connecting downstream object."""
+        # TODO: check that the downstream thing matches what we expect
+        self.downstream = downstream
+
+    # Begin simulation cycle methods
 
     def update_speeds(self) -> None:
         """Update speed and acceleration for all vehicles on this road.
@@ -181,13 +221,15 @@ class Road(Configurable, Facility, Upstream, Downstream):
         vehicles on this road that aren't partially in an intersection.
         """
 
-        # error checking
-        if self.downstream is None:
-            raise DownstreamError("No downstream object.")
-        elif ((self.downstream is not Intersection)
-              and (self.downstream is not VehicleRemover)):
-            raise DownstreamError(
-                "Downstream object is not Intersection or VehicleRemover.")
+        # Check that Upstream and Downstream objects have been connected.
+        try:
+            self.upstream
+        except NameError:
+            raise LinkError("No upstream object.")
+        try:
+            self.downstream
+        except NameError:
+            raise LinkError("No downstream object.")
 
         if self.manager is not None:
             # three separate road regions. process accordingly.
