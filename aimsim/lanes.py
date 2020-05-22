@@ -29,9 +29,9 @@ from .trajectories import Trajectory
 class Lane(ABC):
 
     class VehicleProgress(NamedTuple):
-        front: float
-        center: float
-        rear: float
+        front: Optional[float]
+        center: Optional[float]
+        rear: Optional[float]
 
     def __init__(self,
                  trajectory: Trajectory,
@@ -64,6 +64,16 @@ class Lane(ABC):
 
     # Support functions for speed updates
 
+    @staticmethod
+    def p_in_bounds(p: float,
+                    p_min: float, p_max: float) -> Tuple[bool, float]:
+        if p > p_min and p <= p_max:
+            # Vehicle falls into observation area.
+            return True, p
+        else:
+            # Vehicle doesn't fall into observation area.
+            return False, p
+
     def effective_speed_limit(self, p: float) -> float:
         """Return the effective speed limit at the given progression.
 
@@ -75,7 +85,7 @@ class Lane(ABC):
 
     def update_speeds_by_section(self,
                                  p_max: float = 1,
-                                 p_min: float = -1,
+                                 p_min: float = -1
                                  ) -> Dict[Vehicle, SpeedUpdate]:
         """Return speed updates for vehicles in (p_min, p_max]
 
@@ -84,11 +94,6 @@ class Lane(ABC):
                 Minimum proportion is 0 but we want to account for boundary
                 conditions since transferring vehicles will be placed at 0.
             p_max: float
-            check_preceding: bool
-                Whether to compare speeds for a vehicle against the preceding
-                vehicle. Not necessary for vehicles in the intersection with a
-                reservation, as they've already secured a reservation that
-                requires them increase speed as much as possible.
         """
         if p_max < p_min:
             raise ValueError("p_max must be greater than or equal to p_min")
@@ -98,21 +103,31 @@ class Lane(ABC):
         preceding: Optional[Vehicle] = None
         # self.vehicles should be in order of decreasing progress
         for vehicle in self.vehicles:
-            if self.vehicle_progress[vehicle].front <= p_min:
-                # exit loop if we reach a vehicle with progress < p_min
+            front: Optional[float] = self.vehicle_progress[vehicle].front
+            if (front is not None) and (front <= p_min):
+                # exit if we reach a vehicle with max/front progress < p_min
                 break
 
-            if self.vehicle_progress[vehicle].front <= p_max:
+            vehicle_in_jurisdiction, p = self.controls_this_speed(vehicle,
+                                                                  p_min, p_max)
+            if vehicle_in_jurisdiction:
+                # vehicle falls into this lane's jurisdiction
                 # don't update speeds of vehicles with progress > p_max
-                a_new = self.accel_update(vehicle, preceding)
-                new_speed[vehicle] = self.speed_update(vehicle, a_new)
+                a_new = self.accel_update(vehicle, p, preceding)
+                new_speed[vehicle] = self.speed_update(vehicle, p, a_new)
 
             preceding = vehicle
 
         return new_speed
 
     @abstractmethod
-    def accel_update(self, vehicle: Vehicle,
+    def controls_this_speed(self, vehicle: Vehicle,
+                            p_min: float, p_max: float) -> Tuple[bool, float]:
+        """Should return if lane controls this vehicle and its progress."""
+        raise NotImplementedError("Must be implemented in child class.")
+
+    @abstractmethod
+    def accel_update(self, vehicle: Vehicle, p: float,
                      preceding: Optional[Vehicle]) -> float:
         """Return a vehicle's acceleration update.
 
@@ -124,10 +139,14 @@ class Lane(ABC):
         """
         raise NotImplementedError("Must be implemented in child classes.")
 
-    def accel_update_uncontested(self, vehicle: Vehicle) -> float:
-        """Return accel update if there are no vehicles ahead."""
-        effective_speed_limit = self.effective_speed_limit(
-            self.vehicle_progress[vehicle].front)
+    def accel_update_uncontested(self, vehicle: Vehicle, p: float) -> float:
+        """Return accel update if there are no vehicles ahead.
+
+        p is the proportional progress associated with this vehicle. Because it
+        could be the front or rear of the vehicle depending on the situation,
+        it's presented here as an input argument.
+        """
+        effective_speed_limit = self.effective_speed_limit(p)
         if vehicle.v > effective_speed_limit:
             return vehicle.max_braking
         elif vehicle.v == effective_speed_limit:
@@ -137,22 +156,26 @@ class Lane(ABC):
 
     def accel_update_following(self,
                                vehicle: Vehicle,
+                               p: float,
                                pre_p: float = 1,
                                pre_v: float = 0,
                                pre_a: float = 0) -> float:
         """Return speed update to prevent collision with a preceding object.
 
+        p is the proportional progress associated with this vehicle. Because it
+        could be the front or rear of the vehicle depending on the situation,
+        it's presented here as an input argument.
+
         The preceding object is either a preceding vehicle with proportional
         progress, velocity, acceleration broken out or, given the defaults, the
         intersection line.
         """
-        effective_speed_limit = self.effective_speed_limit(
-            self.vehicle_progress[vehicle].front)
+        effective_speed_limit = self.effective_speed_limit(p)
 
         # TODO: when implementing, take into account that time is discrete so
         #       round down when spacing.
 
-        a_maybe = self.accel_update_uncontested(vehicle)
+        a_maybe = self.accel_update_uncontested(vehicle, p)
         if a_maybe < 0:  # need to brake regardless of closeness
             return a_maybe
         else:
@@ -165,17 +188,21 @@ class Lane(ABC):
             #     # vehicles too close together
             #     return 0 if (can't get closer) else a_maybe
 
-    def speed_update(self, vehicle: Vehicle, accel: float) -> SpeedUpdate:
+    def speed_update(self, vehicle: Vehicle, p: float,
+                     accel: float) -> SpeedUpdate:
         """Given an accelerationn, update speeds.
 
         Note acceleration and speed aren't 1-to-1 because of discrete time.
+
+        p is the proportional progress associated with this vehicle. Because it
+        could be the front or rear of the vehicle depending on the situation,
+        it's presented here as an input argument.
         """
         v_new = vehicle.v + accel*SHARED.TIMESTEP_LENGTH
         if v_new < 0:
             return SpeedUpdate(v=0, a=accel)
         else:
-            effective_speed_limit = self.effective_speed_limit(
-                self.vehicle_progress[vehicle].front)
+            effective_speed_limit = self.effective_speed_limit(p)
             if v_new > effective_speed_limit:
                 return SpeedUpdate(v=effective_speed_limit, a=accel)
             else:
@@ -204,10 +231,14 @@ class RoadLane(Lane):
                  offset: Coord = Coord(0, 0),
                  len_entrance_region: float = SHARED.min_entrance_length,
                  len_approach_region: float = 100,
+                 upstream_is_intersection: bool = False,
+                 downstream_is_remover: bool = False,
                  speed_limit: int = SHARED.speed_limit) -> None:
         super().__init__(trajectory=trajectory,
                          offset=offset,
                          speed_limit=speed_limit)
+        self.upstream_is_intersection: bool = upstream_is_intersection
+        self.downstream_is_remover: bool = downstream_is_remover
 
         # TODO: use len_entrance_region and len_approach_region to calculate
         #       the proportional cutoffs for the three regions, for use in the
@@ -222,7 +253,39 @@ class RoadLane(Lane):
 
     # Support functions for speed updates
 
-    def accel_update(self, vehicle: Vehicle,
+    def controls_this_speed(self, vehicle: Vehicle,
+                            p_min: float, p_max: float) -> Tuple[bool, float]:
+        """Return whether this lane controls this vehicle, and its progress.
+
+        """
+
+        front = self.vehicle_progress[vehicle].front
+        if front is None:
+            # The front of the vehicle is not on this road lane.
+            if self.downstream_is_remover:
+                # There's a remover downstream so this road lane is still in
+                # control. Report the rear of the vehicle.
+                rear = self.vehicle_progress[vehicle].rear
+                if rear is None:
+                    raise ValueError("Vehicle exited lane already.")
+                else:
+                    return self.p_in_bounds(rear, p_min, p_max)
+            else:
+                # The front of the vehicle is in the next intersection, so this
+                # road lane is not in control.
+                return False, float("inf")
+        else:
+            # The front of this vehicle front is on this road.
+            if self.upstream_is_intersection:
+                # The vehicles is still exiting the intersection and therefore
+                # not in this road lane's jurisdiction.
+                return False, -float("inf")
+            else:
+                # Front of the vehicle is on this road and its rear isn't in an
+                # intersection
+                return self.p_in_bounds(front, p_min, p_max)
+
+    def accel_update(self, vehicle: Vehicle, p: float,
                      preceding: Optional[Vehicle]) -> float:
 
         if preceding is None:
@@ -230,14 +293,16 @@ class RoadLane(Lane):
             if vehicle.can_enter_intersection:
                 # full speed forward
                 # TODO: does this run into collision issues for signalized?
-                return self.accel_update_uncontested(vehicle)
+                return self.accel_update_uncontested(vehicle, p)
             else:
                 # stop at the intersection line
-                return self.accel_update_following(vehicle)
+                return self.accel_update_following(vehicle, p)
         else:
-            a_follow = self.accel_update_following(vehicle,
-                                                   pre_p=self.vehicle_progress[
-                                                       preceding].rear,
+            preceding_rear = self.vehicle_progress[preceding].rear
+            if preceding_rear is None:
+                raise ValueError("Preceding vehicle not in lane.")
+            a_follow = self.accel_update_following(vehicle, p,
+                                                   pre_p=preceding_rear,
                                                    pre_v=preceding.v,
                                                    pre_a=preceding.a)
             if (preceding.can_enter_intersection
@@ -246,7 +311,7 @@ class RoadLane(Lane):
                 return a_follow
             else:
                 # stop for preceding vehicle AND intersection line
-                return min(a_follow, self.accel_update_following(vehicle))
+                return min(a_follow, self.accel_update_following(vehicle, p))
 
     def update_speeds(self, section: int) -> Dict[Vehicle, SpeedUpdate]:
         """Return speed updates for all vehicles on this road lane."""
@@ -477,6 +542,19 @@ class IntersectionLane(Lane):
 
     # Support functions for speed updates
 
+    def controls_this_speed(self, vehicle: Vehicle,
+                            p_min: float, p_max: float) -> Tuple[bool, float]:
+        front = self.vehicle_progress[vehicle].front
+        if front is not None:
+            # Front of the vehicle is in the lane.
+            return self.p_in_bounds(front, p_min, p_max)
+        else:
+            # Surely the rear of the vehicle must be in the lane.
+            rear = self.vehicle_progress[vehicle].rear
+            if rear is None:
+                raise ValueError("Vehicle exited lane already.")
+            return self.p_in_bounds(rear, p_min, p_max)
+
     def reset_temp_speed_limit(self):
         """Reset the soft speed limit to prevent crashes just downstream.
 
@@ -501,20 +579,22 @@ class IntersectionLane(Lane):
     def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
         return self.update_speeds_by_section()
 
-    def accel_update(self, vehicle: Vehicle,
+    def accel_update(self, vehicle: Vehicle, p: float,
                      preceding: Optional[Vehicle]) -> float:
         if vehicle.has_reservation or (preceding is None):
             # vehicle has a confirmed reservation that assumed maximum
             # acceleration, so we're free to behave as if it's uncontested
             # OR there is no vehicle ahead and the lane has traffic signal
             # permission, so the temporarily lower speed limit is in effect
-            return self.accel_update_uncontested(vehicle)
+            return self.accel_update_uncontested(vehicle, p)
         else:
             # lane has traffic signal permission and there's a vehicle ahead
             # to follow
-            return self.accel_update_following(vehicle,
-                                               pre_p=self.vehicle_progress[
-                                                   preceding].rear,
+            preceding_rear = self.vehicle_progress[preceding].rear
+            if preceding_rear is None:
+                raise ValueError("Preceding vehicle not in lane.")
+            return self.accel_update_following(vehicle, p,
+                                               pre_p=preceding_rear,
                                                pre_v=preceding.v,
                                                pre_a=preceding.a)
 
@@ -557,7 +637,7 @@ class IntersectionLane(Lane):
         #       limit
 
         # reset speed limit when 30s pass since the last exit.
-        if SHARED.t - self.last_reset > 30*SHARED.steps_per_second:
+        if SHARED.t - self.last_exit > 30*SHARED.steps_per_second:
             self.reset_temp_speed_limit()
         # TODO: mark on vehicle exit
         self.last_exit = SHARED.t
