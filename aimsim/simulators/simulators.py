@@ -3,14 +3,14 @@
 including visualizations if enabled.
 """
 
+from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Iterable, Tuple, Dict, Optional, Set, Any
-from __future__ import annotations
 
 from pandas import DataFrame
 from matplotlib import pyplot as plt
 
-import aimsim.settings as SETTINGS
+import aimsim.shared as SHARED
 from ..util import Coord
 from ..archetypes import Configurable, Facility, Upstream, Downstream
 from ..intersections import Intersection
@@ -36,10 +36,10 @@ class Simulator(ABC):
 
     @abstractmethod
     def __init__(self,
-                 road_strs: Iterable[str],
-                 intersection_strs: Iterable[str],
-                 spawner_strs: Iterable[str],
-                 remover_strs: Iterable[str],
+                 road_specs: Iterable[Dict[str, Any]],
+                 intersection_specs: Iterable[Dict[str, Any]],
+                 spawner_specs: Iterable[Dict[str, Any]],
+                 remover_specs: Iterable[Dict[str, Any]],
                  config_filename: str = './config.ini',
                  display: bool = False) -> None:
         """Should create all roads, intersections, and suppport structures.
@@ -49,19 +49,9 @@ class Simulator(ABC):
         """
 
         # 1. Read in the config file.
-        SETTINGS.read(config_filename)
+        SHARED.read(config_filename)
 
-        # 2. Process the specs for every Upstream and Downstream object
-        road_specs: Iterable[Dict[str, Any]] = [
-            Road.spec_from_str(r) for r in road_strs]
-        intersection_specs: Iterable[Dict[str, Any]] = [
-            Intersection.spec_from_str(i) for i in intersection_strs]
-        spawner_specs: Iterable[Dict[str, Any]] = [
-            VehicleSpawner.spec_from_str(s) for s in spawner_strs]
-        remover_specs: Iterable[Dict[str, Any]] = [
-            VehicleRemover.spec_from_str(r) for r in remover_strs]
-
-        # 3. Create the Upstream and Downstream objects
+        # 2. Create the Upstream and Downstream objects
         #   a. Create the roads and organize by intersection and road to be
         #      created.
         self.roads: Dict[int, Road] = {}
@@ -204,27 +194,24 @@ class Simulator(ABC):
             raise ValueError(
                 f"Roads have at least one remover that the spec doesn't.")
 
-        # 4. Group them into common sets so it's neater to loop through
-        self.facilities: Tuple[Dict[int, Facility], ...] = (
-            self.intersections,
-            self.roads
-        )
-        self.upstreams: Tuple[Dict[int, Upstream], ...] = (
-            self.spawners,
-            self.intersections,
-            self.roads
-        )
-        self.downstreams: Tuple[Dict[int, Downstream], ...] = (
-            self.intersections,
-            self.roads,
-            self.removers
-        )
+        # 3. Group them into common sets so it's neater to loop through
+        self.facilities: Iterable[Facility] = list(
+            self.intersections.values()
+        ) + list(self.roads.values())
 
-        # 5. Initialize an empty list of vehicles
+        self.upstreams: Iterable[Upstream] = list(
+            self.spawners.values()
+        ) + list(self.intersections.values()) + list(self.roads.values())
+
+        self.downstreams: Iterable[Downstream] = list(
+            self.intersections.values()
+        ) + list(self.roads.values()) + list(self.removers.values())
+
+        # 4. Initialize an empty list of vehicles
         # self.vehicles: Dict[int, Vehicle] = {}
         self.vehicles: Set[Vehicle] = set()
 
-        # 6. If the visualize flag is enabled, draw the basemap image of
+        # 5. If the visualize flag is enabled, draw the basemap image of
         #    roads and intersections for use later.
         if display:
             # 6a. loop through all roads and visualize their length, width,
@@ -294,15 +281,17 @@ class Simulator(ABC):
         # 1. Have every facility (roads, intersections) calculate the speed and
         #    acceleration of its responsible vehicles. If a vehicle is in any
         #    part inside an intersection, the intersection calculates it,
-        #    otherwise, the road does.
-        #    Currently, calculate_speeds() updates new_speed and
-        #    new_acceleration properties inside each vehicle, but a parallel
-        #    implementation might have each worker save and return changes for
-        #    each worker to update serially between steps.
-        for fs in self.facilities:
-            for f in fs:
-                f.update_speeds()
-        # could possibly update speeds outside the loop here.
+        #    otherwise, the road does. Can be done in parallel. Once
+        #    calculated, update vehicle speed and acceleration serially.
+        new_speeds = []
+        for f in self.facilities:
+            new_speeds.append(f.update_speeds())
+        new_speed = dict(update for f_update in new_speeds
+                         for update in f_update.items())
+        for vehicle in self.vehicles:
+            update = new_speed[vehicle]
+            vehicle.v = update.v
+            vehicle.a = update.a
 
         # 2. Have upstream objects (vehicle spawners, roads, and intersections)
         #    update vehicle absolute (Coord) and relative positions (in-lane
@@ -311,33 +300,33 @@ class Simulator(ABC):
         #    buffer of the downstream object. For spawners, this decides
         #    whether to create a new vehicle and if so places it in the
         #    downstream object.
-        for us in self.upstreams:
-            for u in us:
-                new_vehicle = u.step()
-                if new_vehicle is not None:
-                    self.vehicles.add(new_vehicle)
+        for u in self.upstreams:
+            new_vehicle = u.step()
+            if new_vehicle is not None:
+                self.vehicles.add(new_vehicle)
 
         # 3. Have every downstream object (roads, intersections, and vehicle
         #    removers) resolve all vehicle transfers. This finishes updates to
         #    absolute and relative positions using speeds calculed in 1.
-        for dss in self.downstreams:
-            for ds in dss:
-                exiting_vehicles: Optional[Iterable[Vehicle]
-                                           ] = ds.process_transfers()
-                # only vehicle_removers return vehicles, iff any get removed
-                # in this cycle
-                if exiting_vehicles is not None:
-                    for vehicle in exiting_vehicles:
-                        # log the vehicle
-                        raise NotImplementedError("TODO")
-                        # remove it from self.vehicles
-                        self.vehicles.remove(vehicle)
+        for d in self.downstreams:
+            exiting_vehicles: Optional[Iterable[Vehicle]
+                                       ] = d.process_transfers()
+            # only vehicle_removers return vehicles, iff any get removed
+            # in this cycle
+            if exiting_vehicles is not None:
+                for vehicle in exiting_vehicles:
+                    # log the vehicle
+                    raise NotImplementedError("TODO")
+                    # remove it from self.vehicles
+                    self.vehicles.remove(vehicle)
 
         # 4. Have facility managers handle their special internal logic (e.g.,
         #    lane changes and reservations).
-        for fs in self.facilities:
-            for f in fs:
-                f.handle_logic()
+        for f in self.facilities:
+            f.handle_logic()
+
+        # 5. Update time step
+        SHARED.t += 1
 
     def display(self) -> None:
         """Display the current position of all vehicles on the grid."""
@@ -372,5 +361,32 @@ class SingleIntersectionSimulator(Simulator):
 
 
 class LargeSimulator(Simulator):
-    # TODO: implement a simulator for multiple intersections
-    pass
+
+    def __init__(self,
+                 road_strs: Iterable[str],
+                 intersection_strs: Iterable[str],
+                 spawner_strs: Iterable[str],
+                 remover_strs: Iterable[str],
+                 config_filename: str = './config.ini',
+                 display: bool = False) -> None:
+        """Create a Simulator using strings for every road object."""
+
+        # Process the specs for every Upstream and Downstream object
+        road_specs: Iterable[Dict[str, Any]] = [
+            Road.spec_from_str(r) for r in road_strs]
+        intersection_specs: Iterable[Dict[str, Any]] = [
+            Intersection.spec_from_str(i) for i in intersection_strs]
+        spawner_specs: Iterable[Dict[str, Any]] = [
+            VehicleSpawner.spec_from_str(s) for s in spawner_strs]
+        remover_specs: Iterable[Dict[str, Any]] = [
+            VehicleRemover.spec_from_str(r) for r in remover_strs]
+
+        # Hand it off to the main Simulator init
+        super().__init__(
+            road_specs=road_specs,
+            intersection_specs=intersection_specs,
+            spawner_specs=spawner_specs,
+            remover_specs=remover_specs,
+            config_filename=config_filename,
+            display=display
+        )

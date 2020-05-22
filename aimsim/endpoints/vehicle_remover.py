@@ -6,8 +6,8 @@ counting the vehicle before removal so the user can gauge the throughput of the
 system.
 '''
 
-from typing import Iterable, Dict, Any
 from __future__ import annotations
+from typing import Iterable, Dict, Any
 
 from ..archetypes import Configurable, Downstream
 from ..roads import Road

@@ -9,56 +9,63 @@ vehicle stores its desired route through the intersection, updating pointers
 along the way
 """
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
 from __future__ import annotations
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Union, TypeVar, Type
 
 from ..util import Coord
 
 if TYPE_CHECKING:
     from ..lanes import RoadLane
+    from ..intersections.reservations import Reservation
+
+V = TypeVar('V', bound='Vehicle')
 
 
 class Vehicle(ABC):
     """
-    Vehicles are by default fully automated. So you can think of Vehicle as an
-    AutomatedVehicle, minus the weirdness of having HumanDrivenVehicle be a
-    subclass of an AutomatedVehicle.
+    Default vehicle behavior assumes full automation, which this abstract base
+    class implements. Subclasses like semi-autonomous vehicles and human-
+    driven vehicles should implement themselves as deviation from this base
+    behavior.
 
     In this implementation, a Vehicle can't change its own properties, instead
     relying on the Lane objects it's traveling in to do it via setters.
     """
 
+    @abstractmethod
     def __init__(self,
                  vin: int,  # unique ID
-                 start_pos,  # Coord in which this vehicle originates
-                 end_pos,  # Coord that this vehicle wants to exit from
-                 a_max=3,  # maximum acceleration, in m/s^2
-                 # maximum (comfortable) braking, in m/s^2
-                 # (4.5 for uncomfortable braking)
-                 b_max=3.4,
-                 l=4.5,  # length in meters
-                 w=3,  # width in meters
-                 v=11,  # vehicle speed, in meters per second
-                 a=0,
-                 vot=0  # value of time
+                 start_coord: Coord,
+                 destination: int,  # ID of target VehicleRemover
+                 max_accel: float = 3,  # maximum acceleration, in m/s^2
+                 max_braking: float = -3.4,  # or -4.5, braking in m/s^2
+                 length: float = 4.5,  # length in meters
+                 width: float = 3,  # width in meters
+                 vot: float = 0  # value of time
                  ):
         """Construct a vehicle instance."""
 
+        if max_accel <= 0:
+            raise ValueError("max_accel must be positive")
+        if max_braking >= 0:
+            raise ValueError("max_braking must be negative")
+
         self.vin = vin
 
-        self.pos: Coord = start_pos
-        self.v: float = v
-        self.a: float = a  # zero m/s^2
+        # initialize properties
+        self.pos = start_coord
+        self.v: float = 0
+        self.a: float = 0
         self.heading: float = 0.0
-
-        self.destination_lane = end_pos
-        self.a_max = a_max
-        self.b_max = b_max
-        self.l = l
-        self.w = w
-
         self.enter_intersection = False
+
+        # save vehicle characteristics
+        self.destination = destination
+        self.max_accel = max_accel
+        self.max_braking = max_braking
+        self.length = length
+        self.width = width
 
     @property
     def pos(self) -> Coord:
@@ -80,23 +87,21 @@ class Vehicle(ABC):
     def v(self) -> float:
         return self._v
 
-    # @v.setter
-    # def v(self, new_v: float) -> None:
-    #     if new_v < 0:
-    #         raise ValueError("Speed must be nonnegative.")
-    #     self._v: float = new_v
+    @v.setter
+    def v(self, new_v: float) -> None:
+        if new_v < 0:
+            raise ValueError("Speed must be nonnegative.")
+        self._v: float = new_v
 
     @property
     def a(self) -> float:
+        """Vehicle's current acceleration. Used only for plotting."""
         return self._a
 
     @a.setter
     def a(self, new_a: float) -> None:
         # TODO: error check the case where you try to slow down a stopped vehi
         self._a: float = new_a
-
-    # def update_v(self) -> None:
-    #     self.v =
 
     @property
     def heading(self) -> float:
@@ -108,8 +113,19 @@ class Vehicle(ABC):
             raise ValueError("Heading must be within [0,360) degrees")
         self._heading = new_heading
 
-    # TODO: should it have a property that says yes i have a reservation
-    #       or is there a reservation object
+    @property
+    def can_enter_intersection(self) -> bool:
+        """Check whether a vehicle has permission to enter a reservation.
+
+        In the event of a traffic signal or similar control scheme, a vehicle
+        may enter an intersection without a reservation.
+        """
+        return self._permission
+
+    @can_enter_intersection.setter
+    def can_enter_intersection(self, permission: bool) -> None:
+        self._permission = permission
+
     @property
     def has_reservation(self) -> bool:
         return self._has_reservation
@@ -117,6 +133,16 @@ class Vehicle(ABC):
     @has_reservation.setter
     def has_reservation(self, has_reservation: bool) -> None:
         self._has_reservation = has_reservation
+
+    def stopping_distance(self) -> float:
+        raise NotImplementedError("TODO")
+
+    def clone_for_request(self: Type[V]) -> V:
+        """Return a clone of this vehicle to test a reservation request."""
+        raise NotImplementedError("TODO")
+        v = self()
+        v.has_reservation = True
+        return v
 
     # TODO: does veh need a lane-i'm-in property
     #       or does it just need a reference to the Coord of the next transfer?
@@ -139,6 +165,16 @@ class Vehicle(ABC):
 
     def __hash__(self):
         return hash(self.vin)
+
+
+class AutomatedVehicle(Vehicle):
+    """
+    Since the default vehicle is fully automated, all this class does is change
+    the name of the base class so it's clear what type of vehicle we're using.
+    """
+
+    def __init__(self, ):
+        super.__init__(self)  # TODO: finish
 
 
 class HumanDrivenVehicle(Vehicle):

@@ -2,7 +2,10 @@
 This module contains several intersection priority managers based on different
 policies.
 
-Different policies need different amounts of information.
+The manager itself handles whether reservations are requested and the order in
+which reservations are allocated. Once a reservation has been accepted,
+continued maintenance of requests before their completion is handed off to the
+tiling (which is owned by the manager).
 """
 
 
@@ -88,12 +91,22 @@ class IntersectionManager(Configurable):
 
     # Begin simulation cycle methods
 
+    def handle_logic(self) -> None:
+        """Update tiling, reservations, and poll for new requests to accept."""
+
+        # First update the tiling for the new timestep
+        self.tiling.handle_requests()
+
+        # Then poll for new reservation requests. Consider both those in the
+        # queue to see which ones, if any, to accept
+        self.process_requests()
+
     @abstractmethod
-    def handle_requests(self) -> None:
-        """Should get new reservation requests and process them.
+    def process_requests(self):
+        """Update the request queue and check for requests to accept.
 
         Check every incoming road for vehicles or platoons that are eligible to
-        try and make a reservation (i.e., lane leaders). Accept, reject, or 
+        try and make a reservation (i.e., lane leaders). Accept, reject, or
         hold onto their requests for a future step based on logic in this
         function.
         """

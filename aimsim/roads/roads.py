@@ -19,8 +19,6 @@ Roads are divided into up to 3 sections:
        (i.e, if this road terminates at the end of the simulation area into a
        vehicle collector). Like the entrance region, lane changes are barred
        in this section.
-TODO: Not all sections need to be implemented in case the road is attached to
-      a spawner or remover.
 
 The vehicle transmission and entrance interfaces provide a consistent way for
 roads and intersections to communicate with each other when scheduling the
@@ -28,17 +26,17 @@ passage of a vehicle from one to the other and avoid collisions.
 """
 
 
+from __future__ import annotations
 from abc import abstractmethod
 from typing import (TYPE_CHECKING, Type, Optional, Iterable, Union, Dict, Any,
-                    Tuple, NamedTuple, Set)
-from __future__ import annotations
+                    Tuple, NamedTuple, Set, List)
 
-import aimsim.settings as SETTINGS
+import aimsim.shared as SHARED
 from ..vehicles import Vehicle
 from ..trajectories import Trajectory, BezierTrajectory
 from ..lanes import RoadLane
 from ..util import (Coord, CollisionError, LinkError, VehicleTransfer,
-                    TooManyProgressionsError)
+                    TooManyProgressionsError, SpeedUpdate)
 from ..archetypes import Configurable, Facility, Upstream, Downstream
 from ..intersections.reservations import ReservationRequest
 from .managers import LaneChangeManager, DummyManager
@@ -72,9 +70,9 @@ class Road(Configurable, Facility, Upstream, Downstream):
                  num_lanes: int = 1,
                  lane_width: float = 4,  # meters
                  lane_offset_angle: Optional[float] = None,  # degrees
-                 len_entrance_region: float = SETTINGS.min_entrance_length,
+                 len_entrance_region: float = SHARED.min_entrance_length,
                  len_approach_region: float = 100,  # meters
-                 v_max: int = SETTINGS.speed_limit) -> None:
+                 v_max: int = SHARED.speed_limit) -> None:
         """Create a new road.
 
         Parameters:
@@ -214,8 +212,8 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
     # Begin simulation cycle methods
 
-    def update_speeds(self) -> None:
-        """Update speed and acceleration for all vehicles on this road.
+    def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
+        """Return speed and acceleration update for all vehicles on this road.
 
         This road is responsible for updating the speed and acceleration of all
         vehicles on this road that aren't partially in an intersection.
@@ -231,30 +229,40 @@ class Road(Configurable, Facility, Upstream, Downstream):
         except NameError:
             raise LinkError("No downstream object.")
 
-        if self.manager is not None:
-            # three separate road regions. process accordingly.
-            raise NotImplementedError("TODO")
-        else:
-            # no lane change region. approach and entrance regions are combined
-            # so there's only one continuous region.
-            for lane in self.lanes:
-                lane.update_speeds()
+        new_speeds: List[Dict[Vehicle, SpeedUpdate]] = []
+
+        # 1. Update speed and acceleration for vehicles in the approach region
+        #    (unless any part of the vehicle is inside the intersection)
+        for lane in self.lanes:
+            new_speeds.append(lane.update_speeds(section=1))
+
+        # 2. Have the LaneChangeManager update the vehicles in its region
+        new_speeds.append(self.manager.update_speeds())
+
+        # 3. Update speed and acceleration for vehicles in the entrance region
+        #    (unless any part of the vehicle is inside the last intersection)
+        for lane in self.lanes:
+            new_speeds.append(lane.update_speeds(section=3))
+
+        # 4. Merge the SpeedUpdates from every lane and section into one dict
+        return dict(update for lane_update in new_speeds
+                    for update in lane_update.items())
 
     def step(self) -> None:
-        """Update the positions of all vehicles, passing them on if exiting."""
+        """Update all vehicles' positions and transfer them if they exit."""
 
-        # move vehicles in the approach region forward, passing vehicles if
-        # necessary
+        # 1. Update the true and lane-relative positions of vehicles in the
+        #    approach region, transferring vehicle front/center/rear portions
+        #    if they exit the road.
         for lane in self.lanes:
             leaving = lane.step_approach()
             if leaving is not None:
                 self.downstream.transfer_vehicle(leaving)
 
-        # # next, have the LaneChangeManager move the vehicles in the middle
-        # punt TODO: skipping designing the API for the LaneChangeManager
-        #            until the basics are complete.
+        # 2. Have the LaneChangeManager step the vehicles in its region.
+        self.manager.step()
 
-        # finally, move vehicles in the entrance region forward
+        # 3. Update the positions of vehicles in the entrance region.
         for lane in self.lanes:
             lane.step_entrance()
 
@@ -272,10 +280,10 @@ class Road(Configurable, Facility, Upstream, Downstream):
         super().process_transfers()  # just makes sure the list is empty after
 
     def handle_logic(self) -> None:
-        # # tell RoadManager to schedule the next set of lane changes
-        # punt TODO: skipping designing the API for the LaneChangeManager
-        #            until the basics are complete.
-        pass
+        """Tell LaneChangeManager to schedule the next set of lane changes."""
+        self.manager.handle_logic()
+
+    # Functions used by intersection managers.
 
     def room_to_enter(self, lane_coord: Coord) -> float:
         """If the vehicles in the entrance region stop, how much room is there?

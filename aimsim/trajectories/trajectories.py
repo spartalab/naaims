@@ -7,11 +7,11 @@ versa.
 The `trajectories` module implements several different ways of doing so.
 """
 
+from __future__ import annotations
 from collections import deque
 from abc import abstractmethod
 from math import acos, sqrt
 from typing import TYPE_CHECKING, Tuple, Optional, Iterable, Dict, Any
-from __future__ import annotations
 
 import bezier
 import numpy as np
@@ -24,6 +24,7 @@ from ..vehicles import Vehicle
 
 class Trajectory(Configurable):
 
+    @abstractmethod
     def __init__(self,
                  start_coord: Coord,
                  end_coord: Coord,
@@ -46,6 +47,11 @@ class Trajectory(Configurable):
         self.end_coord = end_coord
         self.reference_coords = reference_coords
         self.traversibility_factors = traversibility_factors
+
+    @property
+    @abstractmethod
+    def length(self) -> float:
+        raise NotImplementedError("Must be implemented in child classes.")
 
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
@@ -118,6 +124,16 @@ class Trajectory(Configurable):
         #       for override if fancier trajectories want to account for
         #       slowdowns on curved roads
         raise NotImplementedError("TODO")
+
+    def effective_speed_limit(self, proportion: float):
+        """Would use traversibility_factors to find an effective speed limit.
+
+        Some trajectories (e.g., tight turns) require a certain speed to
+        navigate properly or comfortably. This method, if implemented, would
+        enforce a slower speed on different proportions of the trajectory.
+        """
+        # TODO: (later) implement this properly in child classes
+        return float('inf')
 
 
 class BezierTrajectory(Trajectory):

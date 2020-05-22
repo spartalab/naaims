@@ -16,19 +16,20 @@ to come in or not.
 The tiling handles how the manager checks for upcoming conflicts.
 """
 
-import itertools
-from typing import Iterable, Type, Dict, Union, Set, Any
 from __future__ import annotations
+import itertools
+from typing import Iterable, Type, Dict, Union, Set, Any, List
 
 from pandas import DataFrame
 
-import aimsim.settings as SETTINGS
+import aimsim.shared as SHARED
 from ..archetypes import Configurable, Facility, Upstream, Downstream
-from ..util import Coord, VehicleTransfer
-from ..trajectories import Trajectory, Bezier
+from ..util import Coord, VehicleTransfer, SpeedUpdate
+from ..trajectories import Trajectory, BezierTrajectory
 from ..lanes import IntersectionLane
 from ..roads import Road
 from ..endpoints import VehicleRemover
+from ..vehicles import Vehicle
 from .managers import IntersectionManager, FCFSManager
 
 
@@ -40,7 +41,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                  connectivity: Iterable[Iterable],
                  manager_type: IntersectionManager,
                  manager_spec: Dict[str, Any],
-                 v_max: int = SETTINGS.speed_limit
+                 v_max: int = SHARED.speed_limit
                  ) -> None:
         """Create a new intersection.
 
@@ -49,7 +50,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                 Describes which lanes connect to each other.
             manager_spec: Dict[str, Any]
                 Specifications to create the manager with.
-            v_max: int = SETTINGS.speed_limit
+            v_max: int = SHARED.speed_limit
                 The speed limit.
         """
 
@@ -86,7 +87,8 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         manager_spec['lanes'] = self.lanes  # TODO: should this be lane_coords?
 
         # Create the manager
-        self.manager = manager_type.from_spec(manager_spec)
+        self.manager: IntersectionManager = manager_type.from_spec(
+            manager_spec)
 
         # TODO: old code. rewrite or replace.
         # for _, row in lanes_df.iterrows():
@@ -162,6 +164,16 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
 
     # Begin simulation cycle methods
 
+    def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
+
+        new_speeds: List[Dict[Vehicle, SpeedUpdate]] = []
+
+        for lane in self.lanes:
+            new_speeds.append(lane.update_speeds())
+
+        return dict(update for lane_update in new_speeds
+                    for update in lane_update.items())
+
     def step(self) -> None:
         """Progress vehicles currently in intersection."""
 
@@ -200,26 +212,5 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         super().process_transfers()  # just makes sure the list is empty after
 
     def handle_logic(self) -> None:
-
-        # consider checking for collisions here if we have stochasic movement
-        # otherwise collisions _should_ not occur if implemented correctly
-        # vehicles = []
-        # for lane in self.lanes:
-        #     vehicles += [vp.vehicles for vp in lane.vehicles]
-        # # draw every vehicle to check for collisions?
-        raise NotImplementedError("TODO")
-
-        # have manager and tiling compare the current positions and velocities
-        # of all vehicles in intersection. use the difference to update
-        # reservations to reflect resolved stochasticities (probably a TODO
-        # future feature, this will likely only be used by a stochastic
-        # manager)
-        self.manager.update_active_reservations()
-
-        # Have tiling peel off the layer of reservations that correspond to
-        # this passing timestep (i.e., zero the tiling at this step)
-        self.manager.step()
-
-        # have manager look for new requests and at those in the queue to see
-        # which ones to accept
+        """Have the manager update reservations and poll for new requests."""
         self.manager.handle_logic()

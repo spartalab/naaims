@@ -10,7 +10,9 @@ from abc import abstractmethod
 from typing import Iterable, Dict, Any, TypeVar, Type
 
 from ..archetypes import Configurable
+from ..util import SpeedUpdate
 from ..lanes import RoadLane
+from ..vehicles import Vehicle
 
 # [Implementation notes]
 # Helper function progresses vehicles normally along a path, either per vehicle or for all
@@ -63,6 +65,30 @@ class LaneChangeManager(Configurable):
             lanes=spec['lanes']
         )
 
+    @abstractmethod
+    def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
+        """Return lateral speed and acceleration for vehicles in this region.
+
+        This road is responsible for updating the speed and acceleration of all
+        vehicles on this road that aren't partially in an intersection.
+
+        Speed and acceleration are calculated relative to the road's
+        trajectory, i.e., neglect the speed and acceleration vector compenents
+        perpendicular to the road centerline, which are only nonzero in case
+        of a lane change. The manager should handle those internally.
+        """
+        raise NotImplementedError("Must be implemented in child classes.")
+
+    @abstractmethod
+    def step(self) -> None:
+        """Should update vehicle positions in the lane change region."""
+        raise NotImplementedError("Must be implemented in child classes.")
+
+    @abstractmethod
+    def handle_logic(self) -> None:
+        """Should process and schedule new and queued lane change requests."""
+        raise NotImplementedError("Must be implemented in child classes.")
+
 
 class DummyManager(LaneChangeManager):
 
@@ -74,4 +100,29 @@ class DummyManager(LaneChangeManager):
         Used roads that leave from a spawner or end at a remover.
         (All roads in one intersection simulations.)
         """
+        pass
+
+    def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
+        """Return lateral speed and acceleration for vehicles in this region.
+
+        The dummy manager doesn't permit lane changes, so default to normal
+        lane behavior.
+        """
+        new_speeds = []
+        for lane in self.lanes:
+            new_speeds.append(lane.update_speeds(section=2))
+        # Merge the SpeedUpdates from every lane into one dict
+        return dict(update for lane_update in new_speeds
+                    for update in lane_update.items())
+
+    def step(self) -> None:
+        """Update vehicle positions in the lane change region.
+
+        The dummy manager doesn't permit lange changes, so just default
+        to normal lane behavior.
+        """
+        raise NotImplementedError("TODO")
+
+    def handle_logic(self) -> None:
+        """DummyManager has no logic, so do nothing."""
         pass

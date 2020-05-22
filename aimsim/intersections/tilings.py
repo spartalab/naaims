@@ -106,6 +106,51 @@ class Tiling(Configurable):
 
     # Begin simulation cycle methods
 
+    def handle_requests(self) -> None:
+        """Check for crashes. Update tile stack and existing reservations."""
+
+        # 1. Check for collisions
+        self.check_for_collisions()
+
+        # 2. Update tiling for the new timestep
+        self.update()
+
+        # 3. Update existing reservations
+        self.update_active_reservations()
+
+    @abstractmethod
+    def check_for_collisions(self):
+        """Check for collisions in the intersection."""
+        # TODO: (Low priority) May only be necessary if we have stochasic
+        #       movement, because otherwise collisions _should_ not occur if
+        #       implemented correctly
+        # vehicles = []
+        # for lane in self.lanes:
+        #     vehicles += [vp.vehicles for vp in lane.vehicles]
+        # # draw every vehicle to check for collisions?
+        pass
+
+    @abstractmethod
+    def update(self):
+        """Progress the tiling stack one timestep."""
+        # TODO: how does the Tiling stack work? If it's a fixed length stack,
+        #       Peel off the layer of tiles that corresponds to the passing
+        #       timestep and add a fresh one at the bottom.
+        raise NotImplementedError("TODO")
+
+    @abstractmethod
+    def update_active_reservations(self):
+        """Given vehicle movement in the last step, update their reservations.
+
+        Have manager and tiling compare the current positions and velocities
+        of all vehicles in intersection. Use the difference to update 
+        reservations to reflect resolved stochasticities
+        """
+        # TODO: (low priority)
+        pass
+
+    # Methods used by manager during reservation request handling
+
     @abstractmethod
     def reserve_lanes(self, lanes: Iterable[IntersectionLane],
                       start: int, end: int) -> None:

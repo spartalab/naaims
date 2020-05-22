@@ -4,10 +4,10 @@ vehicle and uses the lane `LeavingInterface` to send the vehicle onto a lane
 in the network.
 """
 
-from typing import TYPE_CHECKING, Dict, Optional, Iterable, Any
 from __future__ import annotations
+from typing import TYPE_CHECKING, Dict, Optional, Iterable, Any
 
-import aimsim.settings as SETTINGS
+import aimsim.shared as SHARED
 from ..archetypes import Configurable, Upstream
 from ..util import VehicleTransfer, LinkError, Coord
 from ..vehicles import Vehicle
@@ -83,8 +83,8 @@ class VehicleSpawner(Configurable, Upstream):
         # if there's room, create a new vehicle object and assign it the latest
         # vin
         # TODO: not thread-safe. must be changed for multiprocessing.
-        vin = SETTINGS.vin_counter
-        SETTINGS.vin_counter += 1
+        vin = SHARED.vin_counter
+        SHARED.vin_counter += 1
 
         # separately put the front and center of the vehicle into the road's
         # buffer

@@ -14,7 +14,7 @@ entrance_length
     acceleration is the time to traverse the length of the longest movement at
     full acceleration plus the length of the vehicle, which could end up being
     some super ridiculous length. Maybe this isn't worth it.
-    
+
     TODO: calculate for every vehicle to find the worst case instead of having
     it provided in the config.
 max deceleration
@@ -39,6 +39,15 @@ SETTINGS: Dict[str, Any] = {
 
 config_file_already_read: bool = False
 
+# initialize required variables
+steps_per_second = SETTINGS['steps_per_second']
+speed_limit = SETTINGS['speed_limit']
+max_deceleration = SETTINGS['max_deceleration']
+max_stopping_distance = speed_limit**2/(2*max_deceleration)
+max_vehicle_length = SETTINGS['max_vehicle_length']
+min_entrance_length = max_stopping_distance + max_vehicle_length
+TIMESTEP_LENGTH = steps_per_second**(-1)
+
 
 def read(config_filename: str = './config.ini') -> None:
     global config_file_already_read
@@ -50,18 +59,29 @@ def read(config_filename: str = './config.ini') -> None:
         for key, value in SETTINGS.items():
             SETTINGS[key] = eval(value)
         config_file_already_read = True
+
+        # unpack required variables
+        global steps_per_second
+        global speed_limit
+        global max_deceleration
+        global max_stopping_distance
+        global max_vehicle_length
+        global min_entrance_length
+        global TIMESTEP_LENGTH
+        steps_per_second = SETTINGS['steps_per_second']
+        speed_limit = SETTINGS['speed_limit']
+        max_deceleration = SETTINGS['max_deceleration']
+        max_stopping_distance = speed_limit**2/(2*max_deceleration)
+        max_vehicle_length = SETTINGS['max_vehicle_length']
+        min_entrance_length = max_stopping_distance + max_vehicle_length
+        TIMESTEP_LENGTH = steps_per_second**(-1)
     else:
         raise RuntimeError('Config file already read.')
 
 
-# unpack required variables
-steps_per_second = SETTINGS['steps_per_second']
-speed_limit = SETTINGS['speed_limit']
-max_deceleration = SETTINGS['max_deceleration']
-max_stopping_distance = speed_limit**2/(2*max_deceleration)
-max_vehicle_length = SETTINGS['max_vehicle_length']
-min_entrance_length = max_stopping_distance + max_vehicle_length
-
 # shared vin counter
 # TODO: not thread safe. fix for multiprocessing.
 vin_counter = 0
+
+# time counter
+t = 0

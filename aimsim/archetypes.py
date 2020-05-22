@@ -9,11 +9,11 @@ These archetypes enforce the main simulation loop:
     4. handle_logic (Facilities)
 """
 
-from abc import ABC, abstractmethod
-from typing import Optional, Any, Type, List, Iterable, NamedTuple, Union, Dict
 from __future__ import annotations
+from abc import ABC, abstractmethod
+from typing import Optional, Any, List, Iterable, Union, Dict
 
-from .util import VehicleTransfer, Coord
+from .util import VehicleTransfer, Coord, SpeedUpdate
 from .vehicles import Vehicle
 
 
@@ -39,7 +39,7 @@ class Configurable(ABC):
 
 class Facility(ABC):
     @abstractmethod
-    def update_speeds(self) -> None:
+    def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
         """
         For roads and intersections, goes through and calculates the speed and
         acceleration of its responsible vehicles. If a vehicle is in any part

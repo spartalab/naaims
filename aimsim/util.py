@@ -2,12 +2,12 @@
 Contains utility functions that makes other stuff work.
 """
 
+from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import (TYPE_CHECKING, TypeVar, Type, NamedTuple, Optional, Any,
                     Iterable)
-from __future__ import annotations
 
 if TYPE_CHECKING:
     from .vehicles import Vehicle
@@ -22,6 +22,11 @@ class VehicleSection(Enum):
     FRONT = 1
     CENTER = 2
     REAR = 3
+
+
+class SpeedUpdate(NamedTuple):
+    v: float
+    a: float
 
 
 class VehicleTransfer:
