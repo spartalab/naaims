@@ -220,6 +220,8 @@ class Road(Configurable, Facility, Upstream, Downstream):
         """
 
         # Check that Upstream and Downstream objects have been connected.
+        # This only needs to be checked the first time but hopefully this
+        # runtime is trivial.
         try:
             self.upstream
         except NameError:
@@ -228,6 +230,19 @@ class Road(Configurable, Facility, Upstream, Downstream):
             self.downstream
         except NameError:
             raise LinkError("No downstream object.")
+
+        # TODO: (LCM) Consider changing this implementation such that speeds
+        #       are updated entirely lane-by-lane. In the update_speeds call
+        #       to each lane, have the LCM provide a list of all the vehicles
+        #       in that lane that should be slowed down.
+        #
+        #       Issue compared to current implementation: LCM won't have the
+        #       freshest speeds in the region ahead of the area it controls,
+        #       so it'll have to make pessimistic assumptions on speeds from
+        #       one timestep ago.
+        #
+        #       Advantage: It's a much simpler implementation since each lane
+        #       only gets passed through once.
 
         new_speeds: List[Dict[Vehicle, SpeedUpdate]] = []
 
@@ -245,8 +260,21 @@ class Road(Configurable, Facility, Upstream, Downstream):
             new_speeds.append(lane.update_speeds(section=3))
 
         # 4. Merge the SpeedUpdates from every lane and section into one dict
-        return dict(update for lane_update in new_speeds
-                    for update in lane_update.items())
+        finalized_speed: Dict[Vehicle, SpeedUpdate] = {}
+        for new_speed_dict in new_speeds:
+            for vehicle, new_speed in new_speed_dict.items():
+                if vehicle in finalized_speed:
+                    # One vehicle is present in two lanes because it's in the
+                    # middle of a lane change. Take the slower speed update of
+                    # the two lanes. (Technically speed_updates are tuples so
+                    # comparing them is a bit odd but since if the v of the
+                    # update is lower the a is as well and vice versa, so this
+                    # works.)
+                    finalized_speed[vehicle] = min(finalized_speed[vehicle],
+                                                   new_speed)
+                else:
+                    finalized_speed[vehicle] = new_speed
+        return finalized_speed
 
     def step(self) -> None:
         """Update all vehicles' positions and transfer them if they exit."""

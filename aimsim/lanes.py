@@ -74,12 +74,23 @@ class Lane(ABC):
             # Vehicle doesn't fall into observation area.
             return False, p
 
-    def effective_speed_limit(self, p: float) -> float:
+    def effective_speed_limit(self, p: float, vehicle: Vehicle) -> float:
         """Return the effective speed limit at the given progression.
 
         Some trajectories may require a lower speed limit, e.g. on sharper
         turns. Overriden in IntersectionLane to prevent crashes just downstream
         when control is done by signals instead of by reservation.
+
+        Parameters
+        p: float
+            Progress to use on the intersection trajectory to calculate the
+            effective speed limit (e.g. on tight turns). (This is provided
+            instead of vehicle because the vehicle has front, middle, and rear
+            progress values so it would be ambiguous which one to use.)
+        vehicle: Vehicle
+            (Used only by IntersectionLane) Provide the vehicle to allow us to
+            adjust the effective speed limit based on its characteristics.
+            TODO: (stochasticity) remove if unused.
         """
         return min(self.speed_limit, self.trajectory.effective_speed_limit(p))
 
@@ -146,7 +157,7 @@ class Lane(ABC):
         could be the front or rear of the vehicle depending on the situation,
         it's presented here as an input argument.
         """
-        effective_speed_limit = self.effective_speed_limit(p)
+        effective_speed_limit = self.effective_speed_limit(p, vehicle)
         if vehicle.v > effective_speed_limit:
             return vehicle.max_braking
         elif vehicle.v == effective_speed_limit:
@@ -170,7 +181,7 @@ class Lane(ABC):
         progress, velocity, acceleration broken out or, given the defaults, the
         intersection line.
         """
-        effective_speed_limit = self.effective_speed_limit(p)
+        effective_speed_limit = self.effective_speed_limit(p, vehicle)
 
         # TODO: when implementing, take into account that time is discrete so
         #       round down when spacing.
@@ -202,7 +213,7 @@ class Lane(ABC):
         if v_new < 0:
             return SpeedUpdate(v=0, a=accel)
         else:
-            effective_speed_limit = self.effective_speed_limit(p)
+            effective_speed_limit = self.effective_speed_limit(p, vehicle)
             if v_new > effective_speed_limit:
                 return SpeedUpdate(v=effective_speed_limit, a=accel)
             else:
@@ -568,13 +579,22 @@ class IntersectionLane(Lane):
         self.temp_speed_limit = self.speed_limit
         self.last_exit: int = SHARED.t
 
-    def effective_speed_limit(self, p: float) -> float:
+    def effective_speed_limit(self, p: float, vehicle: Vehicle) -> float:
         """Return the effective speed limit at the given progression.
 
         Some trajectories may require a lower speed limit, e.g. on sharper
         turns.
         """
-        return min(self.temp_speed_limit, super().effective_speed_limit(p))
+        return min(self.temp_speed_limit,
+                   super().effective_speed_limit(p, vehicle))
+
+        # TODO: (stochasticity) Consider making the effective speed limit a
+        #       function of a vehicle's ability to follow instructions
+        #       precisely (to account for it over-accelerating) and its
+        #       deviation from the lane's centerline to allow it to hit the
+        #       actual speed limit if it cuts the corner.
+        #
+        #       See the update_speeds todo for more information.
 
     def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
         return self.update_speeds_by_section()
@@ -597,6 +617,23 @@ class IntersectionLane(Lane):
                                                pre_p=preceding_rear,
                                                pre_v=preceding.v,
                                                pre_a=preceding.a)
+
+        # TODO: (stochasticity) Change the return so the speed and acceleration
+        #       update is affected by both:
+        #           1. A stochastic term dependent on the vehicle's reliability
+        #              in following speed updates. They may exceed the actual
+        #              speed limit if their acceleration control is poor.
+        #           2. What side of the trajectory the vehicle is on and how
+        #              far from the centerline the vehicle is laterally.
+        #              Vehicles that cut corners at the speed limit will have a
+        #              higher effective speed limit in-lane, and vehicles that
+        #              turn too loose will have a slower effective speed limit.
+        #       This would require tweaking the effective speed limit for the
+        #       specific vehicle in addition to this acceleration update, since
+        #       in the velocity update the effective speed limit trims the
+        #       acceleration to the speed limit if it exceeds the speed limit.
+        #
+        #       See the effective speed limit todo for more details.
 
     # Support functions for step updates
 
