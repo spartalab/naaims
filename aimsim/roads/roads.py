@@ -231,35 +231,19 @@ class Road(Configurable, Facility, Upstream, Downstream):
         except NameError:
             raise LinkError("No downstream object.")
 
-        # TODO: (LCM) Consider changing this implementation such that speeds
-        #       are updated entirely lane-by-lane. In the update_speeds call
-        #       to each lane, have the LCM provide a list of all the vehicles
-        #       in that lane that should be slowed down.
-        #
-        #       Issue compared to current implementation: LCM won't have the
-        #       freshest speeds in the region ahead of the area it controls,
-        #       so it'll have to make pessimistic assumptions on speeds from
-        #       one timestep ago.
-        #
-        #       Advantage: It's a much simpler implementation since each lane
-        #       only gets passed through once.
-
         new_speeds: List[Dict[Vehicle, SpeedUpdate]] = []
 
-        # 1. Update speed and acceleration for vehicles in the approach region
-        #    (unless any part of the vehicle is inside the intersection)
+        # Update speed and acceleration for vehicles lane-by-lane. For each
+        # lane, poll the LaneChangeManager for a Set of vehicles that the LCM
+        # is instructing to slow down to allow for another vehicle to merge in.
         for lane in self.lanes:
-            new_speeds.append(lane.update_speeds(section=1))
+            new_speeds.append(
+                lane.update_speeds(
+                    to_slow=self.manager.vehicles_to_slow(lane)
+                )
+            )
 
-        # 2. Have the LaneChangeManager update the vehicles in its region
-        new_speeds.append(self.manager.update_speeds())
-
-        # 3. Update speed and acceleration for vehicles in the entrance region
-        #    (unless any part of the vehicle is inside the last intersection)
-        for lane in self.lanes:
-            new_speeds.append(lane.update_speeds(section=3))
-
-        # 4. Merge the SpeedUpdates from every lane and section into one dict
+        # Merge the SpeedUpdates from every lane and section into one dict
         finalized_speed: Dict[Vehicle, SpeedUpdate] = {}
         for new_speed_dict in new_speeds:
             for vehicle, new_speed in new_speed_dict.items():

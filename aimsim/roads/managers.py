@@ -7,7 +7,7 @@ simultaneously.
 '''
 
 from abc import abstractmethod
-from typing import Iterable, Dict, Any, TypeVar, Type
+from typing import Iterable, Dict, Any, TypeVar, Type, Set
 
 from ..archetypes import Configurable
 from ..util import SpeedUpdate
@@ -66,16 +66,12 @@ class LaneChangeManager(Configurable):
         )
 
     @abstractmethod
-    def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
-        """Return lateral speed and acceleration for vehicles in this region.
+    def vehicles_to_slow(self, lane: RoadLane) -> Set[Vehicle]:
+        """Should return a list of vehicles to slow in the provided lane.
 
-        This road is responsible for updating the speed and acceleration of all
-        vehicles on this road that aren't partially in an intersection.
-
-        Speed and acceleration are calculated relative to the road's
-        trajectory, i.e., neglect the speed and acceleration vector compenents
-        perpendicular to the road centerline, which are only nonzero in case
-        of a lane change. The manager should handle those internally.
+        In the last step, the manager should have calculated which vehicles
+        in each lane it wants to override the lane-following behavior for and
+        slow down to allow for a merge. 
         """
         raise NotImplementedError("Must be implemented in child classes.")
 
@@ -102,21 +98,9 @@ class DummyManager(LaneChangeManager):
         """
         pass
 
-    def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
-        """Return lateral speed and acceleration for vehicles in this region.
-
-        The dummy manager doesn't permit lane changes, so default to normal
-        lane behavior.
-        """
-        new_speeds = []
-        for lane in self.lanes:
-            new_speeds.append(lane.update_speeds(section=2))
-        # Merge the SpeedUpdates from every lane into one dict
-        return dict(update for lane_update in new_speeds
-                    for update in lane_update.items())
-
-    def step(self) -> None:
-        """Update vehicle positions in the lane change region.
+    def vehicles_to_slow(self, lane: RoadLane) -> Set[Vehicle]:
+        """Return an empty set since a dummy manager doesn't slow vehicles."""
+        return set()
 
         The dummy manager doesn't permit lange changes, so just default
         to normal lane behavior.

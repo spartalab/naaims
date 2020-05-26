@@ -15,7 +15,7 @@ proportional progress of the vehicles.
 
 import heapq
 from abc import ABC, abstractmethod
-from typing import Tuple, Iterable, Optional, List, NamedTuple, Dict
+from typing import Tuple, Iterable, Optional, List, NamedTuple, Dict, Set
 
 import aimsim.shared as SHARED
 from .archetypes import Upstream
@@ -64,16 +64,6 @@ class Lane(ABC):
 
     # Support functions for speed updates
 
-    @staticmethod
-    def p_in_bounds(p: float,
-                    p_min: float, p_max: float) -> Tuple[bool, float]:
-        if p > p_min and p <= p_max:
-            # Vehicle falls into observation area.
-            return True, p
-        else:
-            # Vehicle doesn't fall into observation area.
-            return False, p
-
     def effective_speed_limit(self, p: float, vehicle: Vehicle) -> float:
         """Return the effective speed limit at the given progression.
 
@@ -94,37 +84,28 @@ class Lane(ABC):
         """
         return min(self.speed_limit, self.trajectory.effective_speed_limit(p))
 
-    def update_speeds_by_section(self,
-                                 p_max: float = 1,
-                                 p_min: float = -1
-                                 ) -> Dict[Vehicle, SpeedUpdate]:
-        """Return speed updates for vehicles in (p_min, p_max]
+    def update_speeds(self, to_slow: Set[Vehicle] = set()
+                      ) -> Dict[Vehicle, SpeedUpdate]:
+        """Return speed updates for all vehicles on this lane.
 
         Parameters
-            p_min: float = -1
-                Minimum proportion is 0 but we want to account for boundary
-                conditions since transferring vehicles will be placed at 0.
-            p_max: float
+            to_slow: Set[Vehicle]
+                A set of vehicles for which to override lane following behavior
+                and slow down to allow for another vehicle to merge in.
         """
-        if p_max < p_min:
-            raise ValueError("p_max must be greater than or equal to p_min")
-
         new_speed: Dict[Vehicle, SpeedUpdate] = {}
 
+        # Track preceding vehicle in order to avoid colliding with it.
         preceding: Optional[Vehicle] = None
         # self.vehicles should be in order of decreasing progress
         for vehicle in self.vehicles:
-            front: Optional[float] = self.vehicle_progress[vehicle].front
-            if (front is not None) and (front <= p_min):
-                # exit if we reach a vehicle with max/front progress < p_min
-                break
-
-            vehicle_in_jurisdiction, p = self.controls_this_speed(vehicle,
-                                                                  p_min, p_max)
-            if vehicle_in_jurisdiction:
-                # vehicle falls into this lane's jurisdiction
-                # don't update speeds of vehicles with progress > p_max
-                a_new = self.accel_update(vehicle, p, preceding)
+            vehicle_in_jurisdiction, p = self.controls_this_speed(vehicle)
+            if vehicle_in_jurisdiction:  # update its speed
+                # A vehicle being in to_slow overrides any acceleration logic
+                # defined in accel_update, instead telling the vehicle to start
+                # braking no matter what.
+                a_new = (vehicle.max_braking if (vehicle in to_slow)
+                         else self.accel_update(vehicle, p, preceding))
                 new_speed[vehicle] = self.speed_update(vehicle, p, a_new)
 
             preceding = vehicle
@@ -132,8 +113,7 @@ class Lane(ABC):
         return new_speed
 
     @abstractmethod
-    def controls_this_speed(self, vehicle: Vehicle,
-                            p_min: float, p_max: float) -> Tuple[bool, float]:
+    def controls_this_speed(self, vehicle: Vehicle) -> Tuple[bool, float]:
         """Should return if lane controls this vehicle and its progress."""
         raise NotImplementedError("Must be implemented in child class.")
 
@@ -264,11 +244,8 @@ class RoadLane(Lane):
 
     # Support functions for speed updates
 
-    def controls_this_speed(self, vehicle: Vehicle,
-                            p_min: float, p_max: float) -> Tuple[bool, float]:
-        """Return whether this lane controls this vehicle, and its progress.
-
-        """
+    def controls_this_speed(self, vehicle: Vehicle) -> Tuple[bool, float]:
+        """Return if this lane controls this vehicle, and its progress."""
 
         front = self.vehicle_progress[vehicle].front
         if front is None:
@@ -278,9 +255,9 @@ class RoadLane(Lane):
                 # control. Report the rear of the vehicle.
                 rear = self.vehicle_progress[vehicle].rear
                 if rear is None:
-                    raise ValueError("Vehicle exited lane already.")
+                    raise RuntimeError("Vehicle exited lane already.")
                 else:
-                    return self.p_in_bounds(rear, p_min, p_max)
+                    return True, rear
             else:
                 # The front of the vehicle is in the next intersection, so this
                 # road lane is not in control.
@@ -293,8 +270,8 @@ class RoadLane(Lane):
                 return False, -float("inf")
             else:
                 # Front of the vehicle is on this road and its rear isn't in an
-                # intersection
-                return self.p_in_bounds(front, p_min, p_max)
+                # intersection, so this road is in control. Report the front.
+                return True, front
 
     def accel_update(self, vehicle: Vehicle, p: float,
                      preceding: Optional[Vehicle]) -> float:
@@ -323,20 +300,6 @@ class RoadLane(Lane):
             else:
                 # stop for preceding vehicle AND intersection line
                 return min(a_follow, self.accel_update_following(vehicle, p))
-
-    def update_speeds(self, section: int) -> Dict[Vehicle, SpeedUpdate]:
-        """Return speed updates for all vehicles on this road lane."""
-        # Error check
-        if (section not in {1, 2, 3}):
-            raise ValueError("section must be 1, 2, or 3")
-
-        if section == 1:  # approach region
-            return self.update_speeds_by_section(p_min=self.lcregion_end)
-        elif section == 2:  # LCM region
-            return self.update_speeds_by_section(p_max=self.lcregion_end,
-                                                 p_min=self.lcregion_end)
-        else:  # entrance region
-            return self.update_speeds_by_section(p_max=self.lcregion_end)
 
     # Support functions for step updates
 
@@ -553,18 +516,17 @@ class IntersectionLane(Lane):
 
     # Support functions for speed updates
 
-    def controls_this_speed(self, vehicle: Vehicle,
-                            p_min: float, p_max: float) -> Tuple[bool, float]:
+    def controls_this_speed(self, vehicle: Vehicle) -> Tuple[bool, float]:
         front = self.vehicle_progress[vehicle].front
         if front is not None:
             # Front of the vehicle is in the lane.
-            return self.p_in_bounds(front, p_min, p_max)
+            return True, front
         else:
             # Surely the rear of the vehicle must be in the lane.
             rear = self.vehicle_progress[vehicle].rear
             if rear is None:
-                raise ValueError("Vehicle exited lane already.")
-            return self.p_in_bounds(rear, p_min, p_max)
+                raise RuntimeError("Vehicle exited lane already.")
+            return True, rear
 
     def reset_temp_speed_limit(self):
         """Reset the soft speed limit to prevent crashes just downstream.
@@ -596,9 +558,6 @@ class IntersectionLane(Lane):
         #
         #       See the update_speeds todo for more information.
 
-    def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
-        return self.update_speeds_by_section()
-
     def accel_update(self, vehicle: Vehicle, p: float,
                      preceding: Optional[Vehicle]) -> float:
         if vehicle.has_reservation or (preceding is None):
@@ -612,7 +571,7 @@ class IntersectionLane(Lane):
             # to follow
             preceding_rear = self.vehicle_progress[preceding].rear
             if preceding_rear is None:
-                raise ValueError("Preceding vehicle not in lane.")
+                raise RuntimeError("Preceding vehicle not in lane.")
             return self.accel_update_following(vehicle, p,
                                                pre_p=preceding_rear,
                                                pre_v=preceding.v,
