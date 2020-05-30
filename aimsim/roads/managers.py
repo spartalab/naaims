@@ -11,7 +11,7 @@ from typing import Iterable, Dict, Any, TypeVar, Type, Set
 
 from ..archetypes import Configurable
 from ..util import SpeedUpdate
-from ..lanes import RoadLane
+from ..lanes import RoadLane, LateralDeviation
 from ..vehicles import Vehicle
 
 # [Implementation notes]
@@ -71,13 +71,14 @@ class LaneChangeManager(Configurable):
 
         In the last step, the manager should have calculated which vehicles
         in each lane it wants to override the lane-following behavior for and
-        slow down to allow for a merge. 
+        slow down to allow for a merge.
         """
         raise NotImplementedError("Must be implemented in child classes.")
 
     @abstractmethod
-    def step(self) -> None:
-        """Should update vehicle positions in the lane change region."""
+    def lateral_movements(self, lane: RoadLane) -> Dict[Vehicle,
+                                                        LateralDeviation]:
+        """Should return lateral movements for lane change region vehicles."""
         raise NotImplementedError("Must be implemented in child classes.")
 
     @abstractmethod
@@ -102,10 +103,10 @@ class DummyManager(LaneChangeManager):
         """Return an empty set since a dummy manager doesn't slow vehicles."""
         return set()
 
-        The dummy manager doesn't permit lange changes, so just default
-        to normal lane behavior.
-        """
-        raise NotImplementedError("TODO")
+    def lateral_movements(self, lane: RoadLane) -> Dict[Vehicle,
+                                                        LateralDeviation]:
+        """Return an empty dict because the dummy doesn't do lane changes."""
+        return {}
 
     def handle_logic(self) -> None:
         """DummyManager has no logic, so do nothing."""

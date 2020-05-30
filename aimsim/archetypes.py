@@ -61,7 +61,7 @@ class Upstream(ABC):
     """
 
     @abstractmethod
-    def step(self) -> Optional[Vehicle]:
+    def step_vehicles(self) -> Optional[Vehicle]:
         """Should progress all vehicles over one timestep.
 
         Returns nothing except in the case of a VehicleSpawner, which could

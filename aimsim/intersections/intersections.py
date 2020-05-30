@@ -24,7 +24,7 @@ from pandas import DataFrame
 
 import aimsim.shared as SHARED
 from ..archetypes import Configurable, Facility, Upstream, Downstream
-from ..util import Coord, VehicleTransfer, SpeedUpdate
+from ..util import Coord, VehicleTransfer, SpeedUpdate, VehicleSection
 from ..trajectories import Trajectory, BezierTrajectory
 from ..lanes import IntersectionLane
 from ..roads import Road
@@ -137,6 +137,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         # TODO: enforce provision of separate manager_type and manager_config
         #       fields in intersection spec string
 
+        manager_type: str
         # Based on the spec, identify the correct manager type
         if manager_type.lower() in {'fcfs', 'fcfsmanager'}:
             spec['manager_type'] = FCFSManager
@@ -174,30 +175,22 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         return dict(update for lane_update in new_speeds
                     for update in lane_update.items())
 
-    def step(self) -> None:
-        """Progress vehicles currently in intersection."""
+    def step_vehicles(self) -> None:
+        """Progress vehicles currently in intersection.
 
-        # TODO: error check that setup has finished
-        # # error checking
-        # for road_coord in self.upstream_road_coords:
-        #     if road_coord not in self.upstream:
-        #        raise ValueError("Missing promised upstream road in connected"
-        #                          "roads. Check if the intersection and road"
-        #                          "coords in the spec file match."
-        #                         )
-
-        # Have lanes progress their vehicles forward.
-        # If a vehicle in a lane exits the intersection in this step, pass it
-        # to the downstream road's vehicle transfer object and tell the tiling
-        # that this vehicle's reservation is complete and can be dropped.
-
-        # Manager does NOTHING in this cycle step.
+        Have lanes progress their vehicles forward. If a vehicle in a lane
+        exits the intersection in this step, pass it to the downstream road's
+        vehicle transfer object and tell the tiling that this vehicle's
+        reservation is complete and can be dropped.
+        """
 
         for lane in self.lanes:
-            leaving = lane.step()
-            if leaving is not None:
-                self.downstream.transfer_vehicle(leaving)
-                self.tiling.reservation_complete(leaving.vehicle)
+            transfers: Iterable[VehicleTransfer] = lane.step_vehicles()
+            for transfer in transfers:
+                self.downstream_road_by_coord[transfer.pos].transfer_vehicle(
+                    transfer)
+                if transfer.section == VehicleSection.REAR:
+                    self.manager.reservation_complete(transfer.vehicle)
 
     def process_transfers(self) -> None:
         """Incorporate new vehicles"""

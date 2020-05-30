@@ -95,7 +95,7 @@ class Tile:
         #     r in set(tpr.pr for tpr in self.__potentials)
         # except:
         #         r is not in set()):
-        #     raise ValueError("This request was not approved for this Tile.")
+        #     raise RuntimeError("This request was not approved for this Tile.")
 
         if (r is None) and (not force):
             raise ValueError("Empty reservations must be forced.")

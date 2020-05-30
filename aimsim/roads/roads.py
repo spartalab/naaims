@@ -260,23 +260,18 @@ class Road(Configurable, Facility, Upstream, Downstream):
                     finalized_speed[vehicle] = new_speed
         return finalized_speed
 
-    def step(self) -> None:
+    def step_vehicles(self) -> None:
         """Update all vehicles' positions and transfer them if they exit."""
 
-        # 1. Update the true and lane-relative positions of vehicles in the
-        #    approach region, transferring vehicle front/center/rear portions
-        #    if they exit the road.
+        # Update the true and lane-relative positions of vehicles along the
+        # centerline of their lane. If a vehicle portion exits the lane, pass
+        # it back to the road for transferring.
         for lane in self.lanes:
-            leaving = lane.step_approach()
-            if leaving is not None:
-                self.downstream.transfer_vehicle(leaving)
-
-        # 2. Have the LaneChangeManager step the vehicles in its region.
-        self.manager.step()
-
-        # 3. Update the positions of vehicles in the entrance region.
-        for lane in self.lanes:
-            lane.step_entrance()
+            transfers: Iterable[VehicleTransfer] = lane.step_vehicles(
+                lateral_deviations=self.manager.lateral_movements(lane)
+            )
+            for transfer in transfers:
+                self.downstream.transfer_vehicle(transfer)
 
     def process_transfers(self) -> None:
         """Incorporate new vehicles onto this road."""
@@ -286,7 +281,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
             # TODO: consider checking if a lane gets more than one vehicle
             # added in a cycle. if so, raise TooManyProgressionsError
             if transfer.pos not in self.lanes_by_downstream_coord:
-                raise ValueError('Lane not in this road.')
+                raise RuntimeError('Lane not in this road.')
             self.lanes_by_downstream_coord[transfer.pos].enter_vehicle_section(
                 transfer)
         super().process_transfers()  # just makes sure the list is empty after

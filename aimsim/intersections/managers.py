@@ -9,15 +9,16 @@ tiling (which is owned by the manager).
 """
 
 
+from __future__ import annotations
 from abc import abstractmethod
 from typing import (Iterable, Dict, List, TypedDict, NamedTuple, Optional,
                     Tuple, Set, Type, Any, TypeVar)
-from __future__ import annotations
 
 from ..archetypes import Configurable
 from ..util import Coord
 from ..roads import Road
 from ..lanes import IntersectionLane
+from ..vehicles import Vehicle
 from .tilings import Tiling, SquareTiling, ArcTiling
 from .reservations import ReservationRequest, Reservation
 
@@ -61,7 +62,7 @@ class IntersectionManager(Configurable):
 
         # TODO: enforce provision of separate tiling_type and tiling_config
         #       fields in intersection spec string
-
+        tiling_type: str
         # Based on the spec, identify the correct tiling type
         if tiling_type.lower() in {'square', 'squaretiling'}:
             spec['tiling_type'] = SquareTiling
@@ -133,6 +134,10 @@ class IntersectionManager(Configurable):
 
         # Clear marked potential reservations if necessary
         raise NotImplementedError("Should be implemented in child classes.")
+
+    def reservation_complete(self, vehicle: Vehicle) -> None:
+        """Clear a completed reservation from the tiling."""
+        self.tiling.reservation_complete(vehicle)
 
 
 class FCFSManager(IntersectionManager):

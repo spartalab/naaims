@@ -106,6 +106,12 @@ class Tiling(Configurable):
 
     # Begin simulation cycle methods
 
+    def reservation_complete(self, vehicle: Vehicle) -> None:
+        """Clear a completed reservation from the tiling's memory."""
+        del self.reservations[vehicle]
+
+    # Handle logic support methods
+
     def handle_requests(self) -> None:
         """Check for crashes. Update tile stack and existing reservations."""
 

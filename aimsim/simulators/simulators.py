@@ -5,13 +5,14 @@ including visualizations if enabled.
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Iterable, Tuple, Dict, Optional, Set, Any
+from typing import Iterable, Tuple, Dict, Optional, Set, Any, List
 
 from pandas import DataFrame
 from matplotlib import pyplot as plt
 
 import aimsim.shared as SHARED
 from ..util import Coord
+from ..pathfinder import Pathfinder
 from ..archetypes import Configurable, Facility, Upstream, Downstream
 from ..intersections import Intersection
 from ..roads import Road
@@ -40,6 +41,8 @@ class Simulator(ABC):
                  intersection_specs: Iterable[Dict[str, Any]],
                  spawner_specs: Iterable[Dict[str, Any]],
                  remover_specs: Iterable[Dict[str, Any]],
+                 lane_destination_pairs: Dict[Tuple[Coord, int],
+                                              List[Coord]] = {},
                  config_filename: str = './config.ini',
                  display: bool = False) -> None:
         """Should create all roads, intersections, and suppport structures.
@@ -48,8 +51,16 @@ class Simulator(ABC):
         initialize data structures for lookup, calls, and visualization.
         """
 
-        # 1. Read in the config file.
+        # 0. Read in the config file.
         SHARED.read(config_filename)
+
+        # 1. Generate a Pathfinder from the specs and share it across modules
+        # TODO: Figure out how to work around this for simple 1-intersection
+        #       cases. Maybe an override?
+        SHARED.pathfinder = Pathfinder(
+            road_specs, intersection_specs, spawner_specs, remover_specs,
+            lane_destination_pairs
+        )
 
         # 2. Create the Upstream and Downstream objects
         #   a. Create the roads and organize by intersection and road to be
@@ -301,13 +312,13 @@ class Simulator(ABC):
         #    whether to create a new vehicle and if so places it in the
         #    downstream object.
         for u in self.upstreams:
-            new_vehicle = u.step()
+            new_vehicle = u.step_vehicles()
             if new_vehicle is not None:
                 self.vehicles.add(new_vehicle)
 
         # 3. Have every downstream object (roads, intersections, and vehicle
         #    removers) resolve all vehicle transfers. This finishes updates to
-        #    absolute and relative positions using speeds calculed in 1.
+        #    absolute and relative positions using speeds calculated in 1.
         for d in self.downstreams:
             exiting_vehicles: Optional[Iterable[Vehicle]
                                        ] = d.process_transfers()
@@ -325,8 +336,9 @@ class Simulator(ABC):
         for f in self.facilities:
             f.handle_logic()
 
-        # 5. Update time step
+        # 5. Update shared time step and (TODO future) shortest path values
         SHARED.t += 1
+        SHARED.pathfinder.update(None)
 
     def display(self) -> None:
         """Display the current position of all vehicles on the grid."""

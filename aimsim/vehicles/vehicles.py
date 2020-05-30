@@ -11,8 +11,9 @@ along the way
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Union, TypeVar, Type
+from typing import TYPE_CHECKING, Union, TypeVar, Type, Iterable, List
 
+import aimsim.shared as SHARED
 from ..util import Coord
 
 if TYPE_CHECKING:
@@ -36,14 +37,13 @@ class Vehicle(ABC):
     @abstractmethod
     def __init__(self,
                  vin: int,  # unique ID
-                 start_coord: Coord,
                  destination: int,  # ID of target VehicleRemover
                  max_accel: float = 3,  # maximum acceleration, in m/s^2
                  max_braking: float = -3.4,  # or -4.5, braking in m/s^2
                  length: float = 4.5,  # length in meters
                  width: float = 3,  # width in meters
                  vot: float = 0  # value of time
-                 ):
+                 ) -> None:
         """Construct a vehicle instance."""
 
         if max_accel <= 0:
@@ -54,11 +54,12 @@ class Vehicle(ABC):
         self.vin = vin
 
         # initialize properties
-        self.pos = start_coord
-        self.v: float = 0
-        self.a: float = 0
-        self.heading: float = 0.0
-        self.enter_intersection = False
+        self.pos = Coord(0, 0)
+        self.v = 0
+        self.a = 0
+        self.heading = 0.0
+        self.can_enter_intersection = False
+        self.has_reservation = False
 
         # save vehicle characteristics
         self.destination = destination
@@ -134,34 +135,23 @@ class Vehicle(ABC):
     def has_reservation(self, has_reservation: bool) -> None:
         self._has_reservation = has_reservation
 
+    # TODO: (sequencing) Add chain_forward and chain_backward properties.
+    #       Allow the chaining action to temporarily override a vehicle's max
+    #       acceleration with the slowest acceleration in the chain.
+
     def stopping_distance(self) -> float:
         raise NotImplementedError("TODO")
 
-    def clone_for_request(self: Type[V]) -> V:
+    def next_movement(self, start_coord: Coord) -> List[Coord]:
+        """Return the vehicle's exit Coords for the next intersection."""
+        return SHARED.pathfinder.next_movement(start_coord, self.destination)
+
+    def clone_for_request(self) -> V:
         """Return a clone of this vehicle to test a reservation request."""
         raise NotImplementedError("TODO")
         v = self()
         v.has_reservation = True
         return v
-
-    # TODO: does veh need a lane-i'm-in property
-    #       or does it just need a reference to the Coord of the next transfer?
-    # @property
-    # def lane()
-
-    def next_movement(self, lane: RoadLane):
-        # tell a vehicle the lane it's in (we could derive it from its actual
-        # position but that seems long and unnecessary) and make it to do a
-        # shortest path calculation to its destination.
-
-        # or just have a fixed list of movements, but that requires telling the
-        # vehicle when it's completed a movement so it can switch the pointer
-        # to its next movement
-        raise NotImplementedError("TODO")
-
-    # def update_next_movement(self):
-    #     """The vehicle completed its last movement. Update for next time."""
-    #     raise NotImplementedError("TODO")
 
     def __hash__(self):
         return hash(self.vin)

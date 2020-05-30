@@ -137,8 +137,33 @@ class Trajectory(Configurable):
 
 
 class BezierTrajectory(Trajectory):
-    def __init__(self, x0, y0, x1, y1, x2, y2):
-        super().__init__()
+    def __init__(self,
+                 start_coord: Coord,
+                 end_coord: Coord,
+                 reference_coords: Iterable[Coord],
+                 traversibility_factors: Iterable[float] = []) -> None:
+        super().__init__(
+            start_coord=start_coord,
+            end_coord=end_coord,
+            reference_coords=reference_coords,
+            traversibility_factors=traversibility_factors
+        )
+        raise NotImplementedError("TODO")
+
+    @classmethod
+    def as_intersection_connector(cls,
+                                  start_coord: Coord,
+                                  start_heading: float,
+                                  end_coord: Coord,
+                                  end_heading: float):
+        """Creates a Bezier trajectory for use in an IntersectionLane.
+
+        Calculates the reference middle coordinate and traversibility
+        implicitly from the given parameters then passes them to the generic
+        constructor that follows the Trajectory pattern.
+        """
+        raise NotImplementedError("TODO")
+        cls.__init__()
         self.p0 = (x0, y0)
         self.p1 = (x1, y1)
         self.p2 = (x2, y2)
