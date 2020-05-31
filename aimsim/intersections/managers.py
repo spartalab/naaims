@@ -135,9 +135,16 @@ class IntersectionManager(Configurable):
         # Clear marked potential reservations if necessary
         raise NotImplementedError("Should be implemented in child classes.")
 
-    def reservation_complete(self, vehicle: Vehicle) -> None:
-        """Clear a completed reservation from the tiling."""
-        self.tiling.reservation_complete(vehicle)
+    def start_reservation(self, vehicle: Vehicle) -> IntersectionLane:
+        """Start a reservation in the tiling and return its lane."""
+        return self.tiling.start_reservation(vehicle)
+
+    def finish_exiting(self, vehicle: Vehicle) -> None:
+        """Clean up permissions and reservations for exiting vehicle."""
+        vehicle.permission_to_enter_intersection = False
+        if vehicle.has_reservation:
+            self.tiling.clear_reservation(vehicle)
+            vehicle.has_reservation = False
 
 
 class FCFSManager(IntersectionManager):

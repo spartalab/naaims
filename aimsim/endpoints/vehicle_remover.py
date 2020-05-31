@@ -18,7 +18,6 @@ class VehicleRemover(Configurable, Downstream):
 
     def __init__(self, upstream: Road) -> None:
         """Create a new vehicle remover."""
-        # TODO: check and return lane as well as vehicles?
         self.upstream = upstream
 
     @staticmethod
@@ -46,5 +45,6 @@ class VehicleRemover(Configurable, Downstream):
     def process_transfers(self) -> Iterable[Vehicle]:
         """Process transfers by returning the vehicles to be removed."""
         to_return = [vt.vehicle for vt in self.entering_vehicle_buffer]
+        # TODO: (low) check and return lane as well as vehicles
         super().process_transfers()
         return to_return

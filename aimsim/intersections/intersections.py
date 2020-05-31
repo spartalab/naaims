@@ -18,7 +18,7 @@ The tiling handles how the manager checks for upcoming conflicts.
 
 from __future__ import annotations
 import itertools
-from typing import Iterable, Type, Dict, Union, Set, Any, List
+from typing import Iterable, Type, Dict, Union, Set, Any, List, Tuple
 
 from pandas import DataFrame
 
@@ -70,15 +70,14 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         # Given the upstream and downstream roads and connectivity matrix,
         # connect the road endpoints together by creating new lanes, curving
         # if necessary based on the difference in heading between the endpoints
-        # self.lanes = blah
+        self.lanes: Tuple[IntersectionLane, ...]
         raise NotImplementedError("TODO")
 
         # Index the IntersectionLanes by their Coord
-        self.lane_coords: Set[Coord] = {**{
-            l.start_coord: l for l in self.lanes
-        }, **{
-            l.end_coord: l for l in self.lanes
-        }}
+        self.lanes_by_endpoints: Dict[Tuple[Coord, Coord],
+                                      IntersectionLane] = {
+            (l.start_coord, l.end_coord): l for l in self.lanes
+        }
 
         # Finish the spec for the manager by providing the roads and lanes
         manager_spec['upstream_road_by_coord'] = self.upstream_road_by_coord
@@ -189,19 +188,33 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
             for transfer in transfers:
                 self.downstream_road_by_coord[transfer.pos].transfer_vehicle(
                     transfer)
-                if transfer.section == VehicleSection.REAR:
-                    self.manager.reservation_complete(transfer.vehicle)
+                if transfer.section is VehicleSection.REAR:
+                    self.manager.finish_exiting(transfer.vehicle)
 
     def process_transfers(self) -> None:
-        """Incorporate new vehicles"""
-        # TODO: write logic to process transfers using self.enter_vehicle()
+        """Incorporate new vehicles onto this intersection."""
         while len(self.entering_vehicle_buffer) > 0:
             transfer = self.entering_vehicle_buffer.pop()
-            # TODO: consider checking if a lane gets more than one vehicle
-            # added in a cycle. if so, raise TooManyProgressionsError
-            # enter_vehicle(transfer)
-            # TODO: tell tiling that this reservation is now active
-            raise NotImplementedError("TODO")
+            lane: IntersectionLane
+            if transfer.vehicle.has_reservation:
+                # Tell the manager this reservation has started and get the
+                # lane it should be on.
+                lane = self.manager.start_reservation(transfer.vehicle)
+            elif transfer.vehicle.permission_to_enter_intersection:
+                # Retrieve the vehicle's desired IntersectionLane by using its
+                # next movement.
+                # TODO: (low) Consider checking that this lane is open for
+                #       unscheduled movements at this timestep. This shouldn't
+                #       be necessary since this should have been cleared when
+                #       the vehicle was given permission to enter.
+                lane = self.lanes_by_endpoints[(
+                    transfer.pos,
+                    transfer.vehicle.next_movement(transfer.pos)[0]
+                )]
+            else:
+                raise RuntimeError("Received a vehicle that does not have "
+                                   "permission to enter the intersection.")
+            lane.enter_vehicle_section(transfer)
         super().process_transfers()  # just makes sure the list is empty after
 
     def handle_logic(self) -> None:

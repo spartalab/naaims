@@ -15,7 +15,8 @@ proportional progress of the vehicles.
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Tuple, Iterable, Optional, List, NamedTuple, Dict, Set
+from typing import Tuple, Iterable, Optional, List, Dict, Set
+from dataclasses import dataclass
 
 import aimsim.shared as SHARED
 from .archetypes import Upstream
@@ -33,15 +34,16 @@ class LateralDeviation:
 
 class Lane(ABC):
 
-    class VehicleProgress(NamedTuple):
+    @dataclass
+    class VehicleProgress:
         """Track the progress of all three sections of a vehicle.
 
-        Note that the index 0, 1, 2 of these sections in this NamedTuple
+        Note that the index 0, 1, 2 of these sections in this dataclass
         correspond to the values of the section in the enum VehicleSection.
         """
-        front: Optional[float]
-        center: Optional[float]
-        rear: Optional[float]
+        front: Optional[float] = None
+        center: Optional[float] = None
+        rear: Optional[float] = None
 
     @abstractmethod
     def __init__(self,
@@ -212,7 +214,8 @@ class Lane(ABC):
 
     # Support functions for stepping vehicles
 
-    def step_vehicles(self, lateral_deviations: Dict[Vehicle, LateralDeviation]
+    def step_vehicles(self,
+                      lateral_deviations: Dict[Vehicle, LateralDeviation] = {}
                       ) -> Iterable[VehicleTransfer]:
         """Execute position step for all vehicles in this lane.
 
@@ -231,10 +234,17 @@ class Lane(ABC):
         # self.vehicles should be in order of decreasing progress
         for vehicle in self.vehicles:
 
+            # TODO: Redo this section to account for VehicleProgress being a
+            #       dataclass now instead of this hacky method.
+            old_progress: List[Optional[float]] = [
+                self.vehicle_progress[vehicle].front,
+                self.vehicle_progress[vehicle].center,
+                self.vehicle_progress[vehicle].rear
+            ]
             new_vehicle_progress: List[Optional[float]] = [None]*3
 
             # Iterate through the 3 sections of the vehicle.
-            for i, progress in enumerate(self.vehicle_progress[vehicle]):
+            for i, progress in enumerate(old_progress):
 
                 # Check if we have a prop progress record for this section.
                 if (progress is None):
@@ -296,6 +306,7 @@ class Lane(ABC):
                 # TODO: translate vehicle.v*SHARED.timestep into proportional
                 #       progress using trajectory
                 new_progress: Optional[float]  # the progress after it's done
+                t_left: float = 0  # TODO: calculate this if the vehicle exits
                 raise NotImplementedError("TODO")
                 new_vehicle_progress[i] = new_progress
 
@@ -334,7 +345,10 @@ class Lane(ABC):
                     # Vehicle section has exited. Create a VehicleTransfer
                     # object from it and add it to the return list.
                     exiting.append(VehicleTransfer(
-                        None  # TODO: fill
+                        vehicle=vehicle,
+                        section=VehicleSection(i),
+                        t_left=t_left,
+                        pos=self.end_coord
                     ))
 
                 last_progress = progress
@@ -389,11 +403,54 @@ class Lane(ABC):
 
     # Support functions for vehicle transfers
 
-    def enter_vehicle_section(self, vehicle_transfer: VehicleTransfer) -> None:
+    def enter_vehicle_section(self, transfer: VehicleTransfer) -> None:
         """Adds a section of a transferring vehicle to the lane."""
-        # TODO: add a vehicle to this lane and progress it forward using the
-        #       time in the timestep it has left
-        raise NotImplementedError("TODO")
+        vehicle: Vehicle = transfer.vehicle
+
+        # Find how far along the lane this vehicle section will be in meters.
+        d: float
+        if transfer.t_left is None:
+            # This is a freshly created vehicle section entering from a spawner
+            # so we need to initialize its position.
+            if transfer.section is VehicleSection.FRONT:
+                # Place the front vehicle section ahead at its full length plus
+                # the length of its front and rear buffers.
+                d = vehicle.length * (1 + 2*SHARED.length_buffer_factor)
+            elif transfer.section is VehicleSection.CENTER:
+                # Place the center vehicle section forward at half its length
+                # plus its rear buffer.
+                d = vehicle.length * (0.5 + SHARED.length_buffer_factor)
+            else:  # transfer.section is VehicleSection.REAR
+                # Place the rear of the vehicle at the very end of the lane.
+                d = 0
+        else:
+            # This is a transfer between road and intersection.
+            # Calculate the distance the vehicle section has left to travel
+            # in this step.
+            d = transfer.vehicle.v * transfer.t_left
+
+        # Convert the real units distance d into proportional progress along
+        # the lane trajectory.
+        p: float = d/self.trajectory.length
+        if transfer.section is VehicleSection.FRONT:
+            # This is the first time this lane has seen this vehicle.
+            # Create new entries for this vehicle in the lane's relevant data
+            # structures and populate its front section progress.
+            self.add_vehicle(vehicle)
+            self.vehicle_progress[vehicle].front = p
+        elif transfer.section is VehicleSection.CENTER:
+            # Update the lane's record of the vehicle center's position and
+            # the vehicle's own record of its actual position Coord.
+            vehicle.pos = self.trajectory.get_position(p)
+            self.vehicle_progress[vehicle].center = p
+        else:  # transfer.section is VehicleSection.REAR
+            # Update only the lane's record of the vehicle rear's position.
+            self.vehicle_progress[vehicle].rear = p
+
+    def add_vehicle(self, vehicle: Vehicle) -> None:
+        """Create entries for this vehicle in lane support structures."""
+        self.vehicles.append(vehicle)
+        self.vehicle_progress[vehicle] = Lane.VehicleProgress()
 
     # Misc functions
 
@@ -479,7 +536,7 @@ class RoadLane(Lane):
     def accel_update(self, vehicle: Vehicle, p: float,
                      preceding: Optional[Vehicle]) -> float:
 
-        # TODO: (sequence) Insert vehicle chain override here and return it.
+        # TODO: (platoon) Insert vehicle chain override here and return it.
         #       Vehicle should look forward to downstream chained vehicles to
         #       match the velocity and accel of all chained vehicles as soon as
         #       possible. Once matched, I think it ends up being just normal
@@ -669,6 +726,7 @@ class IntersectionLane(Lane):
                  start_heading: float,
                  end_coord: Coord,
                  end_heading: float,
+                 width: float,
                  speed_limit: int = SHARED.speed_limit):
         # TODO: Create a BezierTrajectory using start_coord, end_coord, and the
         #       intersection of a line drawn from start_coord at start_heading
@@ -677,6 +735,9 @@ class IntersectionLane(Lane):
         #       calculate a challenge rating based on curvature.
         trajectory: Trajectory
         super().__init__(trajectory, speed_limit)
+
+        # Used to sweep out this lane's area during signal reservations.
+        self.width = width
 
         # Calculate the shortest amount of time (in timesteps) that it takes
         # for a vehicle to fully travel across this lane.
@@ -743,7 +804,7 @@ class IntersectionLane(Lane):
     def accel_update(self, vehicle: Vehicle, p: float,
                      preceding: Optional[Vehicle]) -> float:
 
-        # TODO: (sequence) Insert vehicle chain override here.
+        # TODO: (platoon) Insert vehicle chain override here.
         #       May not be necessary if the emergent behavior of breaking
         #       chains before they start results in vehicles simply following
         #       normal reservation behavior with chained accelerations.
@@ -801,9 +862,6 @@ class IntersectionLane(Lane):
         # Do the normal stuff
         super().remove_vehicle(vehicle)
 
-        # Reset its reservation property
-        vehicle.has_reservation = False
-
         # Delete the vehicle's record from our lateral deviation tracker.
         del self.lateral_deviation[vehicle]
 
@@ -820,6 +878,12 @@ class IntersectionLane(Lane):
         #       and return it.
 
         return 0
+
+    # Support functions for vehicle transfers
+
+    def add_vehicle(self, vehicle: Vehicle) -> None:
+        super().add_vehicle(vehicle)
+        self.lateral_deviation[vehicle] = 0
 
     # Misc functions
 

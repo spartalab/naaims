@@ -275,19 +275,18 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
     def process_transfers(self) -> None:
         """Incorporate new vehicles onto this road."""
-        # TODO: verify this implementation
         while len(self.entering_vehicle_buffer) > 0:
             transfer = self.entering_vehicle_buffer.pop()
-            # TODO: consider checking if a lane gets more than one vehicle
-            # added in a cycle. if so, raise TooManyProgressionsError
-            if transfer.pos not in self.lanes_by_downstream_coord:
+            if transfer.pos not in self.lanes_by_start:
                 raise RuntimeError('Lane not in this road.')
-            self.lanes_by_downstream_coord[transfer.pos].enter_vehicle_section(
-                transfer)
+            self.lanes_by_start[transfer.pos].enter_vehicle_section(transfer)
         super().process_transfers()  # just makes sure the list is empty after
 
     def handle_logic(self) -> None:
         """Tell LaneChangeManager to schedule the next set of lane changes."""
+
+        # TODO: (platoon) Make or break vehicle chains here.
+
         self.manager.handle_logic()
 
     # Functions used by intersection managers.

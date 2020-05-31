@@ -58,7 +58,7 @@ class Vehicle(ABC):
         self.v = 0
         self.a = 0
         self.heading = 0.0
-        self.can_enter_intersection = False
+        self.permission_to_enter_intersection = False
         self.has_reservation = False
 
         # save vehicle characteristics
@@ -115,7 +115,7 @@ class Vehicle(ABC):
         self._heading = new_heading
 
     @property
-    def can_enter_intersection(self) -> bool:
+    def permission_to_enter_intersection(self) -> bool:
         """Check whether a vehicle has permission to enter a reservation.
 
         In the event of a traffic signal or similar control scheme, a vehicle
@@ -123,8 +123,8 @@ class Vehicle(ABC):
         """
         return self._permission
 
-    @can_enter_intersection.setter
-    def can_enter_intersection(self, permission: bool) -> None:
+    @permission_to_enter_intersection.setter
+    def permission_to_enter_intersection(self, permission: bool) -> None:
         self._permission = permission
 
     @property

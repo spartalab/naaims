@@ -81,6 +81,7 @@ class Tiling(Configurable):
         raise NotImplementedError("TODO")
 
         # TODO: enforce provision of tile_type field in manager spec string
+        tile_type: str
 
         # Based on the spec, identify the correct tiling type
         if tile_type.lower() in {'', 'stochastic', 'stochastictile'}:
@@ -106,8 +107,14 @@ class Tiling(Configurable):
 
     # Begin simulation cycle methods
 
-    def reservation_complete(self, vehicle: Vehicle) -> None:
+    def start_reservation(self, vehicle: Vehicle) -> IntersectionLane:
+        """Move reservation from scheduled to active and return its lane."""
+        raise NotImplementedError("TODO")
+
+    def clear_reservation(self, vehicle: Vehicle) -> None:
         """Clear a completed reservation from the tiling's memory."""
+        # TODO: (low) Consider clearing off any remaining tiles associated with
+        #       this reservation.
         del self.reservations[vehicle]
 
     # Handle logic support methods
@@ -127,8 +134,8 @@ class Tiling(Configurable):
     @abstractmethod
     def check_for_collisions(self):
         """Check for collisions in the intersection."""
-        # TODO: (Low priority) May only be necessary if we have stochasic
-        #       movement, because otherwise collisions _should_ not occur if
+        # TODO: (Low priority) May only be necessary if we have stochastic
+        #       movement because otherwise collisions should not occur if
         #       implemented correctly
         # vehicles = []
         # for lane in self.lanes:
@@ -138,19 +145,25 @@ class Tiling(Configurable):
 
     @abstractmethod
     def update(self):
-        """Progress the tiling stack one timestep."""
+        """Progress the tiling stack one timestep.
+
+        Don't forget to add logic to support pre-reserved cycles.
+        """
         # TODO: how does the Tiling stack work? If it's a fixed length stack,
         #       Peel off the layer of tiles that corresponds to the passing
         #       timestep and add a fresh one at the bottom.
         raise NotImplementedError("TODO")
 
     @abstractmethod
-    def update_active_reservations(self):
+    def update_active_reservations(self) -> None:
         """Given vehicle movement in the last step, update their reservations.
 
         Have manager and tiling compare the current positions and velocities
-        of all vehicles in intersection. Use the difference to update 
-        reservations to reflect resolved stochasticities
+        of all vehicles in intersection. Use the difference to update
+        reservations to reflect resolved stochasticity. Should only be
+        necessary for stochastic reservations, but it might be nice for
+        deterministic methods with nonzero buffers, including when a vehicle
+        exits the intersection.
         """
         # TODO: (low priority)
         pass
@@ -238,7 +251,7 @@ class Tiling(Configurable):
                         ) -> Iterable[Reservation]:
         """Take potential reservation permutations and find the best batch.
 
-        Take a list of potential reservations sequence permuatations, where the
+        Take a list of potential reservations sequence permutations, where the
         permutations are of one lane's reservations (e.g., first vehicle in a
         lane, first and second, first through third). (This allows us to start
         looking for compatible sequences with each lane's longest sequence
@@ -258,31 +271,6 @@ class Tiling(Configurable):
     @abstractmethod
     def clear_potential_reservations(self):
         """Go through all tiles and empty out all potential reservations."""
-        raise NotImplementedError("Should be implemented in child classes.")
-
-    def reservation_active(self, vehicle: Vehicle):
-        """Tell tiling this reservation is now active."""
-        raise NotImplementedError("TODO")
-
-    def reservation_complete(self, vehicle: Vehicle):
-        """Tell tiling this reservation is complete."""
-        raise NotImplementedError("TODO")
-
-    @abstractmethod
-    def update_active_reservations(self) -> None:
-        """After vehicles inside move, revise their reserved tiles.
-
-        Only necessary for stochastic reservations, but it might be nice for
-        deterministic methods with nonzero buffers.
-        """
-        pass
-
-    @abstractmethod
-    def step(self):
-        """Prepare for the next timestep (remove last step's tiles).
-
-        Don't forget to add logic to support pre-reserved cycles.
-        """
         raise NotImplementedError("Should be implemented in child classes.")
 
 
