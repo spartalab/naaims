@@ -1,53 +1,61 @@
-"""
-The reservations module holds some datatypes necessary for reservation logic to
-work.
-"""
-
-from typing import TYPE_CHECKING, NamedTuple, Iterable, Dict
 from __future__ import annotations
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Dict, Set, Optional, List
 
-from ..util import Coord
+from ..util import Coord, VehicleTransfer
 from ..vehicles import Vehicle
-from ..lanes import IntersectionLane
+from ..lanes import IntersectionLane, ScheduledExit
 
 if TYPE_CHECKING:
     from .tilings import Tile
 
 
-class ReservationRequest(NamedTuple):
-    """Pattern for requesting a reservation.
+@dataclass
+class Reservation:
+    """
+    Vehicles waiting in a road lane to enter an intersection must successfully
+    reserve timespace tiles in the intersection in order to pass through. The
+    intersection's manager and tiling process reservation requests based on
+    feasibility and priority to decide which reservations to accept.
 
-    Parameters:
-        vehicle: 
-            The vehicle(s) making the reservation. If multiple, use Platoon.
+    After a reservation is created, the only properties that are modified are
+    the tiles (by adding new tiles used each timestep of the reservation test),
+    the dependency property (if we see another vehicle in its sequence get
+    added), and its_exit (when the reservation test progresses to the point
+    where we know when the vehicle's rear section enters the intersection).
+
+    Parameters
+        vehicle: Vehicle
         res_pos: Coord
-            The end of the road lane the vehicle is exiting from, i.e. where is
-            it entering the intersection from. (NOT the coord where it wants to
-            exit the intersection; you can get that target Coord from the first
-            Vehicle since in the reservation.)
-        min_time_to_intersection: float
-            Minimum time for the vehicle to reach the intersection traveling as
-            fast as possible (<= the speed limit) starting from its current
-            velocity. (This assumes that it didn't have to stop and wait at
-            the intersection because it couldn't get a reservation.)
-        v_enter: float
-            Maximum speed at which the vehicle can enter the intersection at.
-            Corresponds to the minimum time to enter the intersection.
-        vot: float
-            Total value of time for the request. Defaults to 0 in case a
-            simulation that doesn't use values doesn't spawn vehicles with
-            VOTs initialized.
+        tiles: Dict[int, Dict[Tile, float]]
+            A dict with timesteps keyed to to the tiles used at that timestep
+            and the proportion at which they're used.
+            # TODO: (stochastic) The tiles themselves probably hold these
+            #       probabilities. Are these necessary to save here?
+        lane: IntersectionLane
+        dependent_on: Set[Vehicle]
+            The set of vehicles whose reservations this vehicle's reservation
+            is dependent on, i.e., the vehicles preceding it in a sequenced
+            reservation.
+        dependency: Optional[Vehicle]
+            The first vehicle dependent on this vehicle's reservation, i.e.,
+            the vehicle immediately following this one in a sequenced
+            reservation.
+        its_exit: ScheduledExit
+            The scheduled time and speed of the vehicle's exit from road into
+            intersection. (Initialized as the scheduled exit of the front
+            section of the vehicle as when the reservation is created that's
+            the only information available. This is replaced by the test
+            observed time of exit when that is found.)
+            (Note: This is NOT the scheduled exit out of the intersection.)
     """
     vehicle: Vehicle
     res_pos: Coord
-    min_time_to_intersection: float
-    v_enter: float
-    vot: float = 0
-
-
-class Reservation(NamedTuple):
-    request: ReservationRequest
-    # tiles used: the proportion at which they're used
-    tiles: Dict[Tile, float]
+    tiles: Dict[int, Dict[Tile, float]]
     lane: IntersectionLane
-    delay: float = 0
+    dependent_on: Set[Vehicle]
+    dependency: Optional[Vehicle]
+    its_exit: ScheduledExit
+
+    def __hash__(self):
+        return hash(vehicle)

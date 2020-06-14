@@ -1,6 +1,6 @@
 """
 A road is a collection of lanes moving in one direction that connects
-intersections to each other.
+intersections to one another as well as vehicle spawn and removal points.
 
 Roads are divided into up to 3 sections:
     1. The entrance region, the section immediately following an
@@ -19,26 +19,20 @@ Roads are divided into up to 3 sections:
        (i.e, if this road terminates at the end of the simulation area into a
        vehicle collector). Like the entrance region, lane changes are barred
        in this section.
-
-The vehicle transmission and entrance interfaces provide a consistent way for
-roads and intersections to communicate with each other when scheduling the
-passage of a vehicle from one to the other and avoid collisions.
 """
 
 
 from __future__ import annotations
 from abc import abstractmethod
-from typing import (TYPE_CHECKING, Type, Optional, Iterable, Union, Dict, Any,
-                    Tuple, NamedTuple, Set, List)
+from typing import (TYPE_CHECKING, Type, Optional, Iterable, Dict, Any, Tuple,
+                    Set, List)
 
 import aimsim.shared as SHARED
 from ..vehicles import Vehicle
 from ..trajectories import Trajectory, BezierTrajectory
 from ..lanes import RoadLane
-from ..util import (Coord, CollisionError, LinkError, VehicleTransfer,
-                    TooManyProgressionsError, SpeedUpdate)
+from ..util import Coord, LinkError, VehicleTransfer, SpeedUpdate
 from ..archetypes import Configurable, Facility, Upstream, Downstream
-from ..intersections.reservations import ReservationRequest
 from .managers import LaneChangeManager, DummyManager
 
 if TYPE_CHECKING:
@@ -48,25 +42,20 @@ if TYPE_CHECKING:
 
 class Road(Configurable, Facility, Upstream, Downstream):
     """
-    ...
+    A road contains one or more lanes that hold vehicles and several support
+    functions that allow Downstream intersections and vehicle removers to
+    interface with vehicles exiting the road and intersections to schedule new
+    arrivals and prevent collisions.
 
-    A road's trajectory object describes the centerline of the road, assuming
-    that all roads are symmetrical left to right, and that where one lane ends
-    and the other begins, i.e., that there are no medians. (If there is a
-    median, create a new road.)
-
-    A road contains one or more lanes that hold vehicles.
-
-    These lanes share the same trajectory object as the road at large,
-    clarified plus a unique offset (including lane spacing and angle)
-    for each lane to account for the spacing between lanes.
-
+    A road's trajectory object describes the centerline of the road.
     """
 
     def __init__(self,
                  trajectory: Trajectory,
                  manager_type: Type[LaneChangeManager],
                  manager_spec: Dict[str, Any],
+                 upstream_is_spawner: bool,
+                 downstream_is_remover: bool,
                  num_lanes: int = 1,
                  lane_width: float = 4,  # meters
                  lane_offset_angle: Optional[float] = None,  # degrees
@@ -77,9 +66,18 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
         Parameters:
             trajectory: Trajectory
-                The trajectory of the centerline of the road.
+                The trajectory of the centerline of the road, assuming that all
+                roads are symmetrical left to right. Lanes share the same
+                trajectory as their parent road, plus a unique offset vector
+                for each lane found using num_lanes and lane_offset_angle.
+            manager_type: Type[LaneChangeManager]
+                What type of LaneChangeManager to use to handle lane changes
+            manager_spec: Dict[str, Any]
+                What specifications to give to the manager constructor
             num_lanes: int
                 Number of lanes the road has
+            lane_width: float
+                The width of each lane (assumed to be equal for every lane)
             lane_offset_angle: float
                 Angle by which to offset each lane
             len_entrance_region: float
@@ -88,15 +86,9 @@ class Road(Configurable, Facility, Upstream, Downstream):
                 How long the approach region is
             v_max: int
                 Speed limit on this road in km/h
-            manager: Optional[Type[LaneChangeManager]]
-                What type of LaneChangeManager to use to handle lane changes.
-                If a LaneChangeManager is not provided, lane changes are
-                prohibited, there is no lane changing region, and the entrance
-                and approach regions are combined.
-            manager_config: Dict[str, Any]
-                What settings to give to the manager constructor
 
-        TODO: change len_entrance_region, len_approach_region defaults
+        TODO: Finalize len_entrance_region and len_approach_region usage as
+              as well as their defaults.
         """
 
         # error checking
@@ -136,6 +128,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
         # Create support structures
         self.lanes: Tuple[RoadLane, ...] = tuple([RoadLane(
             trajectory=trajectory,
+            width=lane_width,
             offset=Coord(0, 0)  # TODO: calculate this correctly
         ) for i in range(num_lanes)])
         self.manager: LaneChangeManager = manager_type.from_spec(manager_spec)
@@ -163,6 +156,9 @@ class Road(Configurable, Facility, Upstream, Downstream):
         # TODO: enforce provision of separate trajectory_type and
         #       trajectory_config fields in road spec string
 
+        trajectory_type: str
+        trajectory_config: Dict[str, Any]
+        # Based on the spec, identify the correct trajectory type
         if trajectory_type.lower() in {'', 'bezier', 'beziertrajectory'}:
             spec['trajectory'] = BezierTrajectory.from_spec(
                 BezierTrajectory.spec_from_str(trajectory_config)
@@ -173,6 +169,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
         # TODO: enforce provision of separate manager_type and manager_config
         #       fields in road spec string
 
+        manager_type: str
         # Based on the spec, identify the correct manager type
         if manager_type.lower() in {'', 'dummy', 'dummymanager'}:
             spec['manager_type'] = DummyManager
@@ -192,6 +189,8 @@ class Road(Configurable, Facility, Upstream, Downstream):
             trajectory=spec['trajectory'],
             manager_type=spec['manager_type'],
             manager_spec=spec['manager_spec'],
+            upstream_is_spawner=spec['upstream_is_spawner'],
+            downstream_is_remover=spec['downstream_is_remover'],
             num_lanes=spec['num_lanes'],
             lane_width=spec['lane_width'],
             lane_offset_angle=spec['lane_offset_angle'],
@@ -207,8 +206,12 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
     def connect_downstream(self, downstream: Downstream) -> None:
         """Finalize connecting downstream object."""
-        # TODO: check that the downstream thing matches what we expect
+        # TODO: (low) check that the downstream thing matches what we expect
         self.downstream = downstream
+        if type(downstream) is Intersection:
+            for lane in self.lanes:
+                lane.connect_downstream_intersection(
+                    downstream)  # type: ignore
 
     # Begin simulation cycle methods
 
@@ -289,101 +292,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
         self.manager.handle_logic()
 
-    # Functions used by intersection managers.
-
-    def room_to_enter(self, lane_coord: Coord) -> float:
-        """If the vehicles in the entrance region stop, how much room is there?
-
-        Used to ensure that entering vehicles don't collide with vehicles just
-        outside of the intersection.
-        """
-        raise NotImplementedError("TODO")
-
-    def check_entrance_collision(self, lane: RoadLane, steps_forward: int,
-                                 entering_vehicle: Vehicle,
-                                 entering_v0: float,
-                                 entering_accel_profile: Iterable[float]
-                                 ) -> bool:
-        """Returns true if proposed movement may cause a collision.
-
-        We need to ensure that a vehicle that wants to enter one of this road's
-        lanes won't collide with any vehicles currently in the lane. To do so
-        we look ahead to when the new vehicle is proposing to enter the lane
-        with a simple heuristic.
-
-        Given what velocity and acceleration profile the new vehicle is
-        proposing to enter the lane at, we isolate the position and speed of
-        the last vehicle in the lane at the current timestep and assume it
-        starts and continues braking between the current timestep and the
-        target timestep(s). Given this behavior for the vehicle currently in
-        the lane, we check if the entering vehicle will collide with the
-        in-lane vehicle if it follows its proposed speed and acceleration
-        profile. If so, return `True`. If the proposed vehicle won't collide,
-        return `False`.
-
-        This function should be called by `VehicleSpawner` to check if a
-        vehicle will collide before spawning it, and by `IntersectionManager`
-        to check if a reservation will collide as it exits the intersection.
-
-        Parameters:
-            steps_forward : int
-                how many steps forward does the vehicle start entering
-            lane : RoadLane
-                which lane does it enter at
-            entering_vehicle : Vehicle
-                the vehicle entering
-            entering_v0 : float
-                at steps_forward, what is its speed
-            entering_accel_profile : Iterable[float]
-                what this vehicle's acceleration from the time it starts
-                entering to the time it finishes entering the lane
-        """
-
-        if lane in self.lanes:
-            lane.check_entrance_collision(steps_forward,
-                                          entering_vehicle,
-                                          entering_v0,
-                                          entering_accel_profile)
-        else:
-            raise ValueError('Lane not in this road.')
-
-        # TODO: Consider caching the worst-case profile of the last vehicle
-        #       at each step instead of calculating it fresh each time. Maybe
-        #       just calculate the lane position at which the new vehicle would
-        #       be considered "colliding" at each timestep as needed, caching
-        #       them for future calls. Clear this cache on a new step() call.
-
-        # TODO: I think I'm forgetting an input arg but I forget what.
-
-        # TODO: Maybe add a check that puts the distance to collision at the
-        #       min of (projected position of the last vehicle, edge of
-        #       entrance region)
-
-        raise NotImplementedError("TODO")
-
-    def get_reservation_candidates(self,
-                                   skip: Optional[Set[Coord]] = None,
-                                   group: bool = False,
-                                   all_groups: bool = False,
-                                   delay: int = 0
-                                   ) -> Iterable[ReservationRequest]:
-        """Return reservation requests from each lane, if there are any.
-
-        (Note that the ReservationRe)
-
-        Parameters:
-            group: bool
-                Whether to collect vehicles of the same class (human/auto/semi)
-                and movement (Intersection end Coord) together into a platoon.
-            all_groups: bool
-                If grouping, whether to return every combination of groups
-                possible. If not, just return the biggest group.
-            delay: int
-                Return a reservation given that it can't start until this many
-                timesteps from now.
-        """
-        # TODO: check
-        return [l.next_reservation_candidate() for l in self.lanes]
+    # Misc functions
 
     def __hash__(self):
         return hash((self.trajectory.start_coord, self.trajectory.end_coord))

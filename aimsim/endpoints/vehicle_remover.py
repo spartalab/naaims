@@ -1,9 +1,7 @@
 '''
-A vehicle spawner behaves like the former half of a lane, in that it accepts a
-vehicle from an incoming lane using the `EnteringInterface`. Once it has the
-vehicle, it removes the vehicle from the system, with the added option of
-counting the vehicle before removal so the user can gauge the throughput of the
-system.
+A vehicle remover accepts vehicles using the Downstream interface and removes
+them from the road network, passing them back to the simulator for final
+processing and record-keeping.
 '''
 
 from __future__ import annotations

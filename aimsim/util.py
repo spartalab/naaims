@@ -40,19 +40,20 @@ class VehicleTransfer(NamedTuple):
             The vehicle to be added.
         vehicle: VehicleSection
             The FRONT, CENTER, or REAR of the vehicle being transferred.
-        t_left: Optional[float]
-            The vehicle moved some distance along the lane it came from in
-            the current timestep before it reached the transition to this
-            lane. This is the time left in the timestep after that move.
-            If t_left is only None in the case where the vehicle enters from a
-            spawner onto the intersection, in which case the Road needs to
-            initialize its position.
+        d_left: Optional[float]
+            Given its velocity in a timestep, the vehicle must move forward
+            some fixed distance in this timestep. The vehicle moved some part
+            of that distance along the lane it came from in the current
+            timestep before it reached the transition to this new lane. d_left
+            is the distance it has left to move in this timestep.
+            d_left is only None when the vehicle enters from a spawner, in
+            which case the Road needs to initialize its position wholesale.
         pos: Coord
             The position of the end of the lane the vehicle is exiting from.
     """
     vehicle: Vehicle
     section: VehicleSection
-    t_left: Optional[float]
+    d_left: Optional[float]
     pos: Coord
 
 

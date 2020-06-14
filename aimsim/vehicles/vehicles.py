@@ -11,14 +11,14 @@ along the way
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Union, TypeVar, Type, Iterable, List
+from typing import TYPE_CHECKING, TypeVar, Type, List
+from copy import copy
 
 import aimsim.shared as SHARED
 from ..util import Coord
 
 if TYPE_CHECKING:
     from ..lanes import RoadLane
-    from ..intersections.reservations import Reservation
 
 V = TypeVar('V', bound='Vehicle')
 
@@ -36,20 +36,58 @@ class Vehicle(ABC):
 
     @abstractmethod
     def __init__(self,
-                 vin: int,  # unique ID
-                 destination: int,  # ID of target VehicleRemover
-                 max_accel: float = 3,  # maximum acceleration, in m/s^2
-                 max_braking: float = -3.4,  # or -4.5, braking in m/s^2
-                 length: float = 4.5,  # length in meters
-                 width: float = 3,  # width in meters
-                 vot: float = 0  # value of time
+                 vin: int,
+                 destination: int,
+                 max_accel: float = 3,
+                 max_braking: float = -3.4,
+                 length: float = 4.5,
+                 width: float = 3,
+                 throttle_score: float = 0,
+                 tracking_score: float = 0,
+                 vot: float = 0
                  ) -> None:
-        """Construct a vehicle instance."""
+        """Construct a vehicle instance.
+
+        Parameters
+            vin: int
+                The unique ID (vehicle identification number) of the vehicle.
+            destination: int
+                The ID of destination VehicleRemover
+            max_accel: float
+                The vehicle's maximum acceleration in m/s^2
+            max_braking: float
+                The vehicle's maximum braking speed in m/s^2. Must be as good
+                or better than the global config SHARED.max_braking.
+            length: float
+                Length of the vehicle in meters
+            width: float
+                Width of the vehicle in meters
+            throttle_score: float
+                Describes how well this vehicle should generally do at
+                following the acceleration instructions it's given. A positive
+                value means that it generally accelerates more and brakes less
+                than it should so it reaches tiles ahead of expected, while a
+                negative value means that it generally accelerates less and
+                brakes more than it should, so it's late to its reserved tiles.
+                The magnitude describes how much it generally deviates from the
+                proper throttling.
+            tracking_score: float
+                Describes how well this vehicle should generally do at
+                following an intersection trajectory. For the meaning of its
+                values, consider a vector pointing from south to north.
+                Positive values mean to deviate from the trajectory laterally
+                to the east, while negative values mean that the vehicle tends
+                to deviate laterally to the west. The magnitude describes how
+                strong this lateral deviation is typically.
+            vot: float
+                The vehicle's value of time, to be used in auctions.
+        """
 
         if max_accel <= 0:
             raise ValueError("max_accel must be positive")
-        if max_braking >= 0:
-            raise ValueError("max_braking must be negative")
+        if max_braking >= SHARED.max_braking:
+            raise ValueError("max_braking must be as good or better than the "
+                             "max_braking set in the global config.")
 
         self.vin = vin
 
@@ -67,6 +105,9 @@ class Vehicle(ABC):
         self.max_braking = max_braking
         self.length = length
         self.width = width
+        self.throttle_score = throttle_score
+        self.tracking_score = tracking_score
+        self.vot = vot
 
     @property
     def pos(self) -> Coord:
@@ -101,7 +142,9 @@ class Vehicle(ABC):
 
     @a.setter
     def a(self, new_a: float) -> None:
-        # TODO: error check the case where you try to slow down a stopped vehi
+        # TODO: (runtime) Should this error or just clip a to 0?
+        if self.v <= 0 and new_a < 0:
+            raise ValueError("Vehicle already stopped.")
         self._a: float = new_a
 
     @property
@@ -140,18 +183,23 @@ class Vehicle(ABC):
     #       acceleration with the slowest acceleration in the chain.
 
     def stopping_distance(self) -> float:
-        raise NotImplementedError("TODO")
+        """Return the vehicle's stopping distance."""
+        return self.v**2/(-2*self.max_braking)
 
-    def next_movement(self, start_coord: Coord) -> List[Coord]:
-        """Return the vehicle's exit Coords for the next intersection."""
-        return SHARED.pathfinder.next_movement(start_coord, self.destination)
+    def next_movements(self, start_coord: Coord, at_least_one: bool = True
+                       ) -> List[Coord]:
+        """Return the vehicle's exit Coords for the next intersection.
 
-    def clone_for_request(self) -> V:
+        If the at_least_one flag is enabled, always return at least one
+        possible coordinate, even if it can't possible get the vehicle to its
+        destination.
+        """
+        return SHARED.pathfinder.next_movements(start_coord, self.destination,
+                                                at_least_one)
+
+    def clone_for_request(self: V) -> V:
         """Return a clone of this vehicle to test a reservation request."""
-        raise NotImplementedError("TODO")
-        v = self()
-        v.has_reservation = True
-        return v
+        return copy(self)
 
     def __hash__(self):
         return hash(self.vin)
@@ -187,25 +235,3 @@ class AdaptiveCCVehicle(Vehicle):
     A connected vehicle with adaptive (variable speed) cruise control.
     """
     raise NotImplementedError("TODO")
-
-
-class Platoon(Vehicle):
-    raise NotImplementedError("TODO")
-
-
-class Sequence(Vehicle):
-    """
-    A group of sequential vehicles that behaves like a single vehicle, formed
-    when a sequence of vehicles reserves together.
-
-    It takes the worst acceleration and braking of the vehicles in the group.
-    """
-    raise NotImplementedError("TODO")
-
-    # when a sequence gets a reservation, does it need to propogate it down to
-    # its component vehicles? not sure. this might need more thinking.
-
-    # contact platoons need to be treated carefully because if consecutive
-    # vehicles are far away and have different braking and acceleration
-    # capabilities, we can't have a "Vehicle" that changes length as they
-    # accelerate differently

@@ -18,7 +18,7 @@ The tiling handles how the manager checks for upcoming conflicts.
 
 from __future__ import annotations
 import itertools
-from typing import Iterable, Type, Dict, Union, Set, Any, List, Tuple
+from typing import Iterable, Type, Dict, Any, List, Tuple, Optional
 
 from pandas import DataFrame
 
@@ -26,7 +26,7 @@ import aimsim.shared as SHARED
 from ..archetypes import Configurable, Facility, Upstream, Downstream
 from ..util import Coord, VehicleTransfer, SpeedUpdate, VehicleSection
 from ..trajectories import Trajectory, BezierTrajectory
-from ..lanes import IntersectionLane
+from ..lanes import IntersectionLane, RoadLane
 from ..roads import Road
 from ..endpoints import VehicleRemover
 from ..vehicles import Vehicle
@@ -38,7 +38,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
     def __init__(self,
                  upstream_roads: Iterable[Road],
                  downstream_roads: Iterable[Road],
-                 connectivity: Iterable[Iterable],
+                 connectivity: Iterable[Tuple[Road, Road, bool]],
                  manager_type: IntersectionManager,
                  manager_spec: Dict[str, Any],
                  v_max: int = SHARED.speed_limit
@@ -46,8 +46,22 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         """Create a new intersection.
 
         Keyword arguments
-            connectivity: Iterable[Iterable] # TODO: finalize structure
-                Describes which lanes connect to each other.
+            connectivity: Iterable[Tuple[Road, Road, bool]]
+                Describes which lanes connect to each other, used to create
+                IntersectionLanes.
+                The pattern is a list of 3-tuples which correspond to:
+                    0. The incoming Road
+                    1. The outgoing Road
+                    2. If true, the two roads will be fully connected as best
+                       as possible. If the number of lanes don't match, defer
+                       to the Road with fewer lanes, attaching them to the
+                       corresponding lane in the other Road that results in the
+                       shortest distance and ensures that no IntersectionLane
+                       created starts or ends at the same node.
+                       If false, only one Intersection will be created between
+                       the closest pair of farthest left or right lanes on both
+                       trajectories. (This approximates a restricted turning
+                       movement.)
             manager_spec: Dict[str, Any]
                 Specifications to create the manager with.
             v_max: int = SHARED.speed_limit
@@ -55,22 +69,21 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         """
 
         # Index the upstream and downstream roads by their lanes' Coords
-        self.road_by_coord: Dict[Coord, Road] = {}
-        self.upstream_road_by_coord: Dict[Coord, Road] = {}
+        self.upstream_road_lane_by_coord: Dict[Coord, RoadLane] = {}
+        self.downstream_road_lane_by_coord: Dict[Coord, RoadLane] = {}
         self.downstream_road_by_coord: Dict[Coord, Road] = {}
         for r in upstream_roads:
-            for coord in r.lanes_by_end:
-                self.road_by_coord[coord] = r
-                self.upstream_road_by_coord[coord] = r
+            for coord, lane in r.lanes_by_end.items():
+                self.upstream_road_lane_by_coord[coord] = lane
         for r in downstream_roads:
-            for coord in r.lanes_by_start:
-                self.road_by_coord[coord] = r
+            for coord, lane in r.lanes_by_start.items():
+                self.downstream_road_lane_by_coord[coord] = lane
                 self.downstream_road_by_coord[coord] = r
 
         # Given the upstream and downstream roads and connectivity matrix,
         # connect the road endpoints together by creating new lanes, curving
         # if necessary based on the difference in heading between the endpoints
-        self.lanes: Tuple[IntersectionLane, ...]
+        self.lanes: List[IntersectionLane]
         raise NotImplementedError("TODO")
 
         # Index the IntersectionLanes by their Coord
@@ -78,51 +91,25 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                                       IntersectionLane] = {
             (l.start_coord, l.end_coord): l for l in self.lanes
         }
+        self.lanes_by_start: Dict[Coord, List[IntersectionLane]] = {}
+        for lane in self.lanes:
+            coord = lane.trajectory.start_coord
+            if coord not in self.lanes_by_start:
+                self.lanes_by_start[coord] = [lane]
+            else:
+                self.lanes_by_start[coord].append(lane)
 
         # Finish the spec for the manager by providing the roads and lanes
-        manager_spec['upstream_road_by_coord'] = self.upstream_road_by_coord
-        manager_spec['downstream_road_by_coord'
-                     ] = self.downstream_road_by_coord
-        manager_spec['lanes'] = self.lanes  # TODO: should this be lane_coords?
+        manager_spec['upstream_road_lane_by_coord'
+                     ] = self.upstream_road_lane_by_coord
+        manager_spec['downstream_road_lane_by_coord'
+                     ] = self.downstream_road_lane_by_coord
+        manager_spec['lanes'] = self.lanes
+        manager_spec['lanes_by_endpoints'] = self.lanes_by_endpoints
 
         # Create the manager
         self.manager: IntersectionManager = manager_type.from_spec(
             manager_spec)
-
-        # TODO: old code. rewrite or replace.
-        # for _, row in lanes_df.iterrows():
-        #     traj = trajectory(
-        #         row['TAIL_X'],
-        #         row['TAIL_Y'],
-        #         row['MID_X'],
-        #         row['MID_Y'],
-        #         row['HEAD_X'],
-        #         row['HEAD_Y'])
-        #     if row['IO'] == 'I':
-        #         incoming_lanes[row['ID']] = RoadLane(traj, 0)
-        #     elif row['IO'] == 'O':
-        #         outgoing_lanes[row['ID']] = RoadLane(traj, 0)
-        #     else:
-        #         raise ValueError("Unexpected lane type.")
-
-        # for _, row in intersection_traj_df.iterrows():
-        #     tail_traj = incoming_lanes[row['TAIL_ID']].trajectory
-        #     head_traj = outgoing_lanes[row['HEAD_ID']].trajectory
-        #     traj = Bezier(
-        #         tail_traj.p2[0],
-        #         tail_traj.p2[1],
-        #         row['MID_X'],
-        #         row['MID_Y'],
-        #         head_traj.p0[0],
-        #         head_traj.p0[1])
-        #     # TODO: determine the proper length of the lane
-        #     intersection_lane = IntersectionLane(traj, 0)
-
-        #     self.intersection_lanes.add(intersection_lane)
-        #     self.add_incoming_lane(
-        #         incoming_lanes[row['TAIL_ID']], intersection_lane)
-        #     self.add_outgoing_lane(
-        #         outgoing_lanes[row['HEAD_ID']], intersection_lane)
 
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
@@ -152,7 +139,6 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         Note that what spec_from_str returns needs additional processing before
         it can be handled by this method.
         """
-        # TODO: make sure that road objects are provided
         return cls(
             upstream_roads=spec['upstream_roads'],
             downstream_roads=spec['downstream_roads'],
@@ -209,7 +195,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                 #       the vehicle was given permission to enter.
                 lane = self.lanes_by_endpoints[(
                     transfer.pos,
-                    transfer.vehicle.next_movement(transfer.pos)[0]
+                    transfer.vehicle.next_movements(transfer.pos)[0]
                 )]
             else:
                 raise RuntimeError("Received a vehicle that does not have "
@@ -220,3 +206,19 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
     def handle_logic(self) -> None:
         """Have the manager update reservations and poll for new requests."""
         self.manager.handle_logic()
+
+    # Begin helper methods
+
+    def stopping_distance_to_last_vehicle(self, start_coord: Coord
+                                          ) -> Optional[float]:
+        """Return the closest vehicle on a lane that starts at this coord."""
+        sds: List[float] = []
+        for lane in self.lanes_by_start[start_coord]:
+            sd = lane.stopping_distance_to_last_vehicle()
+            if sd is not None:
+                sds.append(sd)
+
+        # Return the smallest stopping distance among all the IntersectionLanes
+        # starting at this Coord. If none of them have a stopping distance
+        # (i.e., none of them have vehicles on them), return None.
+        return min(sds) if len(sds) > 0 else None

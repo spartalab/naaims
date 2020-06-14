@@ -11,16 +11,15 @@ tiling (which is owned by the manager).
 
 from __future__ import annotations
 from abc import abstractmethod
-from typing import (Iterable, Dict, List, TypedDict, NamedTuple, Optional,
-                    Tuple, Set, Type, Any, TypeVar)
+from typing import Iterable, Dict, List, Tuple, Set, Type, Any, TypeVar
 
 from ..archetypes import Configurable
-from ..util import Coord
+from ..util import Coord, VehicleSection
 from ..roads import Road
-from ..lanes import IntersectionLane
+from ..lanes import IntersectionLane, RoadLane, ScheduledExit
 from ..vehicles import Vehicle
 from .tilings import Tiling, SquareTiling, ArcTiling
-from .reservations import ReservationRequest, Reservation
+from .reservations import Reservation
 
 M = TypeVar('M', bound='IntersectionManager')
 
@@ -29,20 +28,26 @@ class IntersectionManager(Configurable):
 
     @abstractmethod
     def __init__(self,
-                 upstream_road_by_coord: Dict[Coord, Road],
-                 downstream_road_by_coord: Dict[Coord, Road],
-                 lanes: Dict[Coord, IntersectionLane],
+                 upstream_road_lane_by_coord: Dict[Coord, RoadLane],
+                 downstream_road_lane_by_coord: Dict[Coord, RoadLane],
+                 lanes: Iterable[IntersectionLane],
+                 lanes_by_endpoints: Dict[Tuple[Coord, Coord],
+                                          IntersectionLane],
                  tiling_type: Type[Tiling],
                  tiling_spec: Dict[str, Any]
                  ) -> None:
-        self.upstream_road_by_coord = upstream_road_by_coord
-        self.downstream_road_by_coord = downstream_road_by_coord
+        self.upstream_road_lane_by_coord = upstream_road_lane_by_coord
+        self.downstream_road_lane_by_coord = downstream_road_lane_by_coord
         self.lanes = lanes
+        self.lanes_by_endpoints = lanes_by_endpoints
 
         # Finish the spec for the manager by providing the roads and lanes
-        tiling_spec['upstream_road_by_coord'] = self.upstream_road_by_coord
-        tiling_spec['downstream_road_by_coord'] = self.downstream_road_by_coord
-        tiling_spec['lanes'] = self.lanes  # TODO: should this be lane_coords?
+        tiling_spec['upstream_road_lane_by_coord'
+                    ] = self.upstream_road_lane_by_coord
+        tiling_spec['downstream_road_lane_by_coord'
+                    ] = self.downstream_road_lane_by_coord
+        tiling_spec['lanes'] = self.lanes
+        tiling_spec['lanes_by_endpoints'] = self.lanes_by_endpoints
 
         # Create the tiling
         self.tiling = tiling_type.from_spec(tiling_spec)
@@ -83,9 +88,11 @@ class IntersectionManager(Configurable):
     def from_spec(cls: Type[M], spec: Dict[str, Any]) -> M:
         """Should interpret a spec dict to call the manager's init."""
         return cls(
-            upstream_road_by_coord=spec['upstream_road_by_coord'],
-            downstream_road_by_coord=spec['downstream_road_by_coord'],
+            upstream_road_lane_by_coord=spec['upstream_road_lane_by_coord'],
+            downstream_road_lane_by_coord=spec[
+                'downstream_road_lane_by_coord'],
             lanes=spec['lanes'],
+            lanes_by_endpoints=spec['lanes_by_endpoints'],
             tiling_type=spec['tiling_type'],
             tiling_spec=spec['tiling_config']
         )
@@ -96,10 +103,10 @@ class IntersectionManager(Configurable):
         """Update tiling, reservations, and poll for new requests to accept."""
 
         # First update the tiling for the new timestep
-        self.tiling.handle_requests()
+        self.tiling.handle_new_timestep()
 
-        # Then poll for new reservation requests. Consider both those in the
-        # queue to see which ones, if any, to accept
+        # Then decide whether to poll for new reservation requests and, if so,
+        # which ones to accept.
         self.process_requests()
 
     @abstractmethod
@@ -111,28 +118,6 @@ class IntersectionManager(Configurable):
         hold onto their requests for a future step based on logic in this
         function.
         """
-
-        # Request handling blueprint:
-
-        # Loop through each lane in each incoming road for new requests
-        # for request n road.get_requests(), either just once or until some
-        # stopping condition, e.g. every lane has had its reservation rejected
-
-        # First, check if the request is individually feasible or if it
-        # conflicts with any already confirmed requests. If it works, it
-        # becomes a potential reservation and gets saved to a list
-        # pr = tiling.check_request(request)
-        # potential_reservations = []
-
-        # Provide the entire bundle of reservations to the tiling to find the
-        # highest value subset of reservations
-        # to_confirm = self.tiling.find_best_batch(potential_reservations)
-
-        # Confirm the reservations that
-        # for reservation in to_confirm:
-        #       profile = self.tiling.confirm_reservation(pr)
-
-        # Clear marked potential reservations if necessary
         raise NotImplementedError("Should be implemented in child classes.")
 
     def start_reservation(self, vehicle: Vehicle) -> IntersectionLane:
@@ -152,138 +137,177 @@ class FCFSManager(IntersectionManager):
     FCFS is a first come first served priority policy.
     """
 
-    def handle_requests(self) -> None:
-        # FCFS can keep polling lanes until they’re out of reservations or the
-        # none of the lane leader reservations work
+    def process_requests(self) -> None:
+        """Approve as many reservation requests as possible.
 
-        # create a dict to flag if a lane should be polled for requests again
-        # this step
-        poll_lane: Dict[Coord, bool] = {
-            coord: True
-            for coords
-            in self.incoming_roads.values()
-            for coord
-            in coords
-        }
+        FCFS can keep polling lanes until they’re out of reservations or the
+        none of the lane leader reservations work
+        """
 
-        # while there are lanes that could still give a request we haven't
+        # Flag every incoming lane to determine if it should be polled for
+        # requests (again) this step.
+        # TODO: (FCFSSignals) Adjust this so that it can be changed to only
+        #       look at whitelisted (i.e., non-green) lanes.
+        poll_lane: Dict[RoadLane, bool] = {
+            lane: True for lane in self.upstream_road_lane_by_coord.values()}
+
+        # While there are lanes that could still return a request we haven't
         # looked at yet, i.e., all lanes on a fresh run and then only lanes
-        # that we accepted requests for last loop
-        # while not all(self.pending_reservations.values())
+        # that we accepted requests for last loop.
         while any(poll_lane.values()):
-            for road, lanes in self.incoming_roads.items():
-                skip: Set[Coord] = set()
-                for lane_coord in lanes:
-                    if not poll_lane[lane_coord]:
-                        # skip polling this lane this loop
-                        skip.add(lane_coord)
-                requests_to_process = road.get_reservation_candidates(
-                    skip=skip)
-                for request in requests_to_process:
-                    # check if this request works
-                    pr: Optional[Reservation
-                                 ] = self.tiling.check_request(request)
-                    if pr:
-                        # if it does, confirm requested reservation
-                        self.tiling.confirm_reservation(pr)
+            stop_polling_lanes: List[RoadLane] = []
+            for lane, check in poll_lane.items():
+                if check:  # Check for a new reservation request
+                    # Have the tiling check for if there's a request in this
+                    # lane and, if so, if it works.
+                    prs = self.tiling.check_request(lane)
+                    if len(prs) > 0:
+                        # It works, so confirm that reservation.
+                        self.tiling.confirm_reservation(prs[0], lane)
                     else:
-                        # if not, mark this lane so it's not polled again
-                        poll_lane[request.res_pos] = False
+                        # There is no request or if there is it doesn't work.
+                        # Unflag this lane so it's not polled again.
+                        stop_polling_lanes.append(lane)
+
+            # Finalize the lanes for which not to flag.
+            # (Don't modify a python object while iterating over it.)
+            for lane in stop_polling_lanes:
+                poll_lane[lane] = False
 
         # Tiles weren't marked for potential requests, so nothing to do here.
 
 
 class SignalsManager(IntersectionManager):
     """
-    Signals implements a traffic signal priority policy, i.e., red/green
-    lights.
+    A traffic signal priority policy, i.e., red and green lights.
     """
 
-    def handle_requests(self) -> None:
-        # [Notes]
-        # we need to maintain the assumption that every vehicle is accelerating
-        # to the speed limit in the intersection
+    def process_requests(self) -> None:
+        # Poll for requests from green light lanes only. We only need to look
+        # at each lane once.
 
-        # each time we admit a vehicle, remember when it was admitted and what
-        # it max acceleration and braking were (can probably just keep a
-        # pointer to the vehicle). prevent the next vehicle from entering
-        # until . DO NOT use tiling to do this, since in FCFSSignals all
-        # tiles associated with green will be reserved.
+        # TODO: Think about the case with one incoming lane into a through and
+        #       a right turn lane.
 
-        # for vehicles coming in from a green lane, stagger requests such that
-        # we can assume that everyone can accelerate to the speed limit in the
-        # intersection without crashing within in the intersection. (I guess
-        # we don't care what happens on the other end).
+        # Iterate through all incoming road lanes associated with at least one
+        # greenlit movement/intersection lane.
+        for lane, targets in self.tiling.greenlit.items():
+            # Keep looking through the vehicles in this road lane until we
+            # reach a vehicle we can't issue permission to (or there are no
+            # vehicles # without permission left).
+            while True:
+                # Get the index of the first vehicle without permission to
+                # enter that wants to go down one of the greenlit intersection
+                # lanes, if there is one.
+                seeking_perms = lane.first_without_permission(targets)
+                if seeking_perms is None:
+                    # The first vehicle does not want to use any of the green
+                    # lanes. Move onto the next lane.
+                    break
+                else:
+                    index: int = seeking_perms[0]
 
-        # [Implementation]
-        # 1. update the cycle step, if necessary
-        raise NotImplementedError("TODO")
+                # Check if the downstream lane has enough room for this vehicle
+                vehicle: Vehicle = lane.vehicles[index]
+                if vehicle.length > self.downstream_road_lane_by_coord[
+                    vehicle.next_movements(lane.end_coord)[0]
+                ].room_to_enter(tight=False):
+                    break
 
-        # 2. poll for requests from green light lanes only
-
-        # 3. given a request, assuming it's accelerating to or at the speed
-        #    limit the entire time it's in the intersection, check if it can
-        #   a. reach the end of the intersection before the light changes
-        #   b. not collide with the vehicle dispatched before it from the
-        #       same lane, regardless of if it's making the same movement
-        #   c. pass the downstream road's check_entrance_collision check
-        #       If it fulfills all of the above criteria, let it through.
-        #       Note that we completely ignore the tiling here.
-
-        # 4. if the request was accepted, save a pointer to the vehicle for the
-        #    next check and repeat from 2 until we reject the first request.
+                # Estimate this vehicle's exit parameters and use those to see
+                # if this exit gives the vehicle enough time to clear the
+                # intersection without colliding with the vehicle ahead of it.
+                # (I don't think we can do that fully accurately without
+                # simulating their entire movements, but we can at least get an
+                # approximation.)
+                this_exit: ScheduledExit = lane.soonest_exit(index)
+                assert self.tiling.cycle is not None
+                move_time: int
+                # TODO: Find how long it'll take for the vehicle to cross the
+                #       the IntersectionLane at max accel to the speed limit
+                #       and add a second of padding.
+                estimated_time_to_finish: int
+                # TODO: Estimate when it will itself finish exiting by assuming
+                #       the vehicle stays at this_exit.v to travel its own
+                #       length.
+                if move_time <= self.tiling.time_left_in_cycle:
+                    self.tiling.issue_permission(
+                        vehicle, lane, ScheduledExit(
+                            vehicle=this_exit.vehicle,
+                            section=VehicleSection.REAR,
+                            t=this_exit.t+estimated_time_to_finish,
+                            v=this_exit.v))
 
 
 class FCFSSignalsManager(SignalsManager, FCFSManager):
 
-    def handle_requests(self) -> None:
+    def process_requests(self) -> None:
         # For FCFS-Light, resolve differently for human-driven vehicles and
         # automated vehicles. If the vehicle is expected to arrive in a green
         # period, pass it a res unconditionally. If it isn't but it's AV, do
         # like FCFS. If it's human, reject. The green light rez also has the
-        # vehicle do lane following behavior (TODO: how to do this).
-        pass
-
-
-class RequestWithFlag(NamedTuple):
-    request: Optional[ReservationRequest] = None
-    tried: bool = False
+        # vehicle do lane following behavior.
+        raise NotImplementedError("TODO")
 
 
 class AuctionManager(IntersectionManager):
 
     def __init__(self,
-                 upstream_road_by_coord: Dict[Coord, Road],
-                 downstream_road_by_coord: Dict[Coord, Road],
-                 lanes: Dict[Coord, IntersectionLane],
+                 upstream_road_lane_by_coord: Dict[Coord, RoadLane],
+                 downstream_road_lane_by_coord: Dict[Coord, RoadLane],
+                 lanes: Iterable[IntersectionLane],
+                 lanes_by_endpoints: Dict[Tuple[Coord, Coord],
+                                          IntersectionLane],
                  tiling_type: Type[Tiling],
-                 tiling_spec: Dict[str, Any]
+                 tiling_spec: Dict[str, Any],
+                 sequencing: bool = False
                  ) -> None:
-        super().__init__(upstream_road_by_coord,
-                         downstream_road_by_coord,
-                         lanes,
-                         tiling_type,
-                         tiling_spec)
-        self.pending_reservations: Dict[Road,
-                                        Dict[Coord, RequestWithFlag]
-                                        ] = {
-            road: {
-                c: RequestWithFlag() for c in coords
-            } for road, coords in self.incoming_roads.items()
-        }
+        super().__init__(
+            upstream_road_lane_by_coord=upstream_road_lane_by_coord,
+            downstream_road_lane_by_coord=downstream_road_lane_by_coord,
+            lanes=lanes,
+            lanes_by_endpoints=lanes_by_endpoints,
+            tiling_type=tiling_type,
+            tiling_spec=tiling_spec)
+        self.sequencing = sequencing
 
-    def handle_requests(self) -> None:
-        # in SequencedAuctionManager, before sending another packet of request
-        # iterables to tiling, check if there have been any changes in lane
-        # since the last set. there's only ever a change if a new vehicle
-        # arrives that has the same movement as the current packet of vehicles,
-        # BUT WAIT the min time to intersection is based on not braking to stop
-        # at the intersection line, so if it doesn't get a reservation by then
-        # it's slowing down and the min time changes.
+    def process_requests(self) -> None:
+        """Issue reservations by auction if the intersection is clear."""
 
-        # Auctions wait several time steps before accepting a single batch of
-        # reservations
+        # Check if the intersection is clear. If not, don't run auction.
+        for lane in self.lanes:
+            if len(lane.vehicles) != 0:
+                return
 
-        # TODO: figure out how auction manager handles request caching
+        # Assemble a reservation request for each lane.
+        #
+        # If the self.sequencing flag is enabled, the request will have, in
+        # order, the reservation of the lane leader and the reservations of
+        # consecutive vehicles with the same desired movement (intersection
+        # lane) as the leader, up to the number of consecutive reservations
+        # that were successful.
+        requests: Dict[RoadLane, Iterable[Reservation]] = {}
+        for road_lane in self.upstream_road_lane_by_coord.values():
+            requests[road_lane] = self.tiling.check_request(road_lane,
+                                                            mark=True,
+                                                            sequence=True)
 
-        pass
+        # Find and accept the maximum value combination of requests by testing
+        # all of them on the tiling using the potential reservation system. An
+        # individual request's value is determined by the VOT provided in the
+        # reservation times the time needed to complete the movement, including
+        # time spent waiting for the first vehicle to enter the intersection.
+        #
+        # If reservation requests include sequences of vehicles, the maximum
+        # could include only the first x of n vehicles in the sequence if it
+        # results in a larger total value.
+        #
+        # Break ties by deferring to the request that serves more vehicles. If
+        # equal, break ties randomly.
+        reservations: Iterable[Tuple[RoadLane, Reservation]
+                               ] = self.tiling.find_best_batch(requests)
+        for road_lane, reservation in reservations:
+            self.tiling.confirm_reservation(reservation, road_lane)
+
+        # Clear unused potential reservations from the tiling.
+        self.tiling.clear_potential_reservations()

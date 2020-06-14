@@ -1,7 +1,7 @@
 """
-A vehicle spawner behaves like the latter half of a road, in that it creates a
-vehicle and uses the lane `LeavingInterface` to send the vehicle onto a lane
-in the network.
+A vehicle spawner creates vehicles using one or more random vehicle generators
+and uses the Upstream interface to send the vehicle onto a lane in the road
+it's connected to.
 """
 
 from __future__ import annotations
@@ -136,43 +136,44 @@ class VehicleSpawner(Configurable, Upstream):
                 # No vehicle spawned. Return nothing.
                 return None
 
-        # 1. Determine which lane to spawn to spawn the vehicle in.
-        #    Shuffle the lanes in the downstream road and iterate through for
-        #    the first lane that works for the spawned vehicle's next movement.
-        #    If we find that no lanes work, ever, error.
+        # Determine which lane to spawn the vehicle in by shuffling through the
+        # lanes in the downstream road until we find the first lane that works
+        # for the spawned vehicle's next movement. If we find that no lanes
+        # work, ever, error.
         can_work: bool = False
         for lane in sample(self.downstream.lanes,
                            k=len(self.downstream.lanes)):
-            if len(spawn.next_movement(lane.end_coord)) > 0:
+            if len(spawn.next_movements(lane.end_coord,
+                                        at_least_one=False)) > 0:
                 can_work = True
                 # Check if the lane it's trying to spawn into has enough space.
-                if lane.free_space() > (spawn.length
-                                        * SHARED.length_buffer_factor):
+                if lane.room_to_enter() > (spawn.length
+                                           * 2*SHARED.length_buffer_factor):
                     # If so, place it in the downstream buffer and return it.
                     self.downstream.transfer_vehicle(VehicleTransfer(
                         vehicle=spawn,
                         section=VehicleSection.FRONT,
-                        t_left=None,
+                        d_left=None,
                         pos=lane.end_coord
                     ))
                     self.downstream.transfer_vehicle(VehicleTransfer(
                         vehicle=spawn,
                         section=VehicleSection.CENTER,
-                        t_left=None,
+                        d_left=None,
                         pos=lane.end_coord
                     ))
                     self.downstream.transfer_vehicle(VehicleTransfer(
                         vehicle=spawn,
                         section=VehicleSection.REAR,
-                        t_left=None,
+                        d_left=None,
                         pos=lane.end_coord
                     ))
                     return spawn
-        if not can_work:
-            # None of the lanes work for the vehicle's desired movement.
-            raise RuntimeError("Spawned vehicle has no eligible lanes.")
-        else:
+        if can_work:
             # At least one of the lanes could spawn this vehicle, but none of
             # them had enough room for it. Queue it for the next timestep.
             self.queued_spawn = spawn
             return None
+        else:
+            # None of the lanes work for the vehicle's desired movement.
+            raise RuntimeError("Spawned vehicle has no eligible lanes.")

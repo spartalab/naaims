@@ -1,32 +1,27 @@
 from typing import Optional, Set, Deque, Dict
 
 from ..vehicles import Vehicle
-from .reservations import ReservationRequest, Reservation
+from .reservations import Reservation
 
 
 class Tile:
     """
     This default tile is stochastic because it demands more input parameters
-    than a deterministic tile. 
+    than a deterministic tile.
     """
 
-    # TODO lower priority: consider implementing a simpler, non-stochastic
-    #                      tile class. Issue: they have different function
-    #                      signatures.
+    # TODO: (sequence) (stochastic) Consider banning the use of stochastic AND
+    #       sequenced reservations. It's supported but the overhead is a lot.
 
-    # TODO: consider banning the use of stochastic AND sequenced reservations.
-    #       the API supports it but man that'd be a lot of overhead.
-
-    # TODO: can make reservation without vehicle
-
-    def __init__(self,
-                 rejection_threshold: float = 0
+    def __init__(self, id: int, time: int, rejection_threshold: float = 0
                  ) -> None:
         """Create a new tile, including if it tracks potential requests.
 
         Parameters
-            track: bool
-                Whether or not to track potential requests.
+            id: int
+                The ID of this tile based on xy position (for hashing).
+            time: int
+                The timestep that this tile tracks (for hashing).
             rejection_threshold: float
                 (Used only for stochastic reservations subclass). If the
                 probability that confirming the next request makes the
@@ -34,6 +29,8 @@ class Tile:
                 reject the request. (Check does not apply to the first
                 reservation on this tile.)
         """
+
+        self.hash = hash((id, time))
         # self.__confirmed = False
         # self.__potentials: Set[PotentialReservation] = set()
 
@@ -44,7 +41,14 @@ class Tile:
         # self.__track = track
         self.__rejection_threshold = rejection_threshold
 
-    def will_request_work(self, r: ReservationRequest, p: float = 1) -> bool:
+    # TODO: (sequence) Change all of these tile checks to account for the total
+    #       probability that a tile is used by every vehicle in its sequence.
+    #       We assume that a vehicle will never collide with another vehicle in
+    #       its sequence due to lane-following behavior, but uncertainty in
+    #       movements means one spacetime tile can have nonzero probabilities
+    #       from more than one vehicle.
+
+    def will_reservation_work(self, r: Reservation, p: float = 1) -> bool:
         """Try a request and return false if it can't work.
 
         Return whether this tile can accept the proposed reservation that will
@@ -55,7 +59,7 @@ class Tile:
         use rejection threshold, it's not free.
 
         Parameters
-            r: ReservationRequest
+            r: Reservation
             p: float
                 The probability that the reservation being requested uses this
                 tile. (Only used for stochastic reservations.)
@@ -68,22 +72,24 @@ class Tile:
                 sum(v for v in self.__reserved_by.values()) + p
             ) > self.__rejection_threshold
 
-    def mark_tile(self, r: Reservation, p: float = 1) -> bool:
-        """Try logging a potential reservation onto a tile."""
-        if self.will_request_work(r.request, p):
-            self.__potentials[r] = p
-            return True
-        else:
-            return False
-        # TODO: should it just error if it doesn't work?
+    def mark(self, r: Reservation, p: float = 1) -> None:
+        """Log a potential reservation onto a tile."""
+        self.__potentials[r] = p
 
-    def confirm_request(self, r: Optional[ReservationRequest], p: float = 1,
-                        force: bool = False) -> None:
+    def remove_mark(self, r: Reservation) -> None:
+        """Clear the marking for this reservation if it exists."""
+        if r in self.__potentials:
+            del self.__potentials[r]
+
+    def confirm_reservation(self, r: Reservation, p: float = 1,
+                            force: bool = False) -> None:
         """Confirm that a reservation will use this tile.
 
         Parameters:
-            r: ReservationRequest
+            r: Reservation
             p: float
+                The probability that the reservation being requested uses this
+                tile. (Only used for stochastic reservations.)
             force: bool
                 Ignore the compatibility check and confirm this reservation no
                 matter what. Should only be used when updating stochastic
@@ -100,13 +106,23 @@ class Tile:
         if (r is None) and (not force):
             raise ValueError("Empty reservations must be forced.")
 
-        if force or self.will_request_work(r, p):
+        # TODO: (low) Consider not bothering with checking if the request will
+        #       work or for the force flag.
+        if force or self.will_reservation_work(r, p):
             if r is not None:
                 self.__reserved_by[r.vehicle] = p
             else:
                 self.__reserved_by[r] = p
         else:
             raise ValueError("This request is incompatible with this tile.")
+
+    def clear_all_marks(self) -> None:
+        """Clear all markings on this tile."""
+        self.__potentials = {}
+
+    def __hash__(self):
+        """Hash a tile based on its unique timespace position."""
+        return self.hash
 
 
 class DeterministicTile(Tile):
@@ -116,5 +132,5 @@ class DeterministicTile(Tile):
     is check for sums.
     """
 
-    # TODO: re-implement every
+    # TODO: (low) re-implement every method under deterministic reservations.
     raise NotImplementedError("TODO")

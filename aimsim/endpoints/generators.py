@@ -69,6 +69,7 @@ class Generator(Configurable):
 
     @abstractmethod
     def create_vehicle(self) -> Vehicle:
+        """Should create a new vehicle."""
         raise NotImplementedError("Must be implemented in child classes.")
 
     def _assign_new_vin(self) -> int:
@@ -79,6 +80,7 @@ class Generator(Configurable):
         return vin
 
     def _generate_type_and_dest(self) -> Tuple[Type[Vehicle], int]:
+        """Randomly generate a valid vehicle type and destination."""
         return (choices(self.vehicle_types, weights=self.type_probs)[0],
                 choices(list(range(self.destinations)),
                         weights=self.d_probs)[0])
@@ -104,6 +106,10 @@ class NormalGenerator(Generator):
                  length_sd: float = 0,
                  width_mn: float = 3,  # width in meters
                  width_sd: float = 0,
+                 throttle_score_mn: float = 0,
+                 throttle_score_sd: float = 0,
+                 tracking_score_mn: float = 0,
+                 tracking_score_sd: float = 0,
                  vot_mn: float = 0,  # value of time
                  vot_sd: float = 0) -> None:
 
@@ -132,14 +138,20 @@ class NormalGenerator(Generator):
             raise ValueError("VOT must be at least 0.")
         self.vot_mn = vot_mn
 
+        self.throttle_score_mn = throttle_score_mn
+        self.tracking_score_mn = tracking_score_mn
+
         if ((max_accel_sd < 0) or (max_braking_sd < 0) or (length_sd < 0)
-                or (width_sd < 0) or (vot_sd < 0)):
+                or (width_sd < 0) or (vot_sd < 0) or (throttle_score_sd < 0)
+                or (tracking_score_sd < 0)):
             raise ValueError("Standard deviation must be at least zero.")
         self.max_accel_sd = max_accel_sd
         self.max_braking_sd = max_braking_sd
         self.length_sd = length_sd
         self.width_sd = width_sd
         self.vot_sd = vot_sd
+        self.throttle_score_sd = throttle_score_sd
+        self.tracking_score_sd = tracking_score_sd
 
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
@@ -169,17 +181,24 @@ class NormalGenerator(Generator):
             length_sd=spec['length_sd'],
             width_mn=spec['width_mn'],
             width_sd=spec['width_sd'],
+            throttle_score_mn=spec['throttle_score_mn'],
+            throttle_score_sd=spec['throttle_score_sd'],
+            tracking_score_mn=spec['tracking_score_mn'],
+            tracking_score_sd=spec['tracking_score_sd'],
             vot_mn=spec['vot_mn'],
             vot_sd=spec['vot_sd']
         )
 
     def create_vehicle(self) -> Vehicle:
         """Create a new vehicle with normally distributed parameters."""
+
         vtype, dest = self._generate_type_and_dest()
         max_accel = gauss(self.max_accel_mn, self.max_accel_sd)
         max_braking = gauss(self.max_braking_mn, self.max_braking_sd)
-        ln = gauss(self.length_mn, self.length_sd)
-        wd = gauss(self.width_mn, self.width_sd)
+        length = gauss(self.length_mn, self.length_sd)
+        width = gauss(self.width_mn, self.width_sd)
+        throttle = gauss(self.throttle_score_mn, self.throttle_score_sd)
+        tracking = gauss(self.tracking_score_mn, self.tracking_score_sd)
         vot = gauss(self.vot_mn, self.vot_sd)
         return vtype(
             vin=self._assign_new_vin(),
@@ -187,7 +206,9 @@ class NormalGenerator(Generator):
             max_accel=max_accel if max_accel > 0 else 1,
             max_braking=(max_braking if (max_braking < SHARED.max_braking)
                          else SHARED.max_braking),
-            length=ln if ln > 0 else 1,
-            width=wd if wd > 0 else 1,
+            length=length if length > 0 else 1,
+            width=width if width > 0 else 1,
+            throttle_score=throttle,
+            tracking_score=tracking,
             vot=vot if vot >= 0 else 0
         )

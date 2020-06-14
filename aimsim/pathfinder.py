@@ -1,4 +1,4 @@
-from typing import Dict, Any, Iterable, Tuple, List
+from typing import overload, Dict, Any, Iterable, Tuple, List, Literal, Union
 
 from .util import Coord
 from .vehicles import Vehicle
@@ -23,7 +23,8 @@ class Pathfinder:
         #       will need to take into account turn restrictions.
         raise NotImplementedError("TODO")
 
-    def next_movement(self, coord: Coord, destination: int) -> List[Coord]:
+    def next_movements(self, coord: Coord, destination: int, at_least_one: bool
+                       ) -> List[Coord]:
         """Return a set of valid Coords from which to exit.
 
         Given the Coord at which a vehicle is entering an intersection (the
@@ -35,6 +36,11 @@ class Pathfinder:
         The first Coord returned should be the ideal exit trajectory (e.g., the
         one requiring the fewest lane changes), in case the intersection
         manager doesn't want to explore multiple options.
+
+        If at_least_one, return at least one Coord that's a valid turning
+        movement, even if it can't possibly reach the specified destination.
+        For use in case of non-fully-connected networks since all modules using
+        this method (except VehicleSpawner) needs a target in order to work.
         """
 
         # Bypass full routing check if the requested source-destination pair
