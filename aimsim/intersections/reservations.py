@@ -57,5 +57,5 @@ class Reservation:
     dependency: Optional[Vehicle]
     its_exit: ScheduledExit
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(vehicle)

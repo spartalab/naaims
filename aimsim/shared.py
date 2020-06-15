@@ -3,10 +3,10 @@ This module reads configurations from file and does stuff with it.
 
 [MAIN] # config options \\
 steps_per_second
-    how many steps does the simulation calculate per second of simulated time?
+    The number of steps the simulation calculates per second of simulated time.
 speed_limit
-    default speed limit in meters per second (can be overriden by specific
-    roads or intersections in their specifications)
+    The default speed limit in meters per second (can be overridden by specific
+    roads or intersections in their specifications).
 max_braking
     Maximum comfortable deceleration (braking) for all vehicles in m/s^2.
     Because this is based on human comfort, this should be also be lower than
@@ -27,9 +27,6 @@ entrance_length
     acceleration is the time to traverse the length of the longest movement at
     full acceleration plus the length of the vehicle, which could end up being
     some super ridiculous length. Maybe this isn't worth it.
-
-    TODO: calculate for every vehicle to find the worst case instead of having
-    it provided in the config.
 """
 
 from typing import Dict, Any
@@ -104,8 +101,8 @@ def read(config_filename: str = './config.ini') -> None:
 
 
 # shared vin counter
-# TODO: not thread safe. fix for multiprocessing.
+# TODO: (parallel) Not thread safe. Fix for multiprocessing.
 vin_counter = 0
 
-# time counter
+# Initialize global simulation timestep.
 t = 0

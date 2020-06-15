@@ -1,5 +1,5 @@
 """
-Contains utility functions that makes other stuff work.
+Contains miscellaneous utility classes that makes other stuff work.
 """
 
 from __future__ import annotations
@@ -14,17 +14,20 @@ if TYPE_CHECKING:
 
 
 class Coord(NamedTuple):
+    """A simple way to track (x,y) coordinates consistently."""
     x: float
     y: float
 
 
 class VehicleSection(Enum):
+    """A consistent way to distinguish front, center, and rear sections."""
     FRONT = 0
     CENTER = 1
     REAR = 2
 
 
 class SpeedUpdate(NamedTuple):
+    """A consistent way to track a vehicle's speed and acceleration updates."""
     v: float
     a: float
 
@@ -62,7 +65,7 @@ class CollisionError(Exception):
     pass
 
 
-class LinkError(Exception):
+class MissingConnectionError(Exception):
     """Raised when a road doesn't find an upstream or downstream object."""
     pass
 

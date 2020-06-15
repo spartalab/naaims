@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import deque
 from abc import abstractmethod
 from math import acos, sqrt
-from typing import TYPE_CHECKING, Tuple, Optional, Iterable, Dict, Any
+from typing import Optional, Iterable, Dict, Any
 
 import bezier
 import numpy as np
@@ -59,7 +59,7 @@ class Trajectory(Configurable):
 
         spec: Dict[str, Any] = {}
 
-        # TODO: interpret the string into the spec dict
+        # TODO: (spec) Interpret the string into a spec dict.
         raise NotImplementedError("TODO")
 
         return spec
@@ -80,14 +80,11 @@ class Trajectory(Configurable):
 
     @abstractmethod
     def get_position(self, proportion: float) -> Coord:
+        """Should return the Coord associated with a proportional progress."""
         raise NotImplementedError('Must be implemented in child classes.')
 
     @abstractmethod
-    def get_proportion(self, position: Coord) -> float:
-        raise NotImplementedError('Must be implemented in child classes.')
-
-    @abstractmethod
-    def heading(self, proportion: float, eps: float = 1e-6) -> float:
+    def get_heading(self, proportion: float, eps: float = 1e-6) -> float:
         """Returns the angle that a vehicle at proportion is heading in."""
 
         if proportion >= 1:
@@ -102,37 +99,14 @@ class Trajectory(Configurable):
         dy = b.y - a.y
         return acos(dx / sqrt(dx**2 + dy**2))
 
-    def curvature(self, proportion: float) -> Optional[float]:
-        """May return the trajectory's angle of curvature at this point.
-
-        If this trajectory supports this feature, this will return the
-        trajectory's angle of curvature at some proportion, which could be
-        used in turn slowdown calculations.
-
-        If this trajectory does not support this feature, it will return None.
-        """
-        return None
-
-    @abstractmethod
-    def progress(self, vehicle: Vehicle, proportion: float) -> float:
-        """Given these vehicle parameters, how far does the it progress?
-
-        Can be overridden in child classes to account for curvature.
-        """
-
-        # TODO: let the trajectory do the progression calculations, allowing
-        #       for override if fancier trajectories want to account for
-        #       slowdowns on curved roads
-        raise NotImplementedError("TODO")
-
-    def effective_speed_limit(self, proportion: float):
+    def effective_speed_limit(self, proportion: float) -> float:
         """Would use traversibility_factors to find an effective speed limit.
 
         Some trajectories (e.g., tight turns) require a certain speed to
         navigate properly or comfortably. This method, if implemented, would
         enforce a slower speed on different proportions of the trajectory.
         """
-        # TODO: (later) implement this properly in child classes
+        # TODO: (low) implement this properly in child classes
         return float('inf')
 
 

@@ -1,16 +1,15 @@
 """
-The `lanes` module handles the progression of vehicles along 1-dimensional
-lines we call "lanes", used on roads and within intersections (e.g., as a left
-turn trajectory), making them the fundamental building block of aimsim.
+The lanes module handles the progression of vehicles along 1-dimensional lines,
+"lanes", used on roads and within intersections (e.g., as a left turn
+trajectory), making them the fundamental building block of aimsim.
 
-Lanes only interact with their Road and Intersection containers, and so must be
-written to interact through their parent road or intersection to pass vehicles
-between lanes, either as a lane change or onto the next road of intersection.
+Vehicles in lanes look forward to make sure that they don't collide with the
+vehicle ahead of them even if the preceding vehicle immediately starts braking
+as hard as it can. This is true even across road lanes to intersection lanes
+and vice versa.
 
-The geometry of a lane is determined by what type of Trajectory is
-provided when initialized. The Trajectory controls the physics of vehicles on
-the lane when they move forward, while the Lane is responsible for holding
-proportional progress of the vehicles.
+The geometry of a lane is determined by what type of Trajectory it's provided
+at init. It determines how vehicles move in 2D space.
 """
 
 from __future__ import annotations
@@ -30,6 +29,14 @@ from .intersections import Intersection
 
 
 class LateralDeviation:
+    """Describes how far a vehicle has deviated perpendicular to a lane.
+
+    lane: Lane
+        The lane in which this deviation is in reference to. Useful in the case
+        of lane changes where a vehicle may be in two lanes at once.
+    d: float
+        How far the vehicle is perpendicular to the lane's trajectory.
+    """
     lane: Lane
     d: float
 
@@ -52,14 +59,15 @@ class Lane(ABC):
                  trajectory: Trajectory,
                  width: float,
                  speed_limit: float = SHARED.speed_limit) -> None:
-        """Create a new lane.
+        """Should create a new lane.
 
-        Lanes inherit the trajectory of the road they're created by (if
-        applicable), adding an offset if necessary.
-
-        Keyword arguments:
-        trajectory: The trajectory of the road that contains the lane.
-        offset: The amount by which to offset the lane by.
+        Parameters
+            trajectory: Trajectory
+                The trajectory of the road that contains the lane.
+            width: float
+                The width of the lane.
+            speed_limit: float = SHARED.speed_limit
+                The speed limit for the lane.
         """
 
         # Save inputs
@@ -98,7 +106,10 @@ class Lane(ABC):
 
     def update_speeds(self, to_slow: Set[Vehicle] = set()
                       ) -> Dict[Vehicle, SpeedUpdate]:
-        """Return speed updates for all vehicles on this lane.
+        """Return all vehicles on this lane and their speed updates.
+
+        Note that this function does NOT change a vehicle's own record of its
+        speed and acceleration. That should be handled outside this function.
 
         Parameters
             to_slow: Set[Vehicle]
@@ -144,9 +155,10 @@ class Lane(ABC):
     @abstractmethod
     def accel_update(self, vehicle: Vehicle, section: VehicleSection, p: float,
                      preceding: Optional[Vehicle]) -> float:
-        """Return a vehicle's acceleration update.
+        """Should return a vehicle's new acceleration.
 
-        Note that this does NOT change the vehicle's position.
+        Note that this function does NOT change a vehicle's own record of its
+        acceleration. That should be handled outside this function.
 
         preceding is the vehicle ahead of the vehicle we're calculating for. If
         there is none, the vehicle is at the head of the queue and must stop at
@@ -193,6 +205,10 @@ class Lane(ABC):
                                     vehicle_stopping_distance: float) -> float:
         """Return the effective stopping distance.
 
+        Calculates the effective stopping distance for a vehicle given its
+        gap to the next waypoint plus the stopping distance of that waypoint
+        if it's a vehicle. (This is 0 if the waypoint is the end of the lane.)
+
         Parameters
             pre_p: float
                 The proportional progress of the rear of the preceding vehicle.
@@ -207,7 +223,7 @@ class Lane(ABC):
     def downstream_stopping_distance(self, vehicle: Vehicle,
                                      section: VehicleSection
                                      ) -> Optional[float]:
-        """Should check if the downstream facility has a vehicle to follow."""
+        """Should check the downstream object's required stopping distance."""
         raise NotImplementedError("Must be implemented in child classes.")
 
     def stopping_distance_to_last_vehicle(self) -> Optional[float]:
@@ -234,7 +250,8 @@ class Lane(ABC):
                     return None
             assert p is not None
             assert pre_p is not None
-            return (pre_p-p)*self.trajectory.length+vehicle.stopping_distance()
+            return self.effective_stopping_distance(
+                pre_p, p, vehicle.stopping_distance())
 
     def accel_update_uncontested(self, vehicle: Vehicle, p: float) -> float:
         """Return accel update if there are no vehicles ahead.
@@ -291,7 +308,7 @@ class Lane(ABC):
 
     def speed_update(self, vehicle: Vehicle, p: float,
                      accel: float) -> SpeedUpdate:
-        """Given an acceleration, update speeds.
+        """Given a vehicle and its acceleration, update speed and return both.
 
         Note acceleration and speed aren't 1-to-1 because of discrete time.
 
@@ -519,21 +536,18 @@ class Lane(ABC):
                                 lateral_deviation: float = 0) -> None:
         """Should update the vehicle's position, including lateral movement."""
 
-        # TODO: only intersectionlane has record of lateral deviation
-        #       should lateral_movement be cumulative instead?
-        #       could give both a record but would that be weird with multilane
-        #       drifting?
-
         # longitudinal update
         pos: Coord = self.trajectory.get_position(new_p)
+        heading: float = self.trajectory.get_heading(new_p)
 
         if lateral_deviation != 0:
-            # TODO: (multi/stochasticity) use trajectory.heading(new_p) to
+            # TODO: (multiple) (stochasticity) use trajectory.heading(new_p) to
             #       calculate the lateral deviation away from pos.
             raise NotImplementedError("TODO")
 
-        # write it to new vehicle
+        # write new values to vehicle
         vehicle.pos = pos
+        vehicle.heading = heading
 
     def remove_vehicle(self, vehicle: Vehicle) -> None:
         """Remove an exited vehicle from this lane."""
@@ -567,7 +581,15 @@ class Lane(ABC):
     def transfer_to_progress(self, transfer: VehicleTransfer,
                              old_progress: VehicleProgress = VehicleProgress()
                              ) -> VehicleProgress:
-        """Update a lane's relative record of a vehicle's progress."""
+        """Update a lane's relative record of a vehicle's progress.
+
+        Parameters:
+            transfer: VehicleTransfer
+            old_progress: VehicleProgress = VehicleProgress()
+                The vehicle's progress in the lane before this transfer
+                resolved, e.g. if its front section was already in the lane
+                last timestep but now its middle section is transferring.
+        """
         vehicle: Vehicle = transfer.vehicle
         new_vehicle_progress: List[Optional[float]] = list(old_progress)
 
@@ -610,12 +632,19 @@ class Lane(ABC):
 
     # Misc functions
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return self.hash
 
 
 class ScheduledExit(NamedTuple):
     """
+    This is when a vehicle is scheduled to either start exiting (if section is
+    VehicleSection.FRONT) or finish exiting (if section is VehicleSection.REAR)
+    the lane. The former case is used by intersection managers to determine if
+    a vehicle can enter the intersection, while the latter is used by road
+    lanes to make sure that reservations don't crash into a vehicle immediately
+    downstream.
+
     Parameters
         vehicle: Vehicle
             The vehicle exiting.
@@ -637,8 +666,6 @@ class RoadLane(Lane):
 
     Like their parent Roads, RoadLanes are divided into three sections: the
     entrance, lane changing, and approach regions.
-
-    They connect directly to the conflict area controlled by `manager`s.
     """
 
     def __init__(self,
@@ -650,6 +677,7 @@ class RoadLane(Lane):
                  upstream_is_spawner: bool = False,
                  downstream_is_remover: bool = False,
                  speed_limit: int = SHARED.speed_limit) -> None:
+        """Create a new road lane."""
 
         self.start_coord: Coord = Coord(trajectory.start_coord.x + offset.x,
                                         trajectory.start_coord.y + offset.y)
@@ -685,7 +713,9 @@ class RoadLane(Lane):
 
         super().__init__(trajectory, width, speed_limit=speed_limit)
 
-    def connect_downstream_intersection(self, downstream: Intersection):
+    def connect_downstream_intersection(self, downstream: Intersection
+                                        ) -> None:
+        """Connect a downstream intersection to this RoadLane."""
         if self.downstream_is_remover:
             raise ValueError("Downstream shouldn't be intersection.")
         else:
@@ -695,8 +725,12 @@ class RoadLane(Lane):
 
     def update_speeds(self, to_slow: Set[Vehicle] = set()
                       ) -> Dict[Vehicle, SpeedUpdate]:
-        # Do an additional check to see if a downstream intersection has been
-        # registered, if necessary
+        """Return all vehicles on this lane and their speed updates.
+
+        On top of the processes in the parent function, this does an additional
+        check to see if a downstream intersection has been registered, if
+        necessary.
+        """
         if ((not self.downstream_is_remover)
                 and (self.downstream_intersection is None)):
             raise RuntimeError("Missing downstream Intersection.")
@@ -734,6 +768,12 @@ class RoadLane(Lane):
 
     def accel_update(self, vehicle: Vehicle, section: VehicleSection, p: float,
                      preceding: Optional[Vehicle]) -> float:
+        """Return a vehicle's new acceleration.
+
+        On top of the parent function's operations, adds additional cases to
+        determine what to do if the vehicle needs to stop at the intersection
+        line, for both there being and not being a preceding vehicle in lane.
+        """
 
         # TODO: (platoon) Insert vehicle chain override here and return it.
         #       Vehicle should look forward to downstream chained vehicles to
@@ -763,6 +803,7 @@ class RoadLane(Lane):
     def downstream_stopping_distance(self, vehicle: Vehicle,
                                      section: VehicleSection
                                      ) -> Optional[float]:
+        """Check the downstream object's required stopping distance, if any."""
         if self.downstream_intersection is None:
             # There's a remover downstream so there's no possibility of having
             # to follow another vehicle.
@@ -772,6 +813,11 @@ class RoadLane(Lane):
                 stopping_distance_to_last_vehicle(self.end_coord)
 
     def remove_vehicle(self, vehicle: Vehicle) -> None:
+        """Remove an exited vehicle from this lane.
+
+        On top of the super's parent call, clear the lane's latest scheduled
+        exit record if this was actually the latest scheduled exit. 
+        """
         super().remove_vehicle(vehicle)
 
         # Clear the latest scheduled exit if this fulfills it.
@@ -967,7 +1013,7 @@ class RoadLane(Lane):
         #       creating and returning the VehicleTransfers.
         raise NotImplementedError("TODO")
 
-    def register_latest_scheduled_exit(self, new_exit: ScheduledExit):
+    def register_latest_scheduled_exit(self, new_exit: ScheduledExit) -> None:
         """Register a new latest scheduled exit if it's actually later.
 
         Note that the output of a soonest_exit call should not go directly into
@@ -994,6 +1040,13 @@ class IntersectionLane(Lane):
                  start_lane: RoadLane,
                  end_lane: RoadLane,
                  speed_limit: int = SHARED.speed_limit):
+        """Create a new IntersectionLane.
+
+        Instead of taking an explicit trajectory, the Intersection Lane infers
+        its own using the Coords of the start and end road lanes and their
+        headings at their start and end to create a BezierTrajectory that
+        curves nicely.
+        """
 
         self.upstream = start_lane
         self.downstream = end_lane
@@ -1047,6 +1100,10 @@ class IntersectionLane(Lane):
 
     def accel_update(self, vehicle: Vehicle, section: VehicleSection, p: float,
                      preceding: Optional[Vehicle]) -> float:
+        """Return a vehicle's new acceleration.
+
+        Just calls the parent's accel_update() (for now).
+        """
 
         # TODO: (platoon) Insert vehicle chain override here.
         #       May not be necessary if the emergent behavior of breaking
@@ -1073,7 +1130,7 @@ class IntersectionLane(Lane):
     def downstream_stopping_distance(self, vehicle: Vehicle,
                                      section: VehicleSection
                                      ) -> Optional[float]:
-        """Call the downstream RoadLane for a preceding vehicle to follow."""
+        """Check the downstream road lane's required stopping distance."""
         return self.downstream.stopping_distance_to_last_vehicle()
 
     # Support functions for step updates
@@ -1101,5 +1158,10 @@ class IntersectionLane(Lane):
     # Support functions for vehicle transfers
 
     def add_vehicle(self, vehicle: Vehicle) -> None:
+        """Create entries for this vehicle in lane support structures.
+
+        On top of what the parent add_vehicle() does, creates a new
+        lateral_deviation entry for this vehicle.
+        """
         super().add_vehicle(vehicle)
         self.lateral_deviation[vehicle] = 0

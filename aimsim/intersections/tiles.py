@@ -1,3 +1,11 @@
+"""
+Tiles are the base component of tilings. Each tiling is associated with an
+(x,y) Coord and a timestep and records the probability that vehicles intend to
+be in this position at this time. The goal is to minimize the likelihood that
+two more more vehicles use the same tile, causing a collision, while still
+maximizing intersection throughput.
+"""
+
 from typing import Optional, Set, Deque, Dict
 
 from ..vehicles import Vehicle
@@ -120,7 +128,7 @@ class Tile:
         """Clear all markings on this tile."""
         self.__potentials = {}
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         """Hash a tile based on its unique timespace position."""
         return self.hash
 

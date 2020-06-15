@@ -1,16 +1,13 @@
 """
-The intersection manager determines how AIM handles the intersection conflict
-area (often called the "box", at least for 4-way 90 degree intersections). This
-includes managing when vehicles are allowed to enter an intersection as well as
-how they proceed through the intersection. (For automated vehicles, this is an
-accurate reflection of how they would be controlled using AIM, while for human-
-driven vehicles, this module handles both what an AIM manager would do in that
-scenario as well as simulates the imprecise movement of human-driven vehicles.)
+The tiling determines how AIM handles the intersection conflict area (often
+called the "box", at least for 4-way 90 degree intersections). It tracks the
+management of traffic signal cycle (if there is one) and the process of
+testing, confirming, and executing reservations through the intersection.
 
 The two primary methods are arc-based (ArcAIM), where vehicles reserve the area
-around a conflict point (the intersection of two trajectories), and tile-based,
-where the entire intersection is divided into tiles that can be reserved
-(Dresner and Stone 2008).
+around a conflict point (the intersection of two trajectories), and square
+tiling, where the entire intersection is divided into square tiles with
+adjustable granularity (Dresner and Stone 2008).
 """
 
 
@@ -20,11 +17,10 @@ from typing import (Optional, Iterable, Set, Dict, Tuple, Type, TypeVar, Any,
 from collections import deque
 
 import aimsim.shared as SHARED
-from ..archetypes import Configurable, Upstream, Downstream
+from ..archetypes import Configurable
 from ..util import Coord, SpeedUpdate, VehicleSection
 from ..lanes import IntersectionLane, RoadLane, VehicleProgress, ScheduledExit
 from ..vehicles import Vehicle
-from ..roads import Road
 from .reservations import Reservation
 from .tiles import Tile, DeterministicTile
 
@@ -946,10 +942,10 @@ class Tiling(Configurable):
         raise NotImplementedError("TODO")
 
     @abstractmethod
-    def clear_potential_reservations(self):
+    def clear_potential_reservations(self) -> None:
         """Go through all tiles and clear potential reservations markings."""
         raise NotImplementedError("Should be implemented in child classes.")
-        # TODO: Use tile.clear_all_marks()
+        # TODO: (auction) Use tile.clear_all_marks()
 
     # Support methods used by the Tiling
 

@@ -29,6 +29,7 @@ class Generator(Configurable):
                  type_probs: Optional[List[float]] = None,
                  d_probs: Optional[List[float]] = None,
                  pair_id: Optional[int] = None) -> None:
+        """Should create a new Generator."""
 
         if type_probs is not None:
             if ((len(vehicle_types) != len(type_probs))
@@ -112,7 +113,7 @@ class NormalGenerator(Generator):
                  tracking_score_sd: float = 0,
                  vot_mn: float = 0,  # value of time
                  vot_sd: float = 0) -> None:
-
+        """Create a new normally distributed Generator."""
         super().__init__(
             vehicle_types=vehicle_types,
             destinations=destinations,

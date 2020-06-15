@@ -1,10 +1,9 @@
 """
-`simulator` implements the class that runs a new instance of the AIM simulator,
-including visualizations if enabled.
+The simulators module contains the classes that create and run a new instance
+of the AIM simulator, including visualizations if enabled.
 """
 
 from __future__ import annotations
-from abc import ABC, abstractmethod
 from typing import Iterable, Tuple, Dict, Optional, Set, Any, List
 
 from pandas import DataFrame
@@ -20,7 +19,7 @@ from ..endpoints import VehicleSpawner, VehicleRemover
 from ..vehicles import Vehicle
 
 
-class Simulator(ABC):
+class Simulator:
     """
     The Simulator class gives fully comprehensive access to every tool
     available in this AIM implementation.
@@ -35,34 +34,40 @@ class Simulator(ABC):
     proprietary datatypes Simulator needs to construct the network.
     """
 
-    @abstractmethod
     def __init__(self,
                  road_specs: Iterable[Dict[str, Any]],
                  intersection_specs: Iterable[Dict[str, Any]],
                  spawner_specs: Iterable[Dict[str, Any]],
                  remover_specs: Iterable[Dict[str, Any]],
-                 lane_destination_pairs: Dict[Tuple[Coord, int],
-                                              List[Coord]] = {},
+                 lane_destination_pairs: Optional[Dict[Tuple[Coord, int],
+                                                       List[Coord]]] = None,
                  config_filename: str = './config.ini',
                  display: bool = False) -> None:
-        """Should create all roads, intersections, and suppport structures.
+        """Create all roads, intersections, and suppport structures.
 
-        This abstract init that all Simulators should call serves only to
-        initialize data structures for lookup, calls, and visualization.
+        Parameters
+            road_specs: Iterable[Dict[str, Any]]
+            intersection_specs: Iterable[Dict[str, Any]]
+            spawner_specs: Iterable[Dict[str, Any]]
+            remover_specs: Iterable[Dict[str, Any]]
+                These dicts, which can contain nested dicts, provide the
+                initialization parameters for all customizable objects in the
+                AIM simulation.
+            lane_destination_pairs:
+                Optional[Dict[Tuple[Coord, int], List[Coord]]] = None
+                If provided, overrides default Pathfinder behavior by
+                hardcoding paths through the intersection network, obviating
+                the need for shortest path calculations.
+            config_filename: str = './config.ini'
+                The location of the config file.
+            display: bool = False
+                Whether to visualize the progress of the simulation.
         """
 
         # 0. Read in the config file.
         SHARED.read(config_filename)
 
-        # 1. Generate a Pathfinder from the specs and share it across modules
-        # TODO: Figure out how to work around this for simple 1-intersection
-        #       cases. Maybe an override?
-        SHARED.pathfinder = Pathfinder(
-            road_specs, intersection_specs, spawner_specs, remover_specs,
-            lane_destination_pairs
-        )
-
-        # 2. Create the Upstream and Downstream objects
+        # 1. Create the Upstream and Downstream objects
         #   a. Create the roads and organize by intersection and road to be
         #      created.
         self.roads: Dict[int, Road] = {}
@@ -71,28 +76,37 @@ class Simulator(ABC):
         for_spawner: Dict[int, int] = {}
         for_remover: Dict[int, int] = {}
         for spec in road_specs:
-            self.roads[spec['id']] = Road.from_spec(spec)
-            # TODO: finish this pseudocode, figure out how info is stored
-            #       and if spec['upstream/downstream'] needs processing
-            # if spec['upstream'] is an intersection:
-            #     for_intersection_upstream.setdefault([spec['upstream'], []
-            #       ]) = self.roads[spec['id']]
-            # else: upstream better be a spawner, throw if not
-            #       TODO: also throw if it has a spawner that already exists
-            # if spec['downstream'] is an intersection:
-            #     for_intersection_downstreamsetdefault([spec['downstream'], []
-            #       ]) = self.roads[spec['id']]
-            raise NotImplementedError("TODO")
+            rid: int = spec['id']
+            self.roads[rid] = Road.from_spec(spec)
 
-        #   b. Create intersections, spawners, and removers given the
-        #      roads. Connect the intersection, spawner, and removers to the
-        #      relevant roads.
-        #   TODO: make sure actual spec fields match what's expected here
+            # Record the road's expected upstream object to check for
+            # correctness later.
+            upstream_id: int = spec['upstream_id']
+            if spec['upstream_is_spawner']:
+                for_spawner[upstream_id] = rid
+            else:
+                if upstream_id not in for_intersection_upstream:
+                    for_intersection_upstream[upstream_id] = {rid}
+                else:
+                    for_intersection_upstream[upstream_id].add(rid)
+
+            # Prepare to attach to Downstream object
+            downstream_id: int = spec['downstream_id']
+            if spec['downstream_is_remover']:
+                for_remover[downstream_id] = rid
+            else:
+                if downstream_id not in for_intersection_downstream:
+                    for_intersection_downstream[downstream_id] = {rid}
+                else:
+                    for_intersection_downstream[downstream_id].add(rid)
+
+        #   b. Create intersections, spawners, and removers given the roads.
+        #      Connect roads to their intersections, spawners, and removers.
         self.intersections: Dict[int, Intersection] = {}
         for spec in intersection_specs:
 
-            # cache intersection ID
-            iid = spec['id']
+            # Cache intersection ID
+            iid: int = spec['id']
 
             # Check that there are roads that lead to this intersection from
             # both upstream and downstream
@@ -102,7 +116,6 @@ class Simulator(ABC):
                     f"Spec has intersection {iid} but no road does.")
 
             # Put the upstream and downstream roads in this spec
-            # TODO: error check that every road the spec expects exists
             spec['upstream_roads'] = {}
             for rid in spec['upstream_road_ids']:
                 spec['upstream_roads'][rid] = self.roads[rid]
@@ -121,13 +134,13 @@ class Simulator(ABC):
                 rid = for_intersection_upstream[iid].pop()
                 self.roads[rid].connect_upstream(self.intersections[iid])
 
-            # On the road side, track which intersections we've confirmed exist
+            # On road's side, track which intersections we've confirmed exist
             del for_intersection_upstream[iid]
             del for_intersection_downstream[iid]
 
         # Check if every road's intersection has been created
-        if (bool(for_intersection_upstream)
-                or bool(for_intersection_downstream)):
+        if ((len(for_intersection_upstream) > 0) or
+                (len(for_intersection_downstream) > 0)):
             raise ValueError(
                 f"Roads have at least one intersection that the spec doesn't.")
 
@@ -135,7 +148,7 @@ class Simulator(ABC):
         for spec in spawner_specs:
 
             # Cache spawner ID
-            sid = spec['id']
+            sid: int = spec['id']
 
             # Check that a road leaves this spawner
             if sid not in for_spawner:
@@ -144,9 +157,7 @@ class Simulator(ABC):
             # Check that the road the spawner thinks is connected to agrees
             # that the spawner is connected to it
             rid = spec['road_id']
-            try:
-                assert rid == for_spawner[sid]
-            except AssertionError:
+            if rid != for_spawner[sid]:
                 raise ValueError(f"Spawner {sid} thinks it's connected to road"
                                  f" {rid} but road {for_spawner[sid]} thinks"
                                  " it's the one.")
@@ -164,7 +175,7 @@ class Simulator(ABC):
             del for_spawner[rid]
 
         # Check if every road's spawner (if it has one) has been created
-        if bool(for_spawner):
+        if len(for_spawner) > 0:
             raise ValueError(
                 f"Roads have at least one spawner that the spec doesn't.")
 
@@ -172,7 +183,7 @@ class Simulator(ABC):
         for spec in remover_specs:
 
             # Cache remover ID
-            vid = spec['id']
+            vid: int = spec['id']
 
             # Check that a road enters this remover
             if vid not in for_remover:
@@ -181,9 +192,7 @@ class Simulator(ABC):
             # Check that the road the remover thinks is connected to agrees
             # that the remover is connected to it
             rid = spec['road_id']
-            try:
-                assert rid == for_remover[vid]
-            except AssertionError:
+            if rid != for_remover[vid]:
                 raise ValueError(f"Remover {vid} thinks it's connected to road"
                                  f" {rid} but road {for_remover[vid]} thinks"
                                  " it's the one.")
@@ -201,9 +210,14 @@ class Simulator(ABC):
             del for_remover[rid]
 
         # Check if every road's remover (if it has one) has been created
-        if bool(for_remover):
+        if len(for_remover) > 0:
             raise ValueError(
                 f"Roads have at least one remover that the spec doesn't.")
+
+        # 2. Generate a Pathfinder from the specs and share it across modules
+        SHARED.pathfinder = Pathfinder(self.roads.values(),
+                                       self.intersections.values(),
+                                       lane_destination_pairs)
 
         # 3. Group them into common sets so it's neater to loop through
         self.facilities: Iterable[Facility] = list(
@@ -218,8 +232,7 @@ class Simulator(ABC):
             self.intersections.values()
         ) + list(self.roads.values()) + list(self.removers.values())
 
-        # 4. Initialize an empty list of vehicles
-        # self.vehicles: Dict[int, Vehicle] = {}
+        # 4. Initialize an empty set of vehicles
         self.vehicles: Set[Vehicle] = set()
 
         # 5. If the visualize flag is enabled, draw the basemap image of
@@ -239,8 +252,8 @@ class Simulator(ABC):
             # Save the result of the road+intersection vis into a property
             # self.vis_basemap = whatever
 
-            # TODO: old code, revise
-            # TODO: revamp to draw lanes better and to include vehicles
+            # TODO: (visualize) Old code, revise. If revise, revamp to draw
+            #       lanes better and to include vehicles.
             # lanes = list(self.intersection.incomingLanes.keys())
             # for ls in self.intersection.outgoingLanes.values():
             #     for l in ls:
@@ -284,8 +297,8 @@ class Simulator(ABC):
     def step(self) -> None:
         """Execute one simulation step."""
 
-        # TODO: The double for loops in each step are parallelizable. Each pass
-        #       can be implemented as a parallel worker. It'd probably be
+        # TODO: (parallel) The for loops in each step can be parallelized. Each
+        #       pass can be implemented as a parallel worker. It'd probably be
         #       tricky, but the algorithm is designed such that at most only
         #       one pass of the double for loop changes any one data structure.
 
@@ -336,7 +349,7 @@ class Simulator(ABC):
         for f in self.facilities:
             f.handle_logic()
 
-        # 5. Update shared time step and (TODO future) shortest path values
+        # 5. Update shared time step and (TODO: (low)) shortest path values
         SHARED.t += 1
         SHARED.pathfinder.update(None)
 
@@ -367,7 +380,7 @@ class SingleIntersectionSimulator(Simulator):
         #     intersection_traj_file, lanes_file)
 
         # call super's init first to initialize data structures
-        super().__init__(config_filename)
+        raise NotImplementedError("TODO")
 
         # fill those data structures by ingesting road geometry
 

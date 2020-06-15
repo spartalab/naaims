@@ -47,14 +47,8 @@ class LaneChangeManager(Configurable):
 
         spec: Dict[str, Any] = {}
 
-        # TODO: interpret the string into the spec dict.
+        # TODO: (spec) Interpret the string into the spec dict.
         raise NotImplementedError("TODO")
-
-        # TODO: consider if children need to do any additional processing
-        #       of the inputs, if there are any custom inputs? maybe this could
-        #       be solved by calling an abstract class function, or we simply
-        #       enforce that no every manager type has exactly the same input
-        #       arguments
 
         return spec
 

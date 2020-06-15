@@ -1,12 +1,5 @@
 """
-The `vehicles` module tracks the properties of vehicles.
-
-Assume routes are static (pre-emptive rerouting is a big ask, forced rerouting
-same but a little less so)
-Add routingerror is a vehicle gets off routes
-
-vehicle stores its desired route through the intersection, updating pointers
-along the way
+This module holds all vehicle types used in the AIM simulator.
 """
 
 from __future__ import annotations
@@ -31,7 +24,7 @@ class Vehicle(ABC):
     behavior.
 
     In this implementation, a Vehicle can't change its own properties, instead
-    relying on the Lane objects it's traveling in to do it via setters.
+    relying on the Lane object it's traveling in to do it via setters.
     """
 
     @abstractmethod
@@ -111,22 +104,16 @@ class Vehicle(ABC):
 
     @property
     def pos(self) -> Coord:
+        """The vehicle's position in real (x,y) Coord."""
         return self._pos
 
     @pos.setter
     def pos(self, new_pos: Coord) -> None:
         self._pos: Coord = new_pos
 
-    # TODO: also store front of car, back of car, and box? or return live?
-    #       they get returned each vis step so maybe cache them.
-
-    #   A vehicle is always accelerating to or at the speed limit, unless,
-    #   if between intersections, if the preceding vehicle were to brake at
-    #   full power, if this vehicle were also to brake at full power, this
-    #   vehicle would collide with the other vehicle.
-
     @property
     def v(self) -> float:
+        """The vehicle's speed in m/s."""
         return self._v
 
     @v.setter
@@ -137,7 +124,7 @@ class Vehicle(ABC):
 
     @property
     def a(self) -> float:
-        """Vehicle's current acceleration. Used only for plotting."""
+        """Vehicle's current acceleration in m/s^2."""
         return self._a
 
     @a.setter
@@ -149,6 +136,7 @@ class Vehicle(ABC):
 
     @property
     def heading(self) -> float:
+        """The orientation of the vehicle in degrees."""
         return self._heading
 
     @heading.setter
@@ -159,7 +147,7 @@ class Vehicle(ABC):
 
     @property
     def permission_to_enter_intersection(self) -> bool:
-        """Check whether a vehicle has permission to enter a reservation.
+        """Check whether this vehicle has permission to enter an intersection.
 
         In the event of a traffic signal or similar control scheme, a vehicle
         may enter an intersection without a reservation.
@@ -172,6 +160,7 @@ class Vehicle(ABC):
 
     @property
     def has_reservation(self) -> bool:
+        """Check whether this vehicle has an intersection reservation."""
         return self._has_reservation
 
     @has_reservation.setter
@@ -183,7 +172,7 @@ class Vehicle(ABC):
     #       acceleration with the slowest acceleration in the chain.
 
     def stopping_distance(self) -> float:
-        """Return the vehicle's stopping distance."""
+        """Return the vehicle's stopping distance in meters."""
         return self.v**2/(-2*self.max_braking)
 
     def next_movements(self, start_coord: Coord, at_least_one: bool = True
@@ -201,7 +190,7 @@ class Vehicle(ABC):
         """Return a clone of this vehicle to test a reservation request."""
         return copy(self)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.vin)
 
 
@@ -210,9 +199,6 @@ class AutomatedVehicle(Vehicle):
     Since the default vehicle is fully automated, all this class does is change
     the name of the base class so it's clear what type of vehicle we're using.
     """
-
-    def __init__(self, ):
-        super.__init__(self)  # TODO: finish
 
 
 class HumanDrivenVehicle(Vehicle):

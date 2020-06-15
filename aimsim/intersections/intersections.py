@@ -1,14 +1,17 @@
 """
-`intersection` implements a road intersection with a specific priority
-control policy, creating all of its associated incoming and outgoing lanes.
+This module implements a road intersection with a specific priority control
+policy (the manager) and method of registering reservations (the tiling).
 
 The intersection includes incoming roads up to some distance specified in the
 constructor. Vehicles on these approach roads are barred from changing lanes
 as a necessary prerequisite for the AIM scheduling method.
 
+The intersection handles the creation of all its moving parts and the transfer
+of vehicles from incoming roads and to outgoing roads, as well as instructing
+the lanes and manager to start their processes.
 
-The intersection handles creation and management of the intersection lanes and
-vehicle physical I/O.
+The intersection lanes handle vehicles' acceleration, speed, and position
+updates.
 
 The manager handles how vehicles progress along the lanes and if vehicles get
 to come in or not.
@@ -39,13 +42,17 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                  upstream_roads: Iterable[Road],
                  downstream_roads: Iterable[Road],
                  connectivity: Iterable[Tuple[Road, Road, bool]],
-                 manager_type: IntersectionManager,
+                 manager_type: Type[IntersectionManager],
                  manager_spec: Dict[str, Any],
                  v_max: int = SHARED.speed_limit
                  ) -> None:
         """Create a new intersection.
 
-        Keyword arguments
+        Parameters
+            upstream_roads: Iterable[Road]
+                The roads from which vehicles enter this intersection.
+            downstream_roads: Iterable[Road]
+                The roads onto which vehicles exit this intersection.
             connectivity: Iterable[Tuple[Road, Road, bool]]
                 Describes which lanes connect to each other, used to create
                 IntersectionLanes.
@@ -62,6 +69,8 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                        the closest pair of farthest left or right lanes on both
                        trajectories. (This approximates a restricted turning
                        movement.)
+            manager_type: Type[IntersectionManager]
+                The type of IntersectionManager to init.
             manager_spec: Dict[str, Any]
                 Specifications to create the manager with.
             v_max: int = SHARED.speed_limit
@@ -81,8 +90,9 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                 self.downstream_road_by_coord[coord] = r
 
         # Given the upstream and downstream roads and connectivity matrix,
-        # connect the road endpoints together by creating new lanes, curving
-        # if necessary based on the difference in heading between the endpoints
+        # connect the road endpoints together by creating new lanes using
+        # BezierTrajectory.as_intersection_connector() and the Coords and
+        # headings of incoming and outgoing roads.
         self.lanes: List[IntersectionLane]
         raise NotImplementedError("TODO")
 
@@ -117,11 +127,11 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
 
         spec: Dict[str, Any] = {}
 
-        # TODO: interpret the string into the spec dict
+        # TODO: (spec) Interpret the string into the spec dict.
         raise NotImplementedError("TODO")
 
-        # TODO: enforce provision of separate manager_type and manager_config
-        #       fields in intersection spec string
+        # TODO: (spec) Enforce provision of separate manager_type and
+        #       manager_config fields in intersection spec string.
 
         manager_type: str
         # Based on the spec, identify the correct manager type

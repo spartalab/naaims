@@ -1,27 +1,41 @@
-from typing import overload, Dict, Any, Iterable, Tuple, List, Literal, Union
+from typing import Dict, Any, Iterable, Tuple, List, Optional
 
 from .util import Coord
 from .vehicles import Vehicle
+from .roads import Road
+from .intersections import Intersection
 
 
 class Pathfinder:
+    """
+    Given a lane's ending Coord, find a vehicle's shortest path to its
+    destination, including a fallback if there is no path to its destination.
+    """
 
     def __init__(self,
-                 road_specs: Iterable[Dict[str, Any]],
-                 intersection_specs: Iterable[Dict[str, Any]],
-                 spawner_specs: Iterable[Dict[str, Any]],
-                 remover_specs: Iterable[Dict[str, Any]],
-                 provided: Dict[Tuple[Coord, int],
-                                List[Coord]] = {}) -> None:
+                 roads: Iterable[Road],
+                 intersections: Iterable[Intersection],
+                 provided: Optional[Dict[Tuple[Coord, int],
+                                         List[Coord]]] = {}) -> None:
+        """Create a new Pathfinder instance.
+
+        Parameters
+            roads: Iterable[Road]
+            intersections: Iterable[Intersection]
+                The roads and intersections in the road network.
+            lane_destination_pairs:
+                Optional[Dict[Tuple[Coord, int], List[Coord]]] = None
+                If provided, overrides default behavior by providing hardcoded
+                paths through the intersection network, obviating the need for
+                shortest path calculations.
+        """
 
         # Save predetermined pairs for use instead of a true routing
         # implementation.
         self.provided = provided
 
-        # TODO: Read the specs and create a network with link costs to use with
-        #       some shortest path algorithm. Note that this implementation
-        #       will need to take into account turn restrictions.
-        raise NotImplementedError("TODO")
+        # TODO: (low) Use the connectivity of each road to build a network that
+        #       we can use with shortest path algorithms.
 
     def next_movements(self, coord: Coord, destination: int, at_least_one: bool
                        ) -> List[Coord]:
@@ -46,7 +60,7 @@ class Pathfinder:
         # Bypass full routing check if the requested source-destination pair
         # has already been provided.
         pair = (coord, destination)
-        if pair in self.provided:
+        if (self.provided is not None) and (pair in self.provided):
             return self.provided[pair]
 
         raise NotImplementedError("TODO")

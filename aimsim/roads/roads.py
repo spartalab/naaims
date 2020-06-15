@@ -4,21 +4,18 @@ intersections to one another as well as vehicle spawn and removal points.
 
 Roads are divided into up to 3 sections:
     1. The entrance region, the section immediately following an
-       intersection. This section is as long as the distance it would take the
-       longest vehicle the lane may need to handle to come to a full and
-       complete stop in order to ensure that the vehicles can always safely
-       exit the intersection. Vehicles are not allowed to change lanes in this
-       section, though this section need not always be clear.
+       intersection. This section needs to be long enough to accommodate the
+       longest vehicle that will be spawned in the AIM simulation. Vehicles are
+       not allowed to change lanes in this section, though this section need
+       not always be clear.
     2. The lane changing region, which follows the entrance region. This
        section is the only area in which vehicles are allowed to change lanes.
-       The length of this section is variable, with no maximum and a minimum
-       length determined by the RoadManager implemented.
+       The length of this section is variable; its length can be 0 but if it
+       isn't the RoadManager implemented will dictate a minimum length.
     3. The approach region, which follows the lane changing region and precedes
-       the next intersection. This area has a minimum length of 0, which may be
-       because there is no room left or because there is no next intersection
-       (i.e, if this road terminates at the end of the simulation area into a
-       vehicle collector). Like the entrance region, lane changes are barred
-       in this section.
+       the next intersection. This area must be at least as long as the longest
+       possible vehicle. Like the entrance region, lane changes are barred in
+       this section.
 """
 
 
@@ -31,8 +28,10 @@ import aimsim.shared as SHARED
 from ..vehicles import Vehicle
 from ..trajectories import Trajectory, BezierTrajectory
 from ..lanes import RoadLane
-from ..util import Coord, LinkError, VehicleTransfer, SpeedUpdate
+from ..util import Coord, MissingConnectionError, VehicleTransfer, SpeedUpdate
 from ..archetypes import Configurable, Facility, Upstream, Downstream
+from ..intersections import Intersection
+from ..endpoints import VehicleSpawner, VehicleRemover
 from .managers import LaneChangeManager, DummyManager
 
 if TYPE_CHECKING:
@@ -74,16 +73,20 @@ class Road(Configurable, Facility, Upstream, Downstream):
                 What type of LaneChangeManager to use to handle lane changes
             manager_spec: Dict[str, Any]
                 What specifications to give to the manager constructor
+            upstream_is_spawner: bool
+                Whether the upstream object is a spawner or intersection
+            downstream_is_remover: bool
+                Whether the downstream object is a remover or intersection
             num_lanes: int
                 Number of lanes the road has
             lane_width: float
-                The width of each lane (assumed to be equal for every lane)
+                The width of each lane (assumed equal for every lane) in meters
             lane_offset_angle: float
-                Angle by which to offset each lane
+                Angle by which to offset each lane in degrees
             len_entrance_region: float
-                How long the entrance region is
+                How long the entrance region is in meters
             len_approach_region: float
-                How long the approach region is
+                How long the approach region is in meters
             v_max: int
                 Speed limit on this road in km/h
 
@@ -104,22 +107,19 @@ class Road(Configurable, Facility, Upstream, Downstream):
             (manager_type is DummyManager) and (trajectory.length < max(
                 len_entrance_region, len_approach_region
             ))
-        ) or (
-            trajectory.length < len_entrance_region+len_approach_region
-        ):
+        ) or (trajectory.length < len_entrance_region+len_approach_region):
             raise ValueError(
                 'Road is not long enough for the region lengths specified.'
             )
-            # TODO: the lane change region, if it exists, also has to be some
-            #       min length to allow for a vehicle to accelerate from 0 and
-            #       pass
         if lane_width <= 0:
-            # TODO: maybe more stringent lane width check
+            # TODO: (low) Maybe add a more stringent lane width check.
             raise ValueError('Need positive lane width.')
         if len_entrance_region + len_approach_region > trajectory.length:
             raise ValueError('Sum of regions longer than trajectory.')
 
         self.trajectory = trajectory
+        self.upstream_is_spawner = upstream_is_spawner
+        self.downstream_is_remover = downstream_is_remover
         self.num_lanes = num_lanes
         self.lane_width = lane_width
         self.lane_offset_angle = lane_offset_angle
@@ -150,11 +150,11 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
         spec: Dict[str, Any] = {}
 
-        # TODO: interpret the string into the spec dict
+        # TODO: (spec) Interpret the string into the spec dict.
         raise NotImplementedError("TODO")
 
-        # TODO: enforce provision of separate trajectory_type and
-        #       trajectory_config fields in road spec string
+        # TODO: (spec) Enforce provision of separate trajectory_type and
+        #       trajectory_config fields in road spec string.
 
         trajectory_type: str
         trajectory_config: Dict[str, Any]
@@ -166,8 +166,8 @@ class Road(Configurable, Facility, Upstream, Downstream):
         else:
             raise ValueError("Unsupported Trajectory type.")
 
-        # TODO: enforce provision of separate manager_type and manager_config
-        #       fields in road spec string
+        # TODO: (spec) Enforce provision of separate manager_type and
+        #       manager_config fields in road spec string.
 
         manager_type: str
         # Based on the spec, identify the correct manager type
@@ -201,12 +201,18 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
     def connect_upstream(self, upstream: Upstream) -> None:
         """Finalize connecting upstream object."""
-        # TODO: check that the upstream thing matches what we expect
+        if ((self.upstream_is_spawner and (type(upstream) is Intersection)) or
+                ((not self.upstream_is_spawner)
+                 and (type(upstream) is VehicleSpawner))):
+            raise ValueError("Incorrect Upstream type.")
         self.upstream = upstream
 
     def connect_downstream(self, downstream: Downstream) -> None:
         """Finalize connecting downstream object."""
-        # TODO: (low) check that the downstream thing matches what we expect
+        if ((self.downstream_is_remover and (type(downstream) is Intersection))
+            or ((not self.downstream_is_remover)
+                and (type(downstream) is VehicleRemover))):
+            raise ValueError("Incorrect Downstream type.")
         self.downstream = downstream
         if type(downstream) is Intersection:
             for lane in self.lanes:
@@ -228,11 +234,11 @@ class Road(Configurable, Facility, Upstream, Downstream):
         try:
             self.upstream
         except NameError:
-            raise LinkError("No upstream object.")
+            raise MissingConnectionError("No upstream object.")
         try:
             self.downstream
         except NameError:
-            raise LinkError("No downstream object.")
+            raise MissingConnectionError("No downstream object.")
 
         new_speeds: List[Dict[Vehicle, SpeedUpdate]] = []
 
@@ -294,5 +300,5 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
     # Misc functions
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self.trajectory.start_coord, self.trajectory.end_coord))

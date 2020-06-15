@@ -10,7 +10,7 @@ from random import random, choices, sample
 
 import aimsim.shared as SHARED
 from ..archetypes import Configurable, Upstream
-from ..util import VehicleTransfer, LinkError, Coord, VehicleSection
+from ..util import VehicleTransfer, MissingConnectionError, Coord, VehicleSection
 from ..vehicles import Vehicle
 from ..roads import Road
 from .generators import Generator, NormalGenerator
@@ -27,8 +27,18 @@ class VehicleSpawner(Configurable, Upstream):
                  ) -> None:
         """Create a new vehicle spawner.
 
-        Keyword arguments:
-        rates -- Gives a Poisson arrival rate for each vehicle class
+        Parameters
+            downstream: Road
+                The road to spawn vehicles on to.
+            vpm: float
+                Target number of vehicles to spawn per minute. Used in a
+                Poisson distribution.
+            generator_ps: List[float]
+                The probability of using a specific Generator.
+            generator_type: List[Type[Generator]]
+                The types of generators to init.
+            generator_specs: List[Dict[str, Any]]
+                The specs of the generators to init.
         """
 
         if len(generator_type) != len(generator_specs) != len(generator_ps):
@@ -60,19 +70,17 @@ class VehicleSpawner(Configurable, Upstream):
         # Prepare a queued spawn to fill later.
         self.queued_spawn: Optional[Vehicle] = None
 
-        raise NotImplementedError("TODO")
-
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
         """Reads a spec string into a spawner spec dict."""
 
         spec: Dict[str, Any] = {}
 
-        # TODO: interpret the string into the spec dict
+        # TODO: (spec) Interpret the string into the spec dict.
         raise NotImplementedError("TODO")
 
-        # TODO: enforce provision of separate lists of generator_type and
-        #       generator_config in spawner spec string
+        # TODO: (spec) Enforce provision of separate lists of generator_type
+        #       and generator_config in spawner spec string.
         generator_type_strs: List[str]
         generator_spec_strs: List[str]
         if len(generator_type_strs) != len(generator_spec_strs):
@@ -115,9 +123,9 @@ class VehicleSpawner(Configurable, Upstream):
         """Decides if to spawn a vehicle. If so, processes and returns it."""
 
         if self.downstream is None:
-            raise LinkError("No downstream object.")
+            raise MissingConnectionError("No downstream object.")
         elif self.downstream is not Road:
-            raise LinkError("Downstream object is not RoadLane.")
+            raise MissingConnectionError("Downstream object is not RoadLane.")
 
         spawn: Vehicle
         if self.queued_spawn is not None:
