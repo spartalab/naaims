@@ -58,4 +58,4 @@ class Reservation:
     its_exit: ScheduledExit
 
     def __hash__(self) -> int:
-        return hash(vehicle)
+        return hash(self.vehicle)
