@@ -363,7 +363,7 @@ class Lane(ABC):
             exiting += new_progress_packet[2]
 
             # Check if this vehicle has fully exited.
-            if all((p is None) for p in new_vehicle_progress):
+            if self.has_vehicle_exited(new_vehicle_progress):
                 # If so, mark it for removal from this lane.
                 to_remove.append(vehicle)
             else:
@@ -548,6 +548,10 @@ class Lane(ABC):
         # write new values to vehicle
         vehicle.pos = pos
         vehicle.heading = heading
+
+    def has_vehicle_exited(self, progress: VehicleProgress) -> bool:
+        """Check if a vehicle has fully exited from the lane."""
+        return all((p is None) for p in progress)
 
     def remove_vehicle(self, vehicle: Vehicle) -> None:
         """Remove an exited vehicle from this lane."""
@@ -800,6 +804,8 @@ class RoadLane(Lane):
             # Stop for preceding vehicle AND intersection line
             return min(a_follow, self.accel_update_following(vehicle, p))
 
+    # Support functions for stepping vehicles
+
     def downstream_stopping_distance(self, vehicle: Vehicle,
                                      section: VehicleSection
                                      ) -> Optional[float]:
@@ -812,11 +818,23 @@ class RoadLane(Lane):
             return self.downstream_intersection.\
                 stopping_distance_to_last_vehicle(self.end_coord)
 
+    def has_vehicle_exited(self, progress: VehicleProgress) -> bool:
+        """Check if a vehicle has exited from road the lane.
+
+        This check is a little more lenient if there's a remover downstream
+        because the downstream has no way to update a vehicle's position, so
+        as soon as the center leaves we delete the vehicle from the lane.
+        """
+        if self.downstream_is_remover:
+            return ((progress.front is None) and (progress.center is None))
+        else:
+            return super().has_vehicle_exited(progress)
+
     def remove_vehicle(self, vehicle: Vehicle) -> None:
         """Remove an exited vehicle from this lane.
 
         On top of the super's parent call, clear the lane's latest scheduled
-        exit record if this was actually the latest scheduled exit. 
+        exit record if this was actually the latest scheduled exit.
         """
         super().remove_vehicle(vehicle)
 

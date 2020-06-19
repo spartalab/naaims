@@ -5,9 +5,10 @@ processing and record-keeping.
 '''
 
 from __future__ import annotations
-from typing import Iterable, Dict, Any
+from typing import Iterable, Dict, Any, List
 
 from ..archetypes import Configurable, Downstream
+from ..util import VehicleSection
 from ..roads import Road
 from ..vehicles import Vehicle
 
@@ -41,8 +42,22 @@ class VehicleRemover(Configurable, Downstream):
         )
 
     def process_transfers(self) -> Iterable[Vehicle]:
-        """Process transfers by returning the vehicles to be removed."""
-        to_return = [vt.vehicle for vt in self.entering_vehicle_buffer]
-        # TODO: (low) check and return lane as well as vehicles
+        """Process transfers by returning the vehicles to be removed.
+
+        We remove vehicles as soon as their center section exits since
+        otherwise they'd need their position updated, which we can't do inside
+        the vehicle remover.
+        """
+
+        # Filter vehicle transfers for center section exits.
+        exited: List[Vehicle] = []
+        for transfer in self.entering_vehicle_buffer:
+            if transfer.section is VehicleSection.CENTER:
+                exited.append(transfer.vehicle)
+                # TODO: (multiple) Return whether the vehicle succeeded in
+                #       making it to its intended destination.
+
+        # Clear the buffer.
         super().process_transfers()
-        return to_return
+
+        return exited
