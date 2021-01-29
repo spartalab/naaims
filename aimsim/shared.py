@@ -32,7 +32,7 @@ entrance_length
 from typing import Dict, Any
 from configparser import ConfigParser
 
-from .pathfinder import Pathfinder
+from aimsim.pathfinder import Pathfinder
 
 # defaults
 SETTINGS: Dict[str, Any] = {

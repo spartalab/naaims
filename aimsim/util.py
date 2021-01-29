@@ -28,8 +28,8 @@ class VehicleSection(Enum):
 
 class SpeedUpdate(NamedTuple):
     """A consistent way to track a vehicle's speed and acceleration updates."""
-    v: float
-    a: float
+    velocity: float
+    acceleration: float
 
 
 class VehicleTransfer(NamedTuple):

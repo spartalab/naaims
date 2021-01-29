@@ -17,12 +17,13 @@ from typing import (Optional, Iterable, Set, Dict, Tuple, Type, TypeVar, Any,
 from collections import deque
 
 import aimsim.shared as SHARED
-from ..archetypes import Configurable
-from ..util import Coord, SpeedUpdate, VehicleSection
-from ..lanes import IntersectionLane, RoadLane, VehicleProgress, ScheduledExit
-from ..vehicles import Vehicle
-from .reservations import Reservation
-from .tiles import Tile, DeterministicTile
+from aimsim.archetypes import Configurable
+from aimsim.util import Coord, SpeedUpdate, VehicleSection
+from aimsim.lanes import (IntersectionLane, RoadLane, VehicleProgress,
+                          ScheduledExit)
+from aimsim.vehicles import Vehicle
+from aimsim.intersections.reservations import Reservation
+from aimsim.intersections.tiles import Tile, DeterministicTile
 
 T = TypeVar('T', bound='Tiling')
 
@@ -314,45 +315,54 @@ class Tiling(Configurable):
             #       expected. Consider addressing.
 
             # Update speeds for clones on the downstream road lane.
-            pre_p: Optional[float] = None
-            preceding_sd: Optional[float] = None
+            preceding_vehicle_progress: Optional[float] = None
+            preceding_vehicle_stopping_distance: Optional[float] = None
             clone_on_seam: bool = False
             for clone in downstream_clones:
-                p_front: Optional[float] = downstream_progress[clone].front
-                assert p_front is not None
+                progress_front: Optional[float
+                                         ] = downstream_progress[clone].front
+                assert progress_front is not None
                 if downstream_progress[clone].rear is not None:
                     # The downstream lane is responsible for this clone's speed
-                    p: Optional[float] = downstream_progress[clone].center
-                    assert p is not None
+                    progress: Optional[float
+                                       ] = downstream_progress[clone].center
+                    assert progress is not None
 
                     # Update the clone's speed and acceleration.
                     a: float
-                    if pre_p is None:
-                        a = downstream_lane.accel_update_uncontested(clone, p)
+                    if preceding_vehicle_progress is None:
+                        a = downstream_lane.accel_update_uncontested(clone,
+                                                                     progress)
                     else:
-                        assert preceding_sd is not None
+                        assert preceding_vehicle_stopping_distance is not None
                         a = downstream_lane.accel_update_following(
-                            clone, p,
+                            clone, progress,
                             downstream_lane.effective_stopping_distance(
-                                pre_p, p_front, preceding_sd))
-                    su: SpeedUpdate = downstream_lane.speed_update(clone, p, a)
-                    clone.v = su.v
-                    clone.a = su.a
+                                preceding_vehicle_progress, progress_front,
+                                preceding_vehicle_stopping_distance))
+                    su: SpeedUpdate = downstream_lane.speed_update(clone,
+                                                                   progress,
+                                                                   a)
+                    clone.velocity = su.velocity
+                    clone.acceleration = su.acceleration
 
                     # Update preceding data for the next loop.
-                    pre_p = downstream_progress[clone].rear
-                    preceding_sd = clone.stopping_distance()
+                    preceding_vehicle_progress = downstream_progress[clone
+                                                                     ].rear
+                    preceding_vehicle_stopping_distance = clone.stopping_distance()
                 else:
                     # This clone is still transferring from intersection to
                     # road, so the intersection is responsible for its speed.
                     # This is the last clone on the downstream lane.
-                    if pre_p is not None:
+                    if preceding_vehicle_progress is not None:
                         # Calculate the stopping distance for this clone for
                         # the intersection lane to use after exiting this loop.
-                        assert preceding_sd is not None
-                        preceding_sd = downstream_lane.\
-                            effective_stopping_distance(pre_p, p_front,
-                                                        preceding_sd)
+                        assert preceding_vehicle_stopping_distance is not None
+                        preceding_vehicle_stopping_distance = downstream_lane.\
+                            effective_stopping_distance(
+                                preceding_vehicle_progress,
+                                progress_front,
+                                preceding_vehicle_stopping_distance)
                     clone_on_seam = True
                     break
 
@@ -366,40 +376,43 @@ class Tiling(Configurable):
             #         Calculate the stopping distance on the downstream lane
             #         here and add the stopping distance in the intersection
             #         lane distance in the next loop.
-            if (preceding_sd is not None) and (not clone_on_seam):
-                assert pre_p is not None
-                preceding_sd = downstream_lane.effective_stopping_distance(
-                    pre_p, 0, preceding_sd)
+            if (preceding_vehicle_stopping_distance is not None) and (
+                    not clone_on_seam):
+                assert preceding_vehicle_progress is not None
+                preceding_vehicle_stopping_distance = downstream_lane.effective_stopping_distance(
+                    preceding_vehicle_progress, 0,
+                    preceding_vehicle_stopping_distance)
 
             # Update speeds for clones on the intersection lane.
-            pre_p = None
+            preceding_vehicle_progress = None
             for clone in in_clones:
                 # The intersection lane is responsible for the speed update of
                 # all vehicles even partially in itself.
-                p = in_progress[clone].front
-                if p is not None:
-                    if (pre_p is None) and (preceding_sd is not None):
+                progress = in_progress[clone].front
+                if progress is not None:
+                    if (preceding_vehicle_progress is None) and (
+                            preceding_vehicle_stopping_distance is not None):
                         # See Case 3 in the preceding code block. Add the
                         # stopping distance between this vehicle and the end of
                         # the lane.
-                        preceding_sd = lane.effective_stopping_distance(
-                            1, p, preceding_sd)
+                        preceding_vehicle_stopping_distance = lane.effective_stopping_distance(
+                            1, progress, preceding_vehicle_stopping_distance)
                 elif in_progress[clone].rear is not None:
-                    p = in_progress[clone].rear
+                    progress = in_progress[clone].rear
                 else:
                     raise ValueError("Can't fetch p, clone has already exited")
 
                 # Update the clone's speed and acceleration.
-                assert p is not None
-                a = lane.accel_update_following(clone, p,
-                                                stopping_distance=preceding_sd)
-                su = lane.speed_update(clone, p, a)
-                clone.v = su.v
-                clone.a = su.a
+                assert progress is not None
+                a = lane.accel_update_following(clone, progress,
+                                                stopping_distance=preceding_vehicle_stopping_distance)
+                su = lane.speed_update(clone, progress, a)
+                clone.velocity = su.velocity
+                clone.acceleration = su.acceleration
 
                 # Update preceding data for the next cycle.
-                pre_p = downstream_progress[clone].rear
-                preceding_sd = clone.stopping_distance()
+                preceding_vehicle_progress = downstream_progress[clone].rear
+                preceding_vehicle_stopping_distance = clone.stopping_distance()
 
             # There is at most one vehicle on the incoming lane, and it will
             # always be at least partially in the intersection lane, so no
@@ -430,9 +443,10 @@ class Tiling(Configurable):
                 # it's partially in the intersection but its center isn't.
                 # Update its reservation with its used tiles as well.
                 if clone in in_progress:
-                    p = downstream_progress[clone].center
-                    if p is not None:
-                        downstream_lane.update_vehicle_position(clone, p)
+                    progress = downstream_progress[clone].center
+                    if progress is not None:
+                        downstream_lane.update_vehicle_position(
+                            clone, progress)
                         tiles_used = self.pos_to_tiles(lane, test_t, clone,
                                                        in_progress[clone],
                                                        test_reservations[clone
@@ -511,19 +525,20 @@ class Tiling(Configurable):
                     if transfer.section is VehicleSection.CENTER:
                         # The clone's center section transitioned and its
                         # position must be updated by the downstream lane.
-                        p = downstream_progress[clone].center
-                        assert p is not None
-                        downstream_lane.update_vehicle_position(clone, p)
+                        progress = downstream_progress[clone].center
+                        assert progress is not None
+                        downstream_lane.update_vehicle_position(
+                            clone, progress)
                         center_transitioned = True
 
                 # Update its position if its center is in the intersection.
-                p = in_progress[clone].center
-                if p is not None:
-                    lane.update_vehicle_position(clone, p)
+                progress = in_progress[clone].center
+                if progress is not None:
+                    lane.update_vehicle_position(clone, progress)
 
                 # Update its reservation with its used tiles if its position
                 # was calculated in this loop.
-                if (p is not None) or center_transitioned:
+                if (progress is not None) or center_transitioned:
                     tiles_used = self.pos_to_tiles(lane, test_t, clone,
                                                    in_progress[clone],
                                                    test_reservations[clone],
@@ -614,16 +629,16 @@ class Tiling(Configurable):
 
                     if transfer.section is VehicleSection.CENTER:
                         # Case 2. Update vehicle position using intersection.
-                        p = in_progress[clone].center
-                        assert p is not None
-                        lane.update_vehicle_position(clone, p)
+                        progress = in_progress[clone].center
+                        assert progress is not None
+                        lane.update_vehicle_position(clone, progress)
                         pos_updated = True
 
                 if center_started_in_road and (not pos_updated):
                     # Case 3. Update vehicle position using road.
-                    p = incoming_progress.center
-                    assert p is not None
-                    incoming_lane.update_vehicle_position(clone, p)
+                    progress = incoming_progress.center
+                    assert progress is not None
+                    incoming_lane.update_vehicle_position(clone, progress)
 
                 # If the clone has fully entered the intersection, delete its
                 # incoming progress, find the scheduled exit of its rear
@@ -631,7 +646,7 @@ class Tiling(Configurable):
                 if all((p is None) for p in incoming_progress):
                     last_exit = ScheduledExit(vehicle=originals[clone],
                                               section=VehicleSection.REAR,
-                                              t=test_t, v=clone.v)
+                                              t=test_t, v=clone.velocity)
                     test_reservations[clone].its_exit = last_exit
                     incoming_progress = None
 
@@ -728,9 +743,9 @@ class Tiling(Configurable):
                         incoming_lane.update_vehicle_position(
                             clone, incoming_progress.center)
                     elif in_progress[clone].center is not None:
-                        p = in_progress[clone].center
-                        assert p is not None
-                        lane.update_vehicle_position(clone, p)
+                        progress = in_progress[clone].center
+                        assert progress is not None
+                        lane.update_vehicle_position(clone, progress)
                     else:
                         raise RuntimeError("Can't find vehicle center.")
 

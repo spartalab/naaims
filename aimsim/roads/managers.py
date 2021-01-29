@@ -9,10 +9,9 @@ simultaneously.
 from abc import abstractmethod
 from typing import Iterable, Dict, Any, TypeVar, Type, Set
 
-from ..archetypes import Configurable
-from ..util import SpeedUpdate
-from ..lanes import RoadLane, LateralDeviation
-from ..vehicles import Vehicle
+from aimsim.archetypes import Configurable
+from aimsim.lanes import RoadLane, LateralDeviation
+from aimsim.vehicles import Vehicle
 
 # [Implementation notes]
 # Helper function progresses vehicles normally along a path, either per vehicle or for all
@@ -76,7 +75,7 @@ class LaneChangeManager(Configurable):
         raise NotImplementedError("Must be implemented in child classes.")
 
     @abstractmethod
-    def handle_logic(self) -> None:
+    def update_schedule(self) -> None:
         """Should process and schedule new and queued lane change requests."""
         raise NotImplementedError("Must be implemented in child classes.")
 
@@ -102,6 +101,6 @@ class DummyManager(LaneChangeManager):
         """Return an empty dict because the dummy doesn't do lane changes."""
         return {}
 
-    def handle_logic(self) -> None:
+    def update_schedule(self) -> None:
         """DummyManager has no logic, so do nothing."""
         pass

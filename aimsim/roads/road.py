@@ -135,10 +135,10 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
         # Organize lanes
         self.lanes_by_start: Dict[Coord, RoadLane] = {
-            l.trajectory.start_coord: l for l in self.lanes
+            lane.trajectory.start_coord: lane for lane in self.lanes
         }
         self.lanes_by_end: Dict[Coord, RoadLane] = {
-            l.trajectory.end_coord: l for l in self.lanes
+            lane.trajectory.end_coord: lane for lane in self.lanes
         }
 
         # Init buffer for incoming vehicles
@@ -285,18 +285,18 @@ class Road(Configurable, Facility, Upstream, Downstream):
     def process_transfers(self) -> None:
         """Incorporate new vehicles onto this road."""
         while len(self.entering_vehicle_buffer) > 0:
-            transfer = self.entering_vehicle_buffer.pop()
+            transfer = self.entering_vehicle_buffer.pop(0)
             if transfer.pos not in self.lanes_by_start:
                 raise RuntimeError('Lane not in this road.')
             self.lanes_by_start[transfer.pos].enter_vehicle_section(transfer)
         super().process_transfers()  # just makes sure the list is empty after
 
-    def handle_logic(self) -> None:
+    def update_schedule(self) -> None:
         """Tell LaneChangeManager to schedule the next set of lane changes."""
 
         # TODO: (platoon) Make or break vehicle chains here.
 
-        self.manager.handle_logic()
+        self.manager.update_schedule()
 
     # Misc functions
 

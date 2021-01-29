@@ -1,6 +1,6 @@
 """
-The Generator module allows for the procedural generation of new vehicles
-according to set patterns (e.g. a set of fixed vehicles, vehicles with random
+The VehicleFactory module allows for the procedural generation of new vehicles
+according to set patterns (e.g., a set of fixed vehicles, vehicles with random
 dimensions and acceleration, etc.).
 """
 
@@ -10,16 +10,16 @@ from typing import TypeVar, Dict, Any, Type, List, Optional, Tuple
 from random import choices, gauss
 
 import aimsim.shared as SHARED
-from ..archetypes import Configurable
-from ..vehicles import Vehicle
+from aimsim.archetypes import Configurable
+from aimsim.vehicles import Vehicle
 
-G = TypeVar('G', bound='Generator')
+F = TypeVar('F', bound='VehicleFactory')
 
 
-class Generator(Configurable):
+class VehicleFactory(Configurable):
     """
     Generate new vehicles with parameters determined by the implementation of
-    child generators.
+    child vehicle factories.
     """
 
     @abstractmethod
@@ -29,7 +29,7 @@ class Generator(Configurable):
                  type_probs: Optional[List[float]] = None,
                  d_probs: Optional[List[float]] = None,
                  pair_id: Optional[int] = None) -> None:
-        """Should create a new Generator."""
+        """Should create a new VehicleFactory."""
 
         if type_probs is not None:
             if ((len(vehicle_types) != len(type_probs))
@@ -65,7 +65,7 @@ class Generator(Configurable):
 
     @classmethod
     @abstractmethod
-    def from_spec(cls: Type[G], spec: Dict[str, Any]) -> G:
+    def from_spec(cls: Type[F], spec: Dict[str, Any]) -> F:
         raise NotImplementedError("Must be implemented in child classes.")
 
     @abstractmethod
@@ -87,7 +87,7 @@ class Generator(Configurable):
                         weights=self.d_probs)[0])
 
 
-class NormalGenerator(Generator):
+class GaussianVehicleFactory(VehicleFactory):
     """
     Generate new vehicles with parameters determined by normal distributions
     unique to each parameter.
@@ -113,7 +113,7 @@ class NormalGenerator(Generator):
                  tracking_score_sd: float = 0,
                  vot_mn: float = 0,  # value of time
                  vot_sd: float = 0) -> None:
-        """Create a new normally distributed Generator."""
+        """Create a new normally distributed VehicleFactory."""
         super().__init__(
             vehicle_types=vehicle_types,
             destinations=destinations,
@@ -166,8 +166,8 @@ class NormalGenerator(Generator):
         return spec
 
     @classmethod
-    def from_spec(cls, spec: Dict[str, Any]) -> NormalGenerator:
-        """Create a new Generator using the given spec."""
+    def from_spec(cls, spec: Dict[str, Any]) -> GaussianVehicleFactory:
+        """Create a new VehicleFactory using the given spec."""
         return cls(
             vehicle_types=spec['vehicle_types'],
             destinations=spec['destinations'],

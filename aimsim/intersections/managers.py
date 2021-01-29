@@ -8,13 +8,13 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Iterable, Dict, List, Tuple, Set, Type, Any, TypeVar
 
-from ..archetypes import Configurable
-from ..util import Coord, VehicleSection
-from ..roads import Road
-from ..lanes import IntersectionLane, RoadLane, ScheduledExit
-from ..vehicles import Vehicle
-from .tilings import Tiling, SquareTiling, ArcTiling
-from .reservations import Reservation
+from aimsim.archetypes import Configurable
+from aimsim.util import Coord, VehicleSection
+from aimsim.roads import Road
+from aimsim.lanes import IntersectionLane, RoadLane, ScheduledExit
+from aimsim.vehicles import Vehicle
+from aimsim.intersections.tilings import Tiling, SquareTiling, ArcTiling
+from aimsim.intersections.reservations import Reservation
 
 M = TypeVar('M', bound='IntersectionManager')
 
@@ -102,7 +102,7 @@ class IntersectionManager(Configurable):
 
     # Begin simulation cycle methods
 
-    def handle_logic(self) -> None:
+    def update_schedule(self) -> None:
         """Update tiling, reservations, and poll for new requests to accept."""
 
         # First update the tiling for the new timestep.

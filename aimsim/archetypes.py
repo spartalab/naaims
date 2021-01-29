@@ -6,15 +6,15 @@ These archetypes enforce the main simulation loop:
     1. update_speeds (Facilities)
     2. step (Upstreams)
     3. process_transfers (Downstreams)
-    4. handle_logic (Facilities)
+    4. update_schedule (Facilities)
 """
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional, Any, List, Iterable, Union, Dict
 
-from .util import VehicleTransfer, Coord, SpeedUpdate
-from .vehicles import Vehicle
+from aimsim.util import VehicleTransfer, Coord, SpeedUpdate
+from aimsim.vehicles import Vehicle
 
 
 class Configurable(ABC):
@@ -49,7 +49,7 @@ class Facility(ABC):
         raise NotImplementedError("Must be implemented in child classes.")
 
     @abstractmethod
-    def handle_logic(self) -> None:
+    def update_schedule(self) -> None:
         """Should handle all the class-unique stuff like scheduling."""
         raise NotImplementedError('Must be implemented in child classes.')
 
@@ -86,7 +86,7 @@ class Downstream(ABC):
         self.entering_vehicle_buffer.append(transfer)
 
     @abstractmethod
-    def process_transfers(self) -> Optional[Iterable[Vehicle]]:
+    def process_transfers(self) -> Optional[List[Vehicle]]:
         """Should incorporate new vehicles into the Downstream object.
 
         Returns nothing except in the case of a VehicleRemover, which could

@@ -104,7 +104,7 @@ Vehicle removers let the section pass into the ether unless the exiting section 
 
 ### Handle logic
 
-In this substep, facilities use the `Facility.handle_logic()` interface to handle all their logic that doesn't involve updating vehicles' positions, speed, or acceleration.
+In this substep, facilities use the `Facility.update_schedule()` interface to handle all their logic that doesn't involve updating vehicles' positions, speed, or acceleration.
 
 Roads will call on their lane change managers to issue permissions to the vehicles that want to and can switch lanes. This functionality is half-baked right now since I'm focusing on the single intersection case, while lane changes are only necessary for multi-intersection simulations.
 

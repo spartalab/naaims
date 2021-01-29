@@ -16,16 +16,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import (Tuple, Iterable, Optional, List, Dict, Set,
                     NamedTuple)
-from dataclasses import dataclass
 from warnings import warn
 
 import aimsim.shared as SHARED
-from .archetypes import Upstream
-from .util import (Coord, CollisionError, VehicleSection, SpeedUpdate,
-                   TooManyProgressionsError, VehicleTransfer)
-from .vehicles import Vehicle
-from .trajectories import Trajectory
-from .intersections import Intersection
+from aimsim.archetypes import Upstream
+from aimsim.util import (Coord, CollisionError, VehicleSection, SpeedUpdate,
+                         TooManyProgressionsError, VehicleTransfer)
+from aimsim.vehicles import Vehicle
+from aimsim.trajectories import Trajectory
+from aimsim.intersections import Intersection
 
 
 class LateralDeviation:
@@ -166,25 +165,26 @@ class Lane(ABC):
         intersection.
         """
 
-        sd: float  # stopping distance
+        stopping_distance: float
 
         if preceding is None:
             # Call downstream to see if there's a preceding vehicle across the
             # road/intersection seam.
-            dsd: Optional[float] = self.downstream_stopping_distance(vehicle,
-                                                                     section)
+            downstream_stopping_distance: Optional[float] = \
+                self.downstream_stopping_distance(vehicle, section)
 
-            if dsd is None:
+            if downstream_stopping_distance is None:
                 # There's nothing to stop for. Full speed forward.
                 return self.accel_update_uncontested(vehicle, p)
             elif section is VehicleSection.FRONT:
                 # The stopping distance is the sum of the downstream stopping
                 # distance plus the length left in this lane.
-                sd = dsd + (1-p)*self.trajectory.length
+                stopping_distance = downstream_stopping_distance + \
+                    (1-p)*self.trajectory.length
             elif section is VehicleSection.REAR:
                 # The stopping distance is just what we have downstream because
                 # it's straddling the seam.
-                sd = dsd
+                stopping_distance = downstream_stopping_distance
             else:
                 raise ValueError("Did not receive front or rear section p.")
         else:
@@ -193,13 +193,15 @@ class Lane(ABC):
                                  "though there is a preceding vehicle.")
 
             # Prepare to lane-follow the preceding vehicle in this lane.
-            pre_p = self.vehicle_progress[preceding].rear
-            if pre_p is None:
+            preceding_vehicle_progress = self.vehicle_progress[preceding].rear
+            if preceding_vehicle_progress is None:
                 raise ValueError("Preceding vehicle not in lane.")
             else:
-                sd = self.effective_stopping_distance(
-                    pre_p, p, preceding.stopping_distance())
-        return self.accel_update_following(vehicle, p, stopping_distance=sd)
+                stopping_distance = self.effective_stopping_distance(
+                    preceding_vehicle_progress, p,
+                    preceding.stopping_distance())
+        return self.accel_update_following(vehicle, p,
+                                           stopping_distance=stopping_distance)
 
     def effective_stopping_distance(self, pre_p: float, p: float,
                                     vehicle_stopping_distance: float) -> float:
@@ -261,12 +263,12 @@ class Lane(ABC):
         it's presented here as an input argument.
         """
         effective_speed_limit = self.effective_speed_limit(p, vehicle)
-        if vehicle.v > effective_speed_limit:
+        if vehicle.velocity > effective_speed_limit:
             return vehicle.max_braking
-        elif vehicle.v == effective_speed_limit:
+        elif vehicle.velocity == effective_speed_limit:
             return 0
         else:  # vehicle.v < effective_speed_limit
-            return vehicle.max_accel
+            return vehicle.max_acceleration
 
     def accel_update_following(self,
                                vehicle: Vehicle,
@@ -316,15 +318,16 @@ class Lane(ABC):
         could be the front or rear of the vehicle depending on the situation,
         it's presented here as an input argument.
         """
-        v_new = vehicle.v + accel*SHARED.TIMESTEP_LENGTH
+        v_new = vehicle.velocity + accel*SHARED.TIMESTEP_LENGTH
         if v_new < 0:
-            return SpeedUpdate(v=0, a=accel)
+            return SpeedUpdate(velocity=0, acceleration=accel)
         else:
             effective_speed_limit = self.effective_speed_limit(p, vehicle)
             if v_new > effective_speed_limit:
-                return SpeedUpdate(v=effective_speed_limit, a=accel)
+                return SpeedUpdate(velocity=effective_speed_limit,
+                                   acceleration=accel)
             else:
-                return SpeedUpdate(v=v_new, a=accel)
+                return SpeedUpdate(velocity=v_new, acceleration=accel)
         # TODO: Consider enforcing the speed limit clip in accel_update instead
         #       of here to make perturbing stochastic speed and acceleration
         #       easier. Will need to double check for functions that assume

@@ -9,11 +9,13 @@ from typing import TYPE_CHECKING, Dict, Optional, List, Any, Type, Iterable
 from random import random, choices, sample
 
 import aimsim.shared as SHARED
-from ..archetypes import Configurable, Upstream
-from ..util import VehicleTransfer, MissingConnectionError, Coord, VehicleSection
-from ..vehicles import Vehicle
-from ..roads import Road
-from .generators import Generator, NormalGenerator
+from aimsim.archetypes import Configurable, Upstream
+from aimsim.util import (VehicleTransfer, MissingConnectionError, Coord,
+                         VehicleSection)
+from aimsim.vehicles import Vehicle
+from aimsim.roads import Road
+from aimsim.endpoints.vehicle_factories import (VehicleFactory,
+                                                GaussianVehicleFactory)
 
 
 class VehicleSpawner(Configurable, Upstream):
@@ -22,7 +24,7 @@ class VehicleSpawner(Configurable, Upstream):
                  downstream: Road,
                  vpm: float,  # vehicles per minute
                  generator_ps: List[float],
-                 generator_type: List[Type[Generator]],
+                 generator_type: List[Type[VehicleFactory]],
                  generator_specs: List[Dict[str, Any]]
                  ) -> None:
         """Create a new vehicle spawner.
@@ -34,8 +36,8 @@ class VehicleSpawner(Configurable, Upstream):
                 Target number of vehicles to spawn per minute. Used in a
                 Poisson distribution.
             generator_ps: List[float]
-                The probability of using a specific Generator.
-            generator_type: List[Type[Generator]]
+                The probability of using a specific VehicleFactory.
+            generator_type: List[Type[VehicleFactory]]
                 The types of generators to init.
             generator_specs: List[Dict[str, Any]]
                 The specs of the generators to init.
@@ -61,9 +63,9 @@ class VehicleSpawner(Configurable, Upstream):
         # Record generator use probabilities and create the vehicle generators
         # from the given specifications.
         self.generator_ps: List[float] = generator_ps
-        self.generators: List[Generator] = []
+        self.vehicle_factories: List[VehicleFactory] = []
         for i in range(len(generator_type)):
-            self.generators.append(
+            self.vehicle_factories.append(
                 generator_type[i].from_spec(generator_specs[i])
             )
 
@@ -84,22 +86,22 @@ class VehicleSpawner(Configurable, Upstream):
         generator_type_strs: List[str]
         generator_spec_strs: List[str]
         if len(generator_type_strs) != len(generator_spec_strs):
-            raise ValueError("Number of Generator types and specs don't "
+            raise ValueError("Number of VehicleFactory types and specs don't "
                              "match.")
         # Based on the spec, identify the correct generator types
         spec['generator_type'] = []
         spec['generator_specs'] = []
         for i in range(generator_type_strs):
-            generator: Generator
-            generator_spec: Dict[str, Any]
             gen_str: str = generator_type_strs[i]
             gen_spec_str: str = generator_spec_strs[i]
             if gen_str.lower() in {'normal', 'normalgenerator'}:
-                generator = NormalGenerator
-                generator_spec = NormalGenerator.str_from_spec(gen_spec_str)
+                generator: VehicleFactory = GaussianVehicleFactory
+                generator_spec: Dict[str, Any
+                                     ] = GaussianVehicleFactory.str_from_spec(
+                    gen_spec_str)
             else:
-                raise ValueError("Unsupported Generator type.")
-            spec['generator_type'].append(NormalGenerator)
+                raise ValueError("Unsupported VehicleFactory type.")
+            spec['generator_type'].append(GaussianVehicleFactory)
             spec['generator_specs'].append()
 
         return spec
@@ -138,7 +140,7 @@ class VehicleSpawner(Configurable, Upstream):
             if random() < self.p:
                 # Pick a generator to use based on the distribution of
                 # generators and use it to spawn a vehicle.
-                spawn = choices(self.generators,
+                spawn = choices(self.vehicle_factories,
                                 self.generator_ps)[0].create_vehicle()
             else:
                 # No vehicle spawned. Return nothing.
@@ -148,12 +150,12 @@ class VehicleSpawner(Configurable, Upstream):
         # lanes in the downstream road until we find the first lane that works
         # for the spawned vehicle's next movement. If we find that no lanes
         # work, ever, error.
-        can_work: bool = False
+        can_reach_destination: bool = False
         for lane in sample(self.downstream.lanes,
                            k=len(self.downstream.lanes)):
             if len(spawn.next_movements(lane.end_coord,
                                         at_least_one=False)) > 0:
-                can_work = True
+                can_reach_destination = True
                 # Check if the lane it's trying to spawn into has enough space.
                 if lane.room_to_enter() > (spawn.length
                                            * 2*SHARED.length_buffer_factor):
@@ -177,7 +179,7 @@ class VehicleSpawner(Configurable, Upstream):
                         pos=lane.end_coord
                     ))
                     return spawn
-        if can_work:
+        if can_reach_destination:
             # At least one of the lanes could spawn this vehicle, but none of
             # them had enough room for it. Queue it for the next timestep.
             self.queued_spawn = spawn

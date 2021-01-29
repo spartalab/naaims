@@ -7,10 +7,10 @@ processing and record-keeping.
 from __future__ import annotations
 from typing import Iterable, Dict, Any, List
 
-from ..archetypes import Configurable, Downstream
-from ..util import VehicleSection
-from ..roads import Road
-from ..vehicles import Vehicle
+from aimsim.archetypes import Configurable, Downstream
+from aimsim.util import VehicleSection
+from aimsim.roads import Road
+from aimsim.vehicles import Vehicle
 
 
 class VehicleRemover(Configurable, Downstream):
@@ -41,7 +41,7 @@ class VehicleRemover(Configurable, Downstream):
             upstream=spec['upstream']
         )
 
-    def process_transfers(self) -> Iterable[Vehicle]:
+    def process_transfers(self) -> List[Vehicle]:
         """Process transfers by returning the vehicles to be removed.
 
         We remove vehicles as soon as their center section exits since

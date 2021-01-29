@@ -1,1 +1,1 @@
-from .vehicles import *
+from aimsim.vehicles.vehicle import *

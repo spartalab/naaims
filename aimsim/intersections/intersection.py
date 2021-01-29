@@ -99,7 +99,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         # Index the IntersectionLanes by their Coord
         self.lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                       IntersectionLane] = {
-            (l.start_coord, l.end_coord): l for l in self.lanes
+            (lane.start_coord, lane.end_coord): lane for lane in self.lanes
         }
         self.lanes_by_start: Dict[Coord, List[IntersectionLane]] = {}
         for lane in self.lanes:
@@ -190,7 +190,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
     def process_transfers(self) -> None:
         """Incorporate new vehicles onto this intersection."""
         while len(self.entering_vehicle_buffer) > 0:
-            transfer = self.entering_vehicle_buffer.pop()
+            transfer = self.entering_vehicle_buffer.pop(0)
             lane: IntersectionLane
             if transfer.vehicle.has_reservation:
                 # Tell the manager this reservation has started and get the
@@ -213,9 +213,9 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
             lane.enter_vehicle_section(transfer)
         super().process_transfers()  # just makes sure the list is empty after
 
-    def handle_logic(self) -> None:
+    def update_schedule(self) -> None:
         """Have the manager update reservations and poll for new requests."""
-        self.manager.handle_logic()
+        self.manager.update_schedule()
 
     # Begin helper methods
 

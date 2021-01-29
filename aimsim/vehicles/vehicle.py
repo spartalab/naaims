@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, TypeVar, Type, List
 from copy import copy
 
 import aimsim.shared as SHARED
-from ..util import Coord
+from aimsim.util import Coord
 
 if TYPE_CHECKING:
-    from ..lanes import RoadLane
+    from aimsim.lanes import RoadLane
 
 V = TypeVar('V', bound='Vehicle')
 
@@ -86,15 +86,15 @@ class Vehicle(ABC):
 
         # initialize properties
         self.pos = Coord(0, 0)
-        self.v = 0
-        self.a = 0
+        self.velocity = 0
+        self.acceleration = 0
         self.heading = 0.0
         self.permission_to_enter_intersection = False
         self.has_reservation = False
 
         # save vehicle characteristics
         self.destination = destination
-        self.max_accel = max_accel
+        self.max_acceleration = max_accel
         self.max_braking = max_braking
         self.length = length
         self.width = width
@@ -112,25 +112,25 @@ class Vehicle(ABC):
         self._pos: Coord = new_pos
 
     @property
-    def v(self) -> float:
+    def velocity(self) -> float:
         """The vehicle's speed in m/s."""
         return self._v
 
-    @v.setter
-    def v(self, new_v: float) -> None:
+    @velocity.setter
+    def velocity(self, new_v: float) -> None:
         if new_v < 0:
             raise ValueError("Speed must be nonnegative.")
         self._v: float = new_v
 
     @property
-    def a(self) -> float:
+    def acceleration(self) -> float:
         """Vehicle's current acceleration in m/s^2."""
         return self._a
 
-    @a.setter
-    def a(self, new_a: float) -> None:
+    @acceleration.setter
+    def acceleration(self, new_a: float) -> None:
         # TODO: (runtime) Should this error or just clip a to 0?
-        if self.v <= 0 and new_a < 0:
+        if self.velocity <= 0 and new_a < 0:
             raise ValueError("Vehicle already stopped.")
         self._a: float = new_a
 
@@ -173,7 +173,7 @@ class Vehicle(ABC):
 
     def stopping_distance(self) -> float:
         """Return the vehicle's stopping distance in meters."""
-        return self.v**2/(-2*self.max_braking)
+        return self.velocity**2/(-2*self.max_braking)
 
     def next_movements(self, start_coord: Coord, at_least_one: bool = True
                        ) -> List[Coord]:
@@ -200,10 +200,28 @@ class AutomatedVehicle(Vehicle):
     the name of the base class so it's clear what type of vehicle we're using.
     """
 
+    def __init__(self,
+                 vin: int,
+                 destination: int,
+                 max_accel: float = 3,
+                 max_braking: float = -3.4,
+                 length: float = 4.5,
+                 width: float = 3,
+                 vot: float = 0
+                 ) -> None:
+        super().__init__(vin=vin,
+                         destination=destination,
+                         max_accel=max_accel,
+                         max_braking=max_braking,
+                         length=length,
+                         width=width,
+                         vot=vot
+                         )
+
 
 class HumanDrivenVehicle(Vehicle):
     """
-    Like an (Automated)Vehicle, but with more properties, like how accurate
+    Like an (automated) vehicle, but with more properties, like how accurate
     they are at following directions.
     """
     raise NotImplementedError("TODO")

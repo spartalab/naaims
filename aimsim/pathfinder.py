@@ -1,9 +1,9 @@
 from typing import Dict, Any, Iterable, Tuple, List, Optional
 
-from .util import Coord
-from .vehicles import Vehicle
-from .roads import Road
-from .intersections import Intersection
+from aimsim.util import Coord
+from aimsim.vehicles import Vehicle
+from aimsim.roads import Road
+from aimsim.intersections import Intersection
 
 
 class Pathfinder:

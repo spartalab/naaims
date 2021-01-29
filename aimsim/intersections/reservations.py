@@ -2,12 +2,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Set, Optional, List
 
-from ..util import Coord, VehicleTransfer
-from ..vehicles import Vehicle
-from ..lanes import IntersectionLane, ScheduledExit
+from aimsim.util import Coord
+from aimsim.vehicles import Vehicle
+from aimsim.lanes import IntersectionLane, ScheduledExit
 
 if TYPE_CHECKING:
-    from .tilings import Tile
+    from aimsim.intersections.tilings import Tile
 
 
 @dataclass

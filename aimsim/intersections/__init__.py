@@ -1,1 +1,1 @@
-from .intersections import *
+from aimsim.intersections.intersection import *

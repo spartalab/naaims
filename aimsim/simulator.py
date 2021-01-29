@@ -4,19 +4,17 @@ of the AIM simulator, including visualizations if enabled.
 """
 
 from __future__ import annotations
-from typing import Iterable, Tuple, Dict, Optional, Set, Any, List
-
-from pandas import DataFrame
+from typing import List, Tuple, Dict, Optional, Set, Any
 from matplotlib import pyplot as plt
 
 import aimsim.shared as SHARED
-from ..util import Coord
-from ..pathfinder import Pathfinder
-from ..archetypes import Configurable, Facility, Upstream, Downstream
-from ..intersections import Intersection
-from ..roads import Road
-from ..endpoints import VehicleSpawner, VehicleRemover
-from ..vehicles import Vehicle
+from aimsim.util import Coord
+from aimsim.pathfinder import Pathfinder
+from aimsim.archetypes import Configurable, Facility, Upstream, Downstream
+from aimsim.intersections import Intersection
+from aimsim.roads import Road
+from aimsim.endpoints import VehicleSpawner, VehicleRemover
+from aimsim.vehicles import Vehicle
 
 
 class Simulator:
@@ -35,10 +33,10 @@ class Simulator:
     """
 
     def __init__(self,
-                 road_specs: Iterable[Dict[str, Any]],
-                 intersection_specs: Iterable[Dict[str, Any]],
-                 spawner_specs: Iterable[Dict[str, Any]],
-                 remover_specs: Iterable[Dict[str, Any]],
+                 road_specs: List[Dict[str, Any]],
+                 intersection_specs: List[Dict[str, Any]],
+                 spawner_specs: List[Dict[str, Any]],
+                 remover_specs: List[Dict[str, Any]],
                  lane_destination_pairs: Optional[Dict[Tuple[Coord, int],
                                                        List[Coord]]] = None,
                  config_filename: str = './config.ini',
@@ -46,11 +44,11 @@ class Simulator:
         """Create all roads, intersections, and suppport structures.
 
         Parameters
-            road_specs: Iterable[Dict[str, Any]]
-            intersection_specs: Iterable[Dict[str, Any]]
-            spawner_specs: Iterable[Dict[str, Any]]
-            remover_specs: Iterable[Dict[str, Any]]
-                These dicts, which can contain nested dicts, provide the
+            road_specs: List[Dict[str, Any]]
+            intersection_specs: List[Dict[str, Any]]
+            spawner_specs: List[Dict[str, Any]]
+            remover_specs: List[Dict[str, Any]]
+                These lists, which can contain nested dicts, provide the
                 initialization parameters for all customizable objects in the
                 AIM simulation.
             lane_destination_pairs:
@@ -71,10 +69,10 @@ class Simulator:
         #   a. Create the roads and organize by intersection and road to be
         #      created.
         self.roads: Dict[int, Road] = {}
-        for_intersection_upstream: Dict[int, Set[int]] = {}
-        for_intersection_downstream: Dict[int, Set[int]] = {}
-        for_spawner: Dict[int, int] = {}
-        for_remover: Dict[int, int] = {}
+        upstream_intersection_rids: Dict[int, Set[int]] = {}
+        downstream_intersection_rids: Dict[int, Set[int]] = {}
+        spawner_rids: Dict[int, int] = {}
+        remover_rids: Dict[int, int] = {}
         for spec in road_specs:
             rid: int = spec['id']
             self.roads[rid] = Road.from_spec(spec)
@@ -83,22 +81,22 @@ class Simulator:
             # correctness later.
             upstream_id: int = spec['upstream_id']
             if spec['upstream_is_spawner']:
-                for_spawner[upstream_id] = rid
+                spawner_rids[upstream_id] = rid
             else:
-                if upstream_id not in for_intersection_upstream:
-                    for_intersection_upstream[upstream_id] = {rid}
+                if upstream_id not in upstream_intersection_rids:
+                    upstream_intersection_rids[upstream_id] = {rid}
                 else:
-                    for_intersection_upstream[upstream_id].add(rid)
+                    upstream_intersection_rids[upstream_id].add(rid)
 
             # Prepare to attach to Downstream object
             downstream_id: int = spec['downstream_id']
             if spec['downstream_is_remover']:
-                for_remover[downstream_id] = rid
+                remover_rids[downstream_id] = rid
             else:
-                if downstream_id not in for_intersection_downstream:
-                    for_intersection_downstream[downstream_id] = {rid}
+                if downstream_id not in downstream_intersection_rids:
+                    downstream_intersection_rids[downstream_id] = {rid}
                 else:
-                    for_intersection_downstream[downstream_id].add(rid)
+                    downstream_intersection_rids[downstream_id].add(rid)
 
         #   b. Create intersections, spawners, and removers given the roads.
         #      Connect roads to their intersections, spawners, and removers.
@@ -110,8 +108,8 @@ class Simulator:
 
             # Check that there are roads that lead to this intersection from
             # both upstream and downstream
-            if (iid not in for_intersection_upstream
-                    or iid not in for_intersection_downstream):
+            if (iid not in upstream_intersection_rids
+                    or iid not in downstream_intersection_rids):
                 raise ValueError(
                     f"Spec has intersection {iid} but no road does.")
 
@@ -127,20 +125,20 @@ class Simulator:
             self.intersections[iid] = Intersection.from_spec(spec)
 
             # Attach the intersection to the up and downstream roads
-            while len(for_intersection_downstream[iid]) > 0:
-                rid = for_intersection_downstream[iid].pop()
+            while len(downstream_intersection_rids[iid]) > 0:
+                rid = downstream_intersection_rids[iid].pop()
                 self.roads[rid].connect_downstream(self.intersections[iid])
-            while len(for_intersection_upstream[iid]) > 0:
-                rid = for_intersection_upstream[iid].pop()
+            while len(upstream_intersection_rids[iid]) > 0:
+                rid = upstream_intersection_rids[iid].pop()
                 self.roads[rid].connect_upstream(self.intersections[iid])
 
             # On road's side, track which intersections we've confirmed exist
-            del for_intersection_upstream[iid]
-            del for_intersection_downstream[iid]
+            del upstream_intersection_rids[iid]
+            del downstream_intersection_rids[iid]
 
         # Check if every road's intersection has been created
-        if ((len(for_intersection_upstream) > 0) or
-                (len(for_intersection_downstream) > 0)):
+        if ((len(upstream_intersection_rids) > 0) or
+                (len(downstream_intersection_rids) > 0)):
             raise ValueError(
                 f"Roads have at least one intersection that the spec doesn't.")
 
@@ -151,15 +149,15 @@ class Simulator:
             sid: int = spec['id']
 
             # Check that a road leaves this spawner
-            if sid not in for_spawner:
+            if sid not in spawner_rids:
                 raise ValueError(f"Spec has spawner {sid} but no road does.")
 
             # Check that the road the spawner thinks is connected to agrees
             # that the spawner is connected to it
             rid = spec['road_id']
-            if rid != for_spawner[sid]:
+            if rid != spawner_rids[sid]:
                 raise ValueError(f"Spawner {sid} thinks it's connected to road"
-                                 f" {rid} but road {for_spawner[sid]} thinks"
+                                 f" {rid} but road {spawner_rids[sid]} thinks"
                                  " it's the one.")
 
             # Put the road in the spec
@@ -172,10 +170,10 @@ class Simulator:
             self.roads[rid].connect_upstream(self.spawners[sid])
 
             # On the road side, track that we've created this spawner
-            del for_spawner[rid]
+            del spawner_rids[rid]
 
         # Check if every road's spawner (if it has one) has been created
-        if len(for_spawner) > 0:
+        if len(spawner_rids) > 0:
             raise ValueError(
                 f"Roads have at least one spawner that the spec doesn't.")
 
@@ -186,15 +184,15 @@ class Simulator:
             vid: int = spec['id']
 
             # Check that a road enters this remover
-            if vid not in for_remover:
+            if vid not in remover_rids:
                 raise ValueError(f"Spec has remover {vid} but no road does.")
 
             # Check that the road the remover thinks is connected to agrees
             # that the remover is connected to it
             rid = spec['road_id']
-            if rid != for_remover[vid]:
+            if rid != remover_rids[vid]:
                 raise ValueError(f"Remover {vid} thinks it's connected to road"
-                                 f" {rid} but road {for_remover[vid]} thinks"
+                                 f" {rid} but road {remover_rids[vid]} thinks"
                                  " it's the one.")
 
             # Put the road in the spec
@@ -207,10 +205,10 @@ class Simulator:
             self.roads[rid].connect_downstream(self.removers[vid])
 
             # On the road side, track that we've created this remover
-            del for_remover[rid]
+            del remover_rids[rid]
 
         # Check if every road's remover (if it has one) has been created
-        if len(for_remover) > 0:
+        if len(remover_rids) > 0:
             raise ValueError(
                 f"Roads have at least one remover that the spec doesn't.")
 
@@ -220,17 +218,16 @@ class Simulator:
                                        lane_destination_pairs)
 
         # 3. Group them into common sets so it's neater to loop through
-        self.facilities: Iterable[Facility] = list(
-            self.intersections.values()
-        ) + list(self.roads.values())
+        self.facilities: List[Facility] = [*self.intersections.values(),
+                                           *self.roads.values()]
 
-        self.upstreams: Iterable[Upstream] = list(
-            self.spawners.values()
-        ) + list(self.intersections.values()) + list(self.roads.values())
+        self.upstreams: List[Upstream] = [*self.spawners.values(),
+                                          *self.intersections.values(),
+                                          *self.roads.values()]
 
-        self.downstreams: Iterable[Downstream] = list(
-            self.intersections.values()
-        ) + list(self.roads.values()) + list(self.removers.values())
+        self.downstreams: List[Downstream] = [*self.intersections.values(),
+                                              *self.roads.values(),
+                                              *self.removers.values()]
 
         # 4. Initialize an empty set of vehicles
         self.vehicles: Set[Vehicle] = set()
@@ -314,8 +311,8 @@ class Simulator:
                          for update in f_update.items())
         for vehicle in self.vehicles:
             update = new_speed[vehicle]
-            vehicle.v = update.v
-            vehicle.a = update.a
+            vehicle.velocity = update.v
+            vehicle.acceleration = update.a
 
         # 2. Have upstream objects (vehicle spawners, roads, and intersections)
         #    update vehicle absolute (Coord) and relative positions (in-lane
@@ -333,7 +330,7 @@ class Simulator:
         #    removers) resolve all vehicle transfers. This finishes updates to
         #    absolute and relative positions using speeds calculated in 1.
         for d in self.downstreams:
-            exiting_vehicles: Optional[Iterable[Vehicle]
+            exiting_vehicles: Optional[List[Vehicle]
                                        ] = d.process_transfers()
             # only vehicle_removers return vehicles, iff any get removed
             # in this cycle
@@ -347,7 +344,7 @@ class Simulator:
         # 4. Have facility managers handle their special internal logic (e.g.,
         #    lane changes and reservations).
         for f in self.facilities:
-            f.handle_logic()
+            f.update_schedule()
 
         # 5. Update shared time step and (TODO: (low)) shortest path values
         SHARED.t += 1
@@ -363,55 +360,3 @@ class Simulator:
         # at self.vis_basemap
         # for vehicle in self.Vehicles.values():
         raise NotImplementedError("TODO")
-
-
-class SingleIntersectionSimulator(Simulator):
-
-    def __init__(self,
-                 intersection_traj_file: DataFrame,
-                 lanes_file: DataFrame,
-                 config_filename: str = './config.ini') -> None:
-        """Create a new simulator for a single intersection."""
-
-        # interpret the data files and convert them into classes
-        # that the parent Simulator can understand
-
-        # self.intersection = Intersection(
-        #     intersection_traj_file, lanes_file)
-
-        # call super's init first to initialize data structures
-        raise NotImplementedError("TODO")
-
-        # fill those data structures by ingesting road geometry
-
-
-class LargeSimulator(Simulator):
-
-    def __init__(self,
-                 road_strs: Iterable[str],
-                 intersection_strs: Iterable[str],
-                 spawner_strs: Iterable[str],
-                 remover_strs: Iterable[str],
-                 config_filename: str = './config.ini',
-                 display: bool = False) -> None:
-        """Create a Simulator using strings for every road object."""
-
-        # Process the specs for every Upstream and Downstream object
-        road_specs: Iterable[Dict[str, Any]] = [
-            Road.spec_from_str(r) for r in road_strs]
-        intersection_specs: Iterable[Dict[str, Any]] = [
-            Intersection.spec_from_str(i) for i in intersection_strs]
-        spawner_specs: Iterable[Dict[str, Any]] = [
-            VehicleSpawner.spec_from_str(s) for s in spawner_strs]
-        remover_specs: Iterable[Dict[str, Any]] = [
-            VehicleRemover.spec_from_str(r) for r in remover_strs]
-
-        # Hand it off to the main Simulator init
-        super().__init__(
-            road_specs=road_specs,
-            intersection_specs=intersection_specs,
-            spawner_specs=spawner_specs,
-            remover_specs=remover_specs,
-            config_filename=config_filename,
-            display=display
-        )
