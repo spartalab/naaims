@@ -4,14 +4,11 @@ This module holds all vehicle types used in the AIM simulator.
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, TypeVar, Type, List
+from typing import TypeVar, List
 from copy import copy
 
 import aimsim.shared as SHARED
 from aimsim.util import Coord
-
-if TYPE_CHECKING:
-    from aimsim.lanes import RoadLane
 
 V = TypeVar('V', bound='Vehicle')
 
@@ -219,23 +216,23 @@ class AutomatedVehicle(Vehicle):
                          )
 
 
-class HumanDrivenVehicle(Vehicle):
-    """
-    Like an (automated) vehicle, but with more properties, like how accurate
-    they are at following directions.
-    """
-    raise NotImplementedError("TODO")
+# class HumanDrivenVehicle(Vehicle):
+#     """
+#     Like an (automated) vehicle, but with more properties, like how accurate
+#     they are at following directions.
+#     """
+#     raise NotImplementedError("TODO")
 
 
-class SimpleCCVehicle(Vehicle):
-    """
-    A connected vehicle with simple (fixed speed) cruise control.
-    """
-    raise NotImplementedError("TODO")
+# class SimpleCCVehicle(Vehicle):
+#     """
+#     A connected vehicle with simple (fixed speed) cruise control.
+#     """
+#     raise NotImplementedError("TODO")
 
 
-class AdaptiveCCVehicle(Vehicle):
-    """
-    A connected vehicle with adaptive (variable speed) cruise control.
-    """
-    raise NotImplementedError("TODO")
+# class AdaptiveCCVehicle(Vehicle):
+#     """
+#     A connected vehicle with adaptive (variable speed) cruise control.
+#     """
+#     raise NotImplementedError("TODO")

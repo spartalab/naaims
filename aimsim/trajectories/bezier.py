@@ -1,5 +1,5 @@
 from __future__ import annotations
-from math import pi, sqrt, tan
+from math import pi, sqrt, tan, ceil
 from typing import List, Any
 
 # import bezier
@@ -74,10 +74,11 @@ class BezierTrajectory(Trajectory):
 
         # TODO (low): Calculate traversibility factors.
 
-        return BezierTrajectory(start_coord, end_coord,
-                                reference_coords=[control_coord],
-                                traversibility_factors=[])
+        return cls(start_coord, end_coord,
+                   reference_coords=[control_coord],
+                   traversibility_factors=[])
 
+    @property
     def length(self) -> float:
         return self._length
 
@@ -90,8 +91,11 @@ class BezierTrajectory(Trajectory):
     def __find_length(self, delta=0.05) -> float:
         total: float = 0.
         last_point = self.get_position(0)
-        for i in range(delta, 1+delta, delta):
-            next_point = self.get_position(i)
+        for i in range(1, ceil(1/delta)+1):
+            increment = i*delta
+            increment = 1 if increment > 1 else increment
+
+            next_point = self.get_position(increment)
             total += sqrt((next_point.x - last_point.x)**2 +
                           (next_point.y - last_point.y)**2)
             last_point = next_point
@@ -110,6 +114,14 @@ class BezierTrajectory(Trajectory):
                                     self.control_coord.y,
                                     self.end_coord.y)
         )
+
+    # def __eq__(self, other):
+    #     '''BezierTrajectories are equal if they have the same 3 points.'''
+    #     if isinstance(other, BezierTrajectory):
+    #         return (self.start_coord == other.start_coord) and \
+    #             (self.end_coord == other.end_coord) and \
+    #             (self.control_coord == other.control_coord)
+    #     return False
 
     # def get_derivative(self, t):
     #     """Computes dy/dx of curve given specific time

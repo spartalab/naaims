@@ -1,9 +1,11 @@
-from typing import Dict, Any, Iterable, Tuple, List, Optional
+from __future__ import annotations
+from typing import TYPE_CHECKING, Dict, Iterable, Tuple, List, Optional
 
-from aimsim.util import Coord
-from aimsim.vehicles import Vehicle
-from aimsim.roads import Road
-from aimsim.intersections import Intersection
+if TYPE_CHECKING:
+    from aimsim.util import Coord
+    from aimsim.vehicles import Vehicle
+    from aimsim.roads import Road
+    from aimsim.intersections import Intersection
 
 
 class Pathfinder:

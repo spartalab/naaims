@@ -5,6 +5,7 @@ dimensions and acceleration, etc.).
 """
 
 
+from __future__ import annotations
 from abc import abstractmethod
 from typing import TypeVar, Dict, Any, Type, List, Optional, Tuple
 from random import choices, gauss

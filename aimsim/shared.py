@@ -29,10 +29,12 @@ entrance_length
     some super ridiculous length. Maybe this isn't worth it.
 """
 
-from typing import Dict, Any
+from __future__ import annotations
+from typing import TYPE_CHECKING, Dict, Any
 from configparser import ConfigParser
 
-from aimsim.pathfinder import Pathfinder
+if TYPE_CHECKING:
+    from aimsim.pathfinder import Pathfinder
 
 # defaults
 SETTINGS: Dict[str, Any] = {
