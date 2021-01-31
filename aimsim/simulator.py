@@ -11,8 +11,8 @@ import aimsim.shared as SHARED
 from aimsim.util import Coord
 from aimsim.pathfinder import Pathfinder
 from aimsim.archetypes import Configurable, Facility, Upstream, Downstream
-from aimsim.intersections import Intersection
-from aimsim.roads import Road
+from aimsim.intersection import Intersection
+from aimsim.road import Road
 from aimsim.endpoints import VehicleSpawner, VehicleRemover
 from aimsim.vehicles import Vehicle
 

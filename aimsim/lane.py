@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from aimsim.archetypes import Upstream
     from aimsim.vehicles import Vehicle
     from aimsim.trajectories import Trajectory
-    from aimsim.intersections import Intersection
+    from aimsim.intersection import Intersection
 
 
 class LateralDeviation:

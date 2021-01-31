@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Dict, Iterable, Tuple, List, Optional
 if TYPE_CHECKING:
     from aimsim.util import Coord
     from aimsim.vehicles import Vehicle
-    from aimsim.roads import Road
-    from aimsim.intersections import Intersection
+    from aimsim.road import Road
+    from aimsim.intersection import Intersection
 
 
 class Pathfinder:

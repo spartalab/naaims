@@ -9,7 +9,7 @@ from typing import List, Dict, Any
 
 from aimsim.archetypes import Configurable, Downstream
 from aimsim.util import VehicleSection
-from aimsim.roads import Road
+from aimsim.road import Road
 from aimsim.vehicles import Vehicle
 
 

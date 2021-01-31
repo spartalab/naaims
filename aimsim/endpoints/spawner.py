@@ -17,7 +17,7 @@ from aimsim.endpoints.factories import (VehicleFactory,
 
 if TYPE_CHECKING:
     from aimsim.vehicles import Vehicle
-    from aimsim.roads import Road
+    from aimsim.road import Road
 
 
 class VehicleSpawner(Configurable, Upstream):
