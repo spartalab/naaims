@@ -26,14 +26,15 @@ from typing import Iterable, Type, Dict, Any, List, Tuple, Optional
 from pandas import DataFrame
 
 import aimsim.shared as SHARED
-from ..archetypes import Configurable, Facility, Upstream, Downstream
-from ..util import Coord, VehicleTransfer, SpeedUpdate, VehicleSection
-from ..trajectories import Trajectory, BezierTrajectory
-from ..lanes import IntersectionLane, RoadLane
-from ..roads import Road
-from ..endpoints import VehicleRemover
-from ..vehicles import Vehicle
-from .managers import IntersectionManager, FCFSManager
+from aimsim.archetypes import Configurable, Facility, Upstream, Downstream
+from aimsim.util import Coord, VehicleTransfer, SpeedUpdate, VehicleSection
+from aimsim.trajectories import Trajectory, BezierTrajectory
+from aimsim.intersections import IntersectionLane
+from aimsim.roads import RoadLane
+from aimsim.roads import Road
+from aimsim.endpoints import VehicleRemover
+from aimsim.vehicles import Vehicle
+from aimsim.intersections.managers import IntersectionManager, FCFSManager
 
 
 class Intersection(Configurable, Facility, Upstream, Downstream):

@@ -88,7 +88,7 @@ class BezierTrajectory(Trajectory):
         """Return the (1D, quadratic) Bezier coordinate of a proportion."""
         return (1-p)*((1-p)*start+p*control) + p*((1-p)*control+p*end)
 
-    def __find_length(self, delta=0.05) -> float:
+    def __find_length(self, delta: float = 0.05) -> float:
         total: float = 0.
         last_point = self.get_position(0)
         for i in range(1, ceil(1/delta)+1):

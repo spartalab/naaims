@@ -12,10 +12,12 @@ import aimsim.shared as SHARED
 from aimsim.archetypes import Configurable, Upstream
 from aimsim.util import (VehicleTransfer, MissingConnectionError, Coord,
                          VehicleSection)
-from aimsim.vehicles import Vehicle
-from aimsim.roads import Road
-from aimsim.endpoints.vehicle_factories import (VehicleFactory,
-                                                GaussianVehicleFactory)
+from aimsim.endpoints.factories import (VehicleFactory,
+                                        GaussianVehicleFactory)
+
+if TYPE_CHECKING:
+    from aimsim.vehicles import Vehicle
+    from aimsim.roads import Road
 
 
 class VehicleSpawner(Configurable, Upstream):

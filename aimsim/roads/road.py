@@ -25,18 +25,17 @@ from typing import (TYPE_CHECKING, Type, Optional, Iterable, Dict, Any, Tuple,
                     Set, List)
 
 import aimsim.shared as SHARED
-from ..vehicles import Vehicle
-from ..trajectories import Trajectory, BezierTrajectory
-from ..lanes import RoadLane
-from ..util import Coord, MissingConnectionError, VehicleTransfer, SpeedUpdate
-from ..archetypes import Configurable, Facility, Upstream, Downstream
-from ..intersections import Intersection
-from ..endpoints import VehicleSpawner, VehicleRemover
-from .managers import LaneChangeManager, DummyManager
+from aimsim.vehicles import Vehicle
+from aimsim.trajectories import Trajectory, BezierTrajectory
+from aimsim.roads import RoadLane
+from aimsim.util import (Coord, MissingConnectionError, VehicleTransfer,
+                         SpeedUpdate)
+from aimsim.archetypes import Configurable, Facility, Upstream, Downstream
+from aimsim.roads.managers import LaneChangeManager, DummyManager
 
 if TYPE_CHECKING:
-    from ..intersections import Intersection
-    from ..endpoints import VehicleRemover
+    from aimsim.intersections import Intersection
+    from aimsim.endpoints import VehicleSpawner, VehicleRemover
 
 
 class Road(Configurable, Facility, Upstream, Downstream):

@@ -9,7 +9,7 @@ maximizing intersection throughput.
 from typing import Optional, Set, Deque, Dict
 
 from aimsim.vehicles import Vehicle
-from aimsim.intersections.reservations import Reservation
+from aimsim.intersections.reservation import Reservation
 
 
 class Tile:

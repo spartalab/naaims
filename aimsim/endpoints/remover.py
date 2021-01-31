@@ -5,7 +5,7 @@ processing and record-keeping.
 '''
 
 from __future__ import annotations
-from typing import Iterable, Dict, Any, List
+from typing import List, Dict, Any
 
 from aimsim.archetypes import Configurable, Downstream
 from aimsim.util import VehicleSection

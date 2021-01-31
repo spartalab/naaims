@@ -1,2 +1,2 @@
-from .vehicle_remover import *
-from .vehicle_spawner import *
+from aimsim.endpoints.spawner import *
+from aimsim.endpoints.remover import *

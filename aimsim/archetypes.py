@@ -11,9 +11,9 @@ These archetypes enforce the main simulation loop:
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Optional, Any, List, Iterable, Union, Dict
+from typing import Optional, Any, List, Dict
 
-from aimsim.util import VehicleTransfer, Coord, SpeedUpdate
+from aimsim.util import VehicleTransfer, SpeedUpdate
 from aimsim.vehicles import Vehicle
 
 

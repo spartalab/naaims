@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, Dict, Set, Optional, List
 
 from aimsim.util import Coord
 from aimsim.vehicles import Vehicle
-from aimsim.lanes import IntersectionLane, ScheduledExit
+from aimsim.lane import ScheduledExit
+from aimsim.intersections import IntersectionLane
 
 if TYPE_CHECKING:
     from aimsim.intersections.tilings import Tile

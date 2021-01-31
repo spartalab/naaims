@@ -59,6 +59,18 @@ max_vehicle_length: float
 min_entrance_length: float
 TIMESTEP_LENGTH: float
 
+# # Initialize required variables to nonsensical values so they error if called
+# # without reading in a config file.
+# pathfinder: Pathfinder = Pathfinder([], [])
+# steps_per_second: int = -1
+# speed_limit: int = -1
+# max_braking: float = -1.
+# length_buffer_factor: float = -1.
+# max_stopping_distance: float = -1.
+# max_vehicle_length: float = -1.
+# min_entrance_length: float = -1.
+# TIMESTEP_LENGTH: float = -1.
+
 
 def read(config_filename: str = './config.ini') -> None:
     global config_file_already_read

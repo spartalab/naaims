@@ -6,12 +6,15 @@ Lane changes are modeled as a single vehicle occupying two parallel links
 simultaneously.
 '''
 
+from __future__ import annotations
 from abc import abstractmethod
-from typing import Iterable, Dict, Any, TypeVar, Type, Set
+from typing import TYPE_CHECKING, Iterable, Dict, Any, TypeVar, Type, Set
 
-from aimsim.archetypes import Configurable
-from aimsim.lanes import RoadLane, LateralDeviation
-from aimsim.vehicles import Vehicle
+if TYPE_CHECKING:
+    from aimsim.archetypes import Configurable
+    from aimsim.lane import LateralDeviation
+    from aimsim.roads import RoadLane
+    from aimsim.vehicles import Vehicle
 
 # [Implementation notes]
 # Helper function progresses vehicles normally along a path, either per vehicle or for all
@@ -36,12 +39,12 @@ class LaneChangeManager(Configurable):
     @abstractmethod
     def __init__(self,
                  lanes: Iterable[RoadLane]
-                 ):
+                 ) -> None:
         self.lanes = lanes
         raise NotImplementedError("TODO")
 
-    @classmethod
-    def spec_from_str(cls, spec_str: str) -> Dict[str, Any]:
+    @staticmethod
+    def spec_from_str(spec_str: str) -> Dict[str, Any]:
         """Reads a spec string into a manager spec dict."""
 
         spec: Dict[str, Any] = {}
@@ -78,29 +81,3 @@ class LaneChangeManager(Configurable):
     def update_schedule(self) -> None:
         """Should process and schedule new and queued lane change requests."""
         raise NotImplementedError("Must be implemented in child classes.")
-
-
-class DummyManager(LaneChangeManager):
-
-    def __init__(self,
-                 lanes: Iterable[RoadLane]
-                 ):
-        """Create a LaneChangeManager that doesn't allow lane changes.
-
-        Used roads that leave from a spawner or end at a remover.
-        (All roads in one intersection simulations.)
-        """
-        pass
-
-    def vehicles_to_slow(self, lane: RoadLane) -> Set[Vehicle]:
-        """Return an empty set since a dummy manager doesn't slow vehicles."""
-        return set()
-
-    def lateral_movements(self, lane: RoadLane) -> Dict[Vehicle,
-                                                        LateralDeviation]:
-        """Return an empty dict because the dummy doesn't do lane changes."""
-        return {}
-
-    def update_schedule(self) -> None:
-        """DummyManager has no logic, so do nothing."""
-        pass
