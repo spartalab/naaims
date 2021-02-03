@@ -1,9 +1,9 @@
-import aimsim.util as util
+from aimsim.util import *
 
 
 def test_Coord():
-    assert util.Coord(1.1, 2.2) == (1.1, 2.2)
+    assert Coord(1.1, 2.2) == (1.1, 2.2)
 
 
 def test_SpeedUpdate():
-    assert util.SpeedUpdate(1.1, 2.2) == (1.1, 2.2)
+    assert SpeedUpdate(1.1, 2.2) == (1.1, 2.2)
