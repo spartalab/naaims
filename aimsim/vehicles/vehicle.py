@@ -6,6 +6,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TypeVar, List
 from copy import copy
+from math import pi
 
 import aimsim.shared as SHARED
 from aimsim.util import Coord
@@ -75,11 +76,11 @@ class Vehicle(ABC):
 
         if max_accel <= 0:
             raise ValueError("max_accel must be positive")
-        if max_braking >= SHARED.max_braking:
+        if max_braking >= SHARED.SETTINGS.max_braking:
             raise ValueError("max_braking must be as good or better than the "
                              "max_braking set in the global config.")
 
-        self.vin = vin
+        self._vin = vin
 
         # initialize properties
         self.pos = Coord(0, 0)
@@ -90,14 +91,19 @@ class Vehicle(ABC):
         self.has_reservation = False
 
         # save vehicle characteristics
-        self.destination = destination
-        self.max_acceleration = max_accel
-        self.max_braking = max_braking
-        self.length = length
-        self.width = width
-        self.throttle_score = throttle_score
-        self.tracking_score = tracking_score
-        self.vot = vot
+        self.__destination = destination
+        self.__max_acceleration = max_accel
+        self.__max_braking = max_braking
+        self.__length = length
+        self.__width = width
+        self.__throttle_score = throttle_score
+        self.__tracking_score = tracking_score
+        self.__vot = vot
+
+    @property
+    def vin(self) -> int:
+        """The vehicle's identification number."""
+        return self._vin
 
     @property
     def pos(self) -> Coord:
@@ -133,13 +139,13 @@ class Vehicle(ABC):
 
     @property
     def heading(self) -> float:
-        """The orientation of the vehicle in degrees."""
+        """The orientation of the vehicle in radians."""
         return self._heading
 
     @heading.setter
     def heading(self, new_heading: float) -> None:
-        if new_heading < 0 or new_heading >= 360:
-            raise ValueError("Heading must be within [0,360) degrees")
+        if new_heading < 0 or new_heading >= 2*pi:
+            raise ValueError("Heading must be in [0,2*pi)")
         self._heading = new_heading
 
     @property
@@ -170,7 +176,7 @@ class Vehicle(ABC):
 
     def stopping_distance(self) -> float:
         """Return the vehicle's stopping distance in meters."""
-        return self.velocity**2/(-2*self.max_braking)
+        return self.velocity**2/(-2*self.__max_braking)
 
     def next_movements(self, start_coord: Coord, at_least_one: bool = True
                        ) -> List[Coord]:
@@ -180,8 +186,8 @@ class Vehicle(ABC):
         possible coordinate, even if it can't possibly get the vehicle to its
         destination.
         """
-        return SHARED.pathfinder.next_movements(start_coord, self.destination,
-                                                at_least_one)
+        return SHARED.SETTINGS.pathfinder.next_movements(
+            start_coord, self.__destination, at_least_one)
 
     def clone_for_request(self: V) -> V:
         """Return a clone of this vehicle to test a reservation request."""

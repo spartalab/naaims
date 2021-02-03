@@ -1,8 +1,6 @@
-
-
 from __future__ import annotations
 
-from aimsim.vehicles import Vehicle
+from aimsim.vehicles.vehicle import Vehicle
 
 
 class AutomatedVehicle(Vehicle):

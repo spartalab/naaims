@@ -63,7 +63,7 @@ class Simulator:
         """
 
         # 0. Read in the config file.
-        SHARED.read(config_filename)
+        SHARED.SETTINGS.read(config_filename)
 
         # 1. Create the Upstream and Downstream objects
         #   a. Create the roads and organize by intersection and road to be

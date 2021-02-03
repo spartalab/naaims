@@ -85,7 +85,7 @@ class Lane(ABC):
     def __init__(self,
                  trajectory: Trajectory,
                  width: float,
-                 speed_limit: float = SHARED.speed_limit) -> None:
+                 speed_limit: float = SHARED.SETTINGS.speed_limit) -> None:
         """Should create a new lane.
 
         Parameters
@@ -93,7 +93,7 @@ class Lane(ABC):
                 The trajectory of the road that contains the lane.
             width: float
                 The width of the lane.
-            speed_limit: float = SHARED.speed_limit
+            speed_limit: float = SHARED.SETTINGS.speed_limit
                 The speed limit for the lane.
         """
 
@@ -164,7 +164,7 @@ class Lane(ABC):
                 #       following vehicle's acceleration is much higher than
                 #       both its braking ability and the preceding vehicle's
                 #       acceleration, this could be an issue.
-                a_new = (vehicle.max_braking if (vehicle in to_slow)
+                a_new = (vehicle.__max_braking if (vehicle in to_slow)
                          else self.accel_update(vehicle, section, p, preceding)
                          )
                 new_speed[vehicle] = self.speed_update(vehicle, p, a_new)
@@ -292,11 +292,11 @@ class Lane(ABC):
         """
         effective_speed_limit = self.effective_speed_limit(p, vehicle)
         if vehicle.velocity > effective_speed_limit:
-            return vehicle.max_braking
+            return vehicle.__max_braking
         elif vehicle.velocity == effective_speed_limit:
             return 0
         else:  # vehicle.v < effective_speed_limit
-            return vehicle.max_acceleration
+            return vehicle.__max_acceleration
 
     def accel_update_following(self,
                                vehicle: Vehicle,
@@ -346,7 +346,7 @@ class Lane(ABC):
         could be the front or rear of the vehicle depending on the situation,
         it's presented here as an input argument.
         """
-        v_new = vehicle.velocity + accel*SHARED.TIMESTEP_LENGTH
+        v_new = vehicle.velocity + accel*SHARED.SETTINGS.TIMESTEP_LENGTH
         if v_new < 0:
             return SpeedUpdate(velocity=0, acceleration=accel)
         else:
@@ -636,11 +636,13 @@ class Lane(ABC):
             if transfer.section is VehicleSection.FRONT:
                 # Place the front vehicle section ahead at its full length plus
                 # the length of its front and rear buffers.
-                d = vehicle.length * (1 + 2*SHARED.length_buffer_factor)
+                d = vehicle.__length * (
+                    1 + 2*SHARED.SETTINGS.length_buffer_factor)
             elif transfer.section is VehicleSection.CENTER:
                 # Place the center vehicle section forward at half its length
                 # plus its rear buffer.
-                d = vehicle.length * (0.5 + SHARED.length_buffer_factor)
+                d = vehicle.__length * (
+                    0.5 + SHARED.SETTINGS.length_buffer_factor)
             else:  # transfer.section is VehicleSection.REAR
                 # Place the rear of the vehicle at the very end of the lane.
                 d = 0

@@ -7,12 +7,15 @@ dimensions and acceleration, etc.).
 
 from __future__ import annotations
 from abc import abstractmethod
-from typing import TypeVar, Dict, Any, Type, List, Optional, Tuple
-from random import choices, gauss
+from typing import (TYPE_CHECKING, TypeVar, Dict, Any, Type, List, Optional,
+                    Tuple)
+from random import choices
 
 import aimsim.shared as SHARED
 from aimsim.archetypes import Configurable
-from aimsim.vehicles import Vehicle
+
+if TYPE_CHECKING:
+    from aimsim.vehicles import Vehicle
 
 F = TypeVar('F', bound='VehicleFactory')
 

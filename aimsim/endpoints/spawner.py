@@ -159,7 +159,7 @@ class VehicleSpawner(Configurable, Upstream):
                                         at_least_one=False)) > 0:
                 can_reach_destination = True
                 # Check if the lane it's trying to spawn into has enough space.
-                if lane.room_to_enter() > (spawn.length
+                if lane.room_to_enter() > (spawn.__length
                                            * 2*SHARED.length_buffer_factor):
                     # If so, place it in the downstream buffer and return it.
                     self.downstream.transfer_vehicle(VehicleTransfer(

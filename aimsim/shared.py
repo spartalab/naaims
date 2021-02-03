@@ -30,89 +30,142 @@ entrance_length
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Dict, Any
+from typing import TYPE_CHECKING
 from configparser import ConfigParser
 
 if TYPE_CHECKING:
     from aimsim.pathfinder import Pathfinder
 
-# defaults
-SETTINGS: Dict[str, Any] = {
-    'steps_per_second': '60',
-    'speed_limit': '15',
-    'max_braking': '-2.6',  # -3.4
-    'max_vehicle_length': '5.5',  # TODO: what to do with this
-    'length_buffer_factor': '0.1'
-}
-# TODO: sanity check these defaults
 
-config_file_already_read: bool = False
+class Settings:
 
-# declare required variables
-pathfinder: Pathfinder
-steps_per_second: int
-speed_limit: int
-max_braking: float
-length_buffer_factor: float
-max_stopping_distance: float
-max_vehicle_length: float
-min_entrance_length: float
-TIMESTEP_LENGTH: float
+    not_read_error = RuntimeError("Config file not yet read.")
 
-# # Initialize required variables to nonsensical values so they error if called
-# # without reading in a config file.
-# pathfinder: Pathfinder = Pathfinder([], [])
-# steps_per_second: int = -1
-# speed_limit: int = -1
-# max_braking: float = -1.
-# length_buffer_factor: float = -1.
-# max_stopping_distance: float = -1.
-# max_vehicle_length: float = -1.
-# min_entrance_length: float = -1.
-# TIMESTEP_LENGTH: float = -1.
+    def __init__(self) -> None:
+        self.config_file_already_read: bool = False
+        self.__pathfinder: Pathfinder
+        self.__steps_per_second: int
+        self.__speed_limit: int
+        self.__max_braking: float
+        self.__length_buffer_factor: float
+        self.__max_stopping_distance: float
+        self.__max_vehicle_length: float
+        self.__min_entrance_length: float
+        self.__timestep_length: float
+
+    @property
+    def pathfinder(self) -> Pathfinder:
+        if not self.config_file_already_read:
+            raise self.not_read_error
+        return self.__pathfinder
+
+    @property
+    def steps_per_second(self) -> int:
+        if not self.config_file_already_read:
+            raise self.not_read_error
+        return self.__steps_per_second
+
+    @property
+    def speed_limit(self) -> int:
+        if not self.config_file_already_read:
+            raise self.not_read_error
+        return self.__speed_limit
+
+    @property
+    def max_braking(self) -> float:
+        if not self.config_file_already_read:
+            raise self.not_read_error
+        return self.__max_braking
+
+    @property
+    def length_buffer_factor(self) -> float:
+        if not self.config_file_already_read:
+            raise self.not_read_error
+        return self.__length_buffer_factor
+
+    @property
+    def max_stopping_distance(self) -> float:
+        if not self.config_file_already_read:
+            raise self.not_read_error
+        return self.__max_stopping_distance
+
+    @property
+    def max_stopping_distance(self) -> float:
+        if not self.config_file_already_read:
+            raise self.not_read_error
+        return self.__max_stopping_distance
+
+    @property
+    def max_vehicle_length(self) -> float:
+        if not self.config_file_already_read:
+            raise self.not_read_error
+        return self.__max_vehicle_length
+
+    @property
+    def min_entrance_length(self) -> float:
+        if not self.config_file_already_read:
+            raise self.not_read_error
+        return self.__min_entrance_length
+
+    @property
+    def TIMESTEP_LENGTH(self) -> float:
+        if not self.config_file_already_read:
+            raise self.not_read_error
+        return self.__timestep_length
+
+    def read(self, config_filename: str = './config.ini') -> None:
+        if not self.config_file_already_read:
+
+            c = ConfigParser(defaults={
+                'steps_per_second': '60',
+                'speed_limit': '15',
+                'max_braking': '-2.6',  # -3.4
+                'max_vehicle_length': '5.5',  # TODO: what to do with this
+                'length_buffer_factor': '0.1'
+            })
+            c.read(config_filename)
+            SETTINGS = dict(c.defaults())
+            # for key, value in SETTINGS.items():
+            #     SETTINGS[key] = eval(value)
+            self.config_file_already_read = True
+
+            steps_per_second: int = int(SETTINGS['steps_per_second'])
+            if steps_per_second <= 0:
+                raise ValueError("steps_per_second must be greater than 0.")
+            self.__steps_per_second = steps_per_second
+
+            speed_limit = int(SETTINGS['speed_limit'])
+            if speed_limit <= 0:
+                raise ValueError("speed_limit must be greater than 0.")
+            self.__speed_limit = speed_limit
+
+            max_braking = float(SETTINGS['max_braking'])
+            if max_braking >= 0:
+                raise ValueError("max_braking must be less than 0.")
+            self.__max_braking = max_braking
+
+            length_buffer_factor = float(SETTINGS['length_buffer_factor'])
+            if length_buffer_factor < 0:
+                raise ValueError("length_buffer_factor must be at least 0.")
+            self.__length_buffer_factor = length_buffer_factor
+
+            self.__max_stopping_distance = speed_limit**2/(2*-max_braking)
+
+            max_vehicle_length = float(SETTINGS['max_vehicle_length'])
+            if max_vehicle_length <= 0:
+                raise ValueError("max_vehicle_length must be greater than 0.")
+            self.__max_vehicle_length = max_vehicle_length
+
+            self.__min_entrance_length = self.__max_stopping_distance + \
+                max_vehicle_length
+
+            self.__timestep_length = steps_per_second**(-1)
+
+        else:
+            raise RuntimeError('Config file already read.')
 
 
-def read(config_filename: str = './config.ini') -> None:
-    global config_file_already_read
-    if not config_file_already_read:
-        global SETTINGS
-        c = ConfigParser(defaults=SETTINGS)
-        c.read(config_filename)
-        SETTINGS = dict(c.defaults())
-        for key, value in SETTINGS.items():
-            SETTINGS[key] = eval(value)
-        config_file_already_read = True
-
-        # unpack required variables
-        global steps_per_second
-        global speed_limit
-        global max_braking
-        global length_buffer_factor
-        global max_stopping_distance
-        global max_vehicle_length
-        global min_entrance_length
-        global TIMESTEP_LENGTH
-        steps_per_second = SETTINGS['steps_per_second']
-        if steps_per_second <= 0:
-            raise ValueError("steps_per_second must be greater than 0.")
-        speed_limit = SETTINGS['speed_limit']
-        if speed_limit <= 0:
-            raise ValueError("speed_limit must be greater than 0.")
-        max_braking = SETTINGS['max_braking']
-        if max_braking >= 0:
-            raise ValueError("max_braking must be less than 0.")
-        length_buffer_factor = SETTINGS['length_buffer_factor']
-        if length_buffer_factor < 0:
-            raise ValueError("length_buffer_factor must be at least 0.")
-        max_stopping_distance = speed_limit**2/(2*-max_braking)
-        max_vehicle_length = SETTINGS['max_vehicle_length']
-        if max_vehicle_length <= 0:
-            raise ValueError("max_vehicle_length must be greater than 0.")
-        min_entrance_length = max_stopping_distance + max_vehicle_length
-        TIMESTEP_LENGTH = steps_per_second**(-1)
-    else:
-        raise RuntimeError('Config file already read.')
-
+SETTINGS: Settings = Settings()
 
 # shared vin counter
 # TODO: (parallel) Not thread safe. Fix for multiprocessing.

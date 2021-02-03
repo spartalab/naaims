@@ -43,7 +43,7 @@ class SignalsManager(IntersectionManager):
 
                 # Check if the downstream lane has enough room for this vehicle
                 vehicle: Vehicle = lane.vehicles[index]
-                if vehicle.length > self.downstream_road_lane_by_coord[
+                if vehicle.__length > self.downstream_road_lane_by_coord[
                     vehicle.next_movements(lane.end_coord)[0]
                 ].room_to_enter(tight=False):
                     break
