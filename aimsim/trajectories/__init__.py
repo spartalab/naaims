@@ -1,2 +1,2 @@
-from aimsim.trajectories.trajectory import *
-from aimsim.trajectories.bezier import *
+from aimsim.trajectories.trajectory import Trajectory
+from aimsim.trajectories.bezier import BezierTrajectory

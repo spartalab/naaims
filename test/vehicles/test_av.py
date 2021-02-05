@@ -9,13 +9,12 @@ import aimsim.shared as SHARED
 SHARED.SETTINGS.read()
 
 
-def test_automated():
-    a = AutomatedVehicle(0, 0)
+def test_automated(a: AutomatedVehicle = AutomatedVehicle(0, 0)):
 
     # position change
-    assert a.pos == Coord(0, 0)
-    a.pos = Coord(1, 1)
-    assert a.pos == Coord(1, 1)
+    assert a.pos == Coord(0., 0.)
+    a.pos = Coord(1., 1.)
+    assert a.pos == Coord(1., 1.)
 
     # velocity change
     assert a.velocity == 0
@@ -56,7 +55,7 @@ def test_automated():
     # a.next_movements()
 
 
-def test_cloning():
+def test_cloning(a: AutomatedVehicle = AutomatedVehicle(0, 0)):
     a = AutomatedVehicle(0, 0)
     b = a.clone_for_request()
     a.vin == b.vin

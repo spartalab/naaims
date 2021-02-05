@@ -71,6 +71,6 @@ class Pathfinder:
         """Return upstream Coord """
 
     # TODO: (low) Support link cost updates after each sim step.
-    def update(self, inputs) -> None:
+    def update(self, inputs: Optional[Dict[int, float]]) -> None:
         """Update link costs for better pathing."""
         pass

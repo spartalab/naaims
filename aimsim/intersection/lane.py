@@ -24,7 +24,7 @@ class IntersectionLane(Lane):
     def __init__(self,
                  start_lane: RoadLane,
                  end_lane: RoadLane,
-                 speed_limit: int = SHARED.speed_limit):
+                 speed_limit: int):
         """Create a new IntersectionLane.
 
         Instead of taking an explicit trajectory, the Intersection Lane infers

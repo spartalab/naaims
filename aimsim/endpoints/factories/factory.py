@@ -7,8 +7,7 @@ dimensions and acceleration, etc.).
 
 from __future__ import annotations
 from abc import abstractmethod
-from typing import (TYPE_CHECKING, TypeVar, Dict, Any, Type, List, Optional,
-                    Tuple)
+from typing import TYPE_CHECKING, Dict, Any, Type, List, Optional, Tuple
 from random import choices
 
 import aimsim.shared as SHARED
@@ -16,8 +15,6 @@ from aimsim.archetypes import Configurable
 
 if TYPE_CHECKING:
     from aimsim.vehicles import Vehicle
-
-F = TypeVar('F', bound='VehicleFactory')
 
 
 class VehicleFactory(Configurable):
@@ -30,36 +27,69 @@ class VehicleFactory(Configurable):
     def __init__(self,
                  vehicle_types: List[Type[Vehicle]],
                  destinations: int,
-                 type_probs: Optional[List[float]] = None,
-                 d_probs: Optional[List[float]] = None,
-                 pair_id: Optional[int] = None) -> None:
-        """Should create a new VehicleFactory."""
+                 vehicle_type_probabilities: Optional[List[float]] = None,
+                 destination_probabilities: Optional[List[float]] = None,
+                 source_node_id: Optional[int] = None) -> None:
+        """Should create a new VehicleFactory.
 
-        if type_probs is not None:
-            if ((len(vehicle_types) != len(type_probs))
-                    or (sum(type_probs) != 1.)):
+        Parameters
+            vehicle_types: List[Type[Vehicle]]
+                List of potential vehicle types to spawn.
+            destinations: int
+                The total number of possible destinations.
+            vehicle_type_probabilities: Optional[List[float]]
+                The probability of spawning each of the provided vehicle_types.
+                If not provided, assumes all types have an equal chance of
+                spawning.
+            destination_probabilities: Optional[List[float]]
+                The probability of spawning a vehicle directed to each
+                destination. If not provided, assumes all destinations have an
+                equal chance of being chosen. (If source_node_id is provided,
+                it's excluded.)
+            source_node_id: Optional[int]
+                Spawners and removers are often created in pairs (e.g., all
+                two-lane roads). If they are, this parameter can be used to
+                prevent vehicles from spawning with a destination the same as
+                this node that they're starting from.
+        """
+
+        assert len(vehicle_types) > 0
+
+        # TODO: (heterogeneous vehicles) Change vehicle_types to take the same
+        #       vehicle type but with multiple size and shape profiles.
+
+        # Validate or infer vehicle type spawn probabilities
+        if vehicle_type_probabilities is not None:
+            if ((len(vehicle_types) != len(vehicle_type_probabilities))
+                    or (sum(vehicle_type_probabilities) != 1.)):
                 raise ValueError('If not all vehicle types have equal '
                                  'likelihood, each type must have a '
                                  'probability and they must sum to 1.')
-            self.type_probs = type_probs
+            self.type_probs = vehicle_type_probabilities
         else:
             self.type_probs = [1/len(vehicle_types)]*len(vehicle_types)
         self.vehicle_types = vehicle_types
 
-        if d_probs is not None:
-            if (destinations != len(d_probs)) or (sum(d_probs) != 1.):
-                raise ValueError('If not all destinations have equal '
-                                 'likelihood, each destination must have a '
-                                 'probability and they must sum to 1.')
-            self.d_probs = d_probs
+        # Validate or infer destination spawn probabilities
+        if destination_probabilities is not None:
+            if (destinations != len(destination_probabilities)) or \
+                    (sum(destination_probabilities) != 1.):
+                raise ValueError('Each destination must have a probability and'
+                                 'they must sum to 1.')
+            if (source_node_id is not None) and \
+                    (destination_probabilities[source_node_id] > 0):
+                raise ValueError('Supplied destination probabilities have '
+                                 'nonzero chance of selecting the node this'
+                                 'trip originates from.')
+            self.destination_probabilities = destination_probabilities
         else:
-            if pair_id is not None:
-                # Spawners and removers are created in pairs (e.g., all
-                # two-lane roads). Prevent vehicles from trying to u-turn.
-                self.d_probs = [1/(destinations-1)]*destinations
-                self.d_probs[pair_id] = 0
+            # Exclude source node ID from possible destinations if provided
+            if source_node_id is not None:
+                self.destination_probabilities = [1/(destinations-1)
+                                                  ]*destinations
+                self.destination_probabilities[source_node_id] = 0
             else:
-                self.d_probs = [1/destinations]*destinations
+                self.destination_probabilities = [1/destinations]*destinations
         self.destinations = destinations
 
     @staticmethod
@@ -69,7 +99,7 @@ class VehicleFactory(Configurable):
 
     @classmethod
     @abstractmethod
-    def from_spec(cls: Type[F], spec: Dict[str, Any]) -> F:
+    def from_spec(cls, spec: Dict[str, Any]) -> VehicleFactory:
         raise NotImplementedError("Must be implemented in child classes.")
 
     @abstractmethod
@@ -88,4 +118,4 @@ class VehicleFactory(Configurable):
         """Randomly generate a valid vehicle type and destination."""
         return (choices(self.vehicle_types, weights=self.type_probs)[0],
                 choices(list(range(self.destinations)),
-                        weights=self.d_probs)[0])
+                        weights=self.destination_probabilities)[0])

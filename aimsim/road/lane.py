@@ -7,6 +7,7 @@ from aimsim.lane import Lane, LateralDeviation, VehicleProgress, ScheduledExit
 from aimsim.util import (Coord, VehicleSection, SpeedUpdate,
                          VehicleTransfer,
                          CollisionError, TooManyProgressionsError)
+from aimsim.trajectories import Trajectory
 
 
 class RoadLane(Lane):
@@ -19,12 +20,12 @@ class RoadLane(Lane):
     def __init__(self,
                  trajectory: Trajectory,
                  width: float,
+                 len_entrance_region: float,
+                 len_approach_region: float,
+                 speed_limit: int,
                  offset: Coord = Coord(0, 0),
-                 len_entrance_region: float = SHARED.min_entrance_length,
-                 len_approach_region: float = 100,
                  upstream_is_spawner: bool = False,
-                 downstream_is_remover: bool = False,
-                 speed_limit: int = SHARED.speed_limit) -> None:
+                 downstream_is_remover: bool = False) -> None:
         """Create a new road lane."""
 
         self.start_coord: Coord = Coord(trajectory.start_coord.x + offset.x,

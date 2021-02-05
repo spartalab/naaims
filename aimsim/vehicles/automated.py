@@ -16,6 +16,8 @@ class AutomatedVehicle(Vehicle):
                  max_braking: float = -3.4,
                  length: float = 4.5,
                  width: float = 3,
+                 throttle_score: float = 0,
+                 tracking_score: float = 0,
                  vot: float = 0
                  ) -> None:
         super().__init__(vin=vin,

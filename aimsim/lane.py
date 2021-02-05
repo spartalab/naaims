@@ -85,7 +85,7 @@ class Lane(ABC):
     def __init__(self,
                  trajectory: Trajectory,
                  width: float,
-                 speed_limit: float = SHARED.SETTINGS.speed_limit) -> None:
+                 speed_limit: float) -> None:
         """Should create a new lane.
 
         Parameters
@@ -93,7 +93,7 @@ class Lane(ABC):
                 The trajectory of the road that contains the lane.
             width: float
                 The width of the lane.
-            speed_limit: float = SHARED.SETTINGS.speed_limit
+            speed_limit: float
                 The speed limit for the lane.
         """
 

@@ -213,9 +213,9 @@ class Simulator:
                 f"Roads have at least one remover that the spec doesn't.")
 
         # 2. Generate a Pathfinder from the specs and share it across modules
-        SHARED.pathfinder = Pathfinder(self.roads.values(),
-                                       self.intersections.values(),
-                                       lane_destination_pairs)
+        SHARED.SETTINGS.pathfinder = Pathfinder(self.roads.values(),
+                                                self.intersections.values(),
+                                                lane_destination_pairs)
 
         # 3. Group them into common sets so it's neater to loop through
         self.facilities: List[Facility] = [*self.intersections.values(),
@@ -311,8 +311,8 @@ class Simulator:
                          for update in f_update.items())
         for vehicle in self.vehicles:
             update = new_speed[vehicle]
-            vehicle.velocity = update.v
-            vehicle.acceleration = update.a
+            vehicle.velocity = update.velocity
+            vehicle.acceleration = update.acceleration
 
         # 2. Have upstream objects (vehicle spawners, roads, and intersections)
         #    update vehicle absolute (Coord) and relative positions (in-lane
@@ -348,7 +348,7 @@ class Simulator:
 
         # 5. Update shared time step and (TODO: (low)) shortest path values
         SHARED.t += 1
-        SHARED.pathfinder.update(None)
+        SHARED.SETTINGS.pathfinder.update(None)
 
     def display(self) -> None:
         """Display the current position of all vehicles on the grid."""

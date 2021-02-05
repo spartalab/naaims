@@ -20,7 +20,6 @@ Roads are divided into up to 3 sections:
 
 
 from __future__ import annotations
-from abc import abstractmethod
 from typing import (TYPE_CHECKING, Type, Optional, Iterable, Dict, Any, Tuple,
                     Set, List)
 
@@ -50,6 +49,8 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
     def __init__(self,
                  trajectory: Trajectory,
+                 len_entrance_region: float,
+                 v_max: int,
                  manager_type: Type[LaneChangeManager],
                  manager_spec: Dict[str, Any],
                  upstream_is_spawner: bool,
@@ -57,9 +58,8 @@ class Road(Configurable, Facility, Upstream, Downstream):
                  num_lanes: int = 1,
                  lane_width: float = 4,  # meters
                  lane_offset_angle: Optional[float] = None,  # degrees
-                 len_entrance_region: float = SHARED.min_entrance_length,
-                 len_approach_region: float = 100,  # meters
-                 v_max: int = SHARED.speed_limit) -> None:
+                 len_approach_region: float = 100  # meters
+                 ) -> None:
         """Create a new road.
 
         Parameters:
@@ -68,6 +68,10 @@ class Road(Configurable, Facility, Upstream, Downstream):
                 roads are symmetrical left to right. Lanes share the same
                 trajectory as their parent road, plus a unique offset vector
                 for each lane found using num_lanes and lane_offset_angle.
+            len_entrance_region: float
+                How long the entrance region is in meters
+            v_max: int
+                Speed limit on this road in km/h
             manager_type: Type[LaneChangeManager]
                 What type of LaneChangeManager to use to handle lane changes
             manager_spec: Dict[str, Any]
@@ -82,12 +86,8 @@ class Road(Configurable, Facility, Upstream, Downstream):
                 The width of each lane (assumed equal for every lane) in meters
             lane_offset_angle: float
                 Angle by which to offset each lane in degrees
-            len_entrance_region: float
-                How long the entrance region is in meters
             len_approach_region: float
                 How long the approach region is in meters
-            v_max: int
-                Speed limit on this road in km/h
 
         TODO: Finalize len_entrance_region and len_approach_region usage as
               as well as their defaults.
@@ -143,7 +143,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
         # Init buffer for incoming vehicles
         Downstream.__init__(self)
 
-    @staticmethod
+    @ staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
         """Reads a spec string into a road spec dict."""
 
@@ -177,7 +177,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
         return spec
 
-    @classmethod
+    @ classmethod
     def from_spec(cls, spec: Dict[str, Any]) -> Road:
         """Create a new Road from the output of spec_from_str.
 

@@ -10,8 +10,9 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Iterable, Dict, Any, TypeVar, Type, Set
 
+from aimsim.archetypes import Configurable
+
 if TYPE_CHECKING:
-    from aimsim.archetypes import Configurable
     from aimsim.lane import LateralDeviation
     from aimsim.road import RoadLane
     from aimsim.vehicles import Vehicle

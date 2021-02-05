@@ -149,6 +149,38 @@ class Vehicle(ABC):
         self._heading = new_heading
 
     @property
+    def destination(self) -> int:
+        return self.__destination
+
+    @property
+    def max_acceleration(self) -> float:
+        return self.__max_acceleration
+
+    @property
+    def max_braking(self) -> float:
+        return self.__max_braking
+
+    @property
+    def length(self) -> float:
+        return self.__length
+
+    @property
+    def width(self) -> float:
+        return self.__width
+
+    @property
+    def throttle_score(self) -> float:
+        return self.__throttle_score
+
+    @property
+    def tracking_score(self) -> float:
+        return self.__tracking_score
+
+    @property
+    def vot(self) -> float:
+        return self.__vot
+
+    @property
     def permission_to_enter_intersection(self) -> bool:
         """Check whether this vehicle has permission to enter an intersection.
 

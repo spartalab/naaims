@@ -43,6 +43,7 @@ class Settings:
 
     def __init__(self) -> None:
         self.config_file_already_read: bool = False
+        self.__pathfinder_created: bool = False
         self.__pathfinder: Pathfinder
         self.__steps_per_second: int
         self.__speed_limit: int
@@ -55,9 +56,16 @@ class Settings:
 
     @property
     def pathfinder(self) -> Pathfinder:
-        if not self.config_file_already_read:
-            raise self.not_read_error
+        if not self.__pathfinder_created:
+            raise RuntimeError("Pathfinder not yet created.")
         return self.__pathfinder
+
+    @pathfinder.setter
+    def pathfinder(self, p: Pathfinder) -> None:
+        if self.__pathfinder_created:
+            raise RuntimeError("Pathfinder already created.")
+        self.__pathfinder = p
+        self.__pathfinder_created = True
 
     @property
     def steps_per_second(self) -> int:

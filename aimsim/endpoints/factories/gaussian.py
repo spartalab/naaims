@@ -19,9 +19,9 @@ class GaussianVehicleFactory(VehicleFactory):
     def __init__(self,
                  vehicle_types: List[Type[Vehicle]],
                  destinations: int,
-                 type_probs: Optional[List[float]] = None,
-                 d_probs: Optional[List[float]] = None,
-                 pair_id: Optional[int] = None,
+                 vehicle_type_probabilities: Optional[List[float]] = None,
+                 destination_probabilities: Optional[List[float]] = None,
+                 source_node_id: Optional[int] = None,
                  max_accel_mn: float = 3,  # maximum acceleration, in m/s^2
                  max_accel_sd: float = 0,
                  max_braking_mn: float = -3.4,  # or -4.5, braking in m/s^2
@@ -40,8 +40,9 @@ class GaussianVehicleFactory(VehicleFactory):
         super().__init__(
             vehicle_types=vehicle_types,
             destinations=destinations,
-            type_probs=type_probs,
-            d_probs=d_probs,
+            vehicle_type_probabilities=vehicle_type_probabilities,
+            destination_probabilities=destination_probabilities,
+            source_node_id=source_node_id
         )
 
         if max_accel_mn <= 0:
@@ -94,9 +95,9 @@ class GaussianVehicleFactory(VehicleFactory):
         return cls(
             vehicle_types=spec['vehicle_types'],
             destinations=spec['destinations'],
-            type_probs=spec['type_probs'],
-            d_probs=spec['d_probs'],
-            pair_id=spec['pair_id'],
+            vehicle_type_probabilities=spec['vehicle_type_probabilities'],
+            destination_probabilities=spec['destination_probabilities'],
+            source_node_id=spec['source_node_id'],
             max_accel_mn=spec['max_accel_mn'],
             max_accel_sd=spec['max_accel_sd'],
             max_braking_mn=spec['max_braking_mn'],
