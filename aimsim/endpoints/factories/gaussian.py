@@ -49,7 +49,7 @@ class GaussianVehicleFactory(VehicleFactory):
             raise ValueError("Max acceleration must be greater than zero.")
         self.max_accel_mn = max_accel_mn
 
-        if max_braking_mn >= SHARED.SETTINGS.max_braking:
+        if max_braking_mn > SHARED.SETTINGS.max_braking:
             raise ValueError(
                 f"Max braking must be at most {SHARED.SETTINGS.max_braking}.")
         self.max_braking_mn = max_braking_mn

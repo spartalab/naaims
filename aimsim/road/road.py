@@ -143,7 +143,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
         # Init buffer for incoming vehicles
         Downstream.__init__(self)
 
-    @ staticmethod
+    @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
         """Reads a spec string into a road spec dict."""
 
@@ -177,7 +177,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
         return spec
 
-    @ classmethod
+    @classmethod
     def from_spec(cls, spec: Dict[str, Any]) -> Road:
         """Create a new Road from the output of spec_from_str.
 

@@ -3,11 +3,8 @@ Contains miscellaneous utility classes that makes other stuff work.
 """
 
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from enum import Enum
-from typing import (TYPE_CHECKING, TypeVar, Type, NamedTuple, Optional, Any,
-                    Iterable)
+from typing import TYPE_CHECKING, NamedTuple, Optional
 
 if TYPE_CHECKING:
     from .vehicles import Vehicle

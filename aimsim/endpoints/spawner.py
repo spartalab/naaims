@@ -55,7 +55,8 @@ class VehicleSpawner(Configurable, Upstream):
 
         # Given vehicles per minute and a Poisson process, calculate the
         # probability of spawning a vehicle in each timestep.
-        self.p = (vpm/60) * SHARED.TIMESTEP_LENGTH  # veh/min * min/sec * s
+        # veh/min * min/sec * s
+        self.p = (vpm/60) * SHARED.SETTINGS.TIMESTEP_LENGTH
         # Specifically, this is the probability of spawning at least one
         # vehicle in each timestep, but we assume that the probability of
         # spawning more than one vehicle is so low and difficulty of spawning
@@ -129,7 +130,14 @@ class VehicleSpawner(Configurable, Upstream):
         if self.downstream is None:
             raise MissingConnectionError("No downstream object.")
         elif self.downstream is not Road:
-            raise MissingConnectionError("Downstream object is not RoadLane.")
+            raise MissingConnectionError("Downstream object is not a Road.")
+
+        # TODO: (multi-lane) This current style may block valid valid vehicles
+        #       from spawning if a turn lane is backed up. Consider an infinite
+        #       queue that we iterate through each iteration to check for
+        #       spawnable vehicles. This will require refactoring the factories
+        #       and pathfinder to check for valid pathing in addition to
+        #       changes to this module.
 
         spawn: Vehicle
         if self.queued_spawn is not None:
@@ -159,8 +167,9 @@ class VehicleSpawner(Configurable, Upstream):
                                         at_least_one=False)) > 0:
                 can_reach_destination = True
                 # Check if the lane it's trying to spawn into has enough space.
-                if lane.room_to_enter() > (spawn.__length
-                                           * 2*SHARED.length_buffer_factor):
+                if lane.room_to_enter() > (
+                        spawn.length * 2*SHARED.SETTINGS.length_buffer_factor
+                ):
                     # If so, place it in the downstream buffer and return it.
                     self.downstream.transfer_vehicle(VehicleTransfer(
                         vehicle=spawn,
