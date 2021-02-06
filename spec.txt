@@ -1,4 +1,0 @@
-Requirements:
-- spawn vehicles
-- manage reservation grid
-- multiple intersection shapes
