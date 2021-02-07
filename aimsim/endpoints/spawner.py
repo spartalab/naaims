@@ -5,19 +5,18 @@ it's connected to.
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Dict, Optional, List, Any, Type, Iterable
-from random import random, choices, sample
+from typing import TYPE_CHECKING, Dict, Optional, List, Any, Type, Tuple, Set
+from random import random, choices, shuffle
 
 import aimsim.shared as SHARED
 from aimsim.archetypes import Configurable, Upstream
-from aimsim.util import (VehicleTransfer, MissingConnectionError, Coord,
-                         VehicleSection)
+from aimsim.util import VehicleTransfer, MissingConnectionError, VehicleSection
 from aimsim.endpoints.factories import (VehicleFactory,
                                         GaussianVehicleFactory)
 
 if TYPE_CHECKING:
     from aimsim.vehicles import Vehicle
-    from aimsim.road import Road
+    from aimsim.road import Road, RoadLane
 
 
 class VehicleSpawner(Configurable, Upstream):
@@ -74,6 +73,7 @@ class VehicleSpawner(Configurable, Upstream):
 
         # Prepare a queued spawn to fill later.
         self.queued_spawn: Optional[Vehicle] = None
+        self.queue: List[Tuple[Vehicle, List[RoadLane]]] = []
 
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
@@ -132,69 +132,81 @@ class VehicleSpawner(Configurable, Upstream):
         elif self.downstream is not Road:
             raise MissingConnectionError("Downstream object is not a Road.")
 
-        # TODO: (multi-lane) This current style may block valid valid vehicles
-        #       from spawning if a turn lane is backed up. Consider an infinite
-        #       queue that we iterate through each iteration to check for
-        #       spawnable vehicles. This will require refactoring the factories
-        #       and pathfinder to check for valid pathing in addition to
-        #       changes to this module.
+        # Roll to spawn a new vehicle. If the roll is successful, pick a
+        # generator to use based on the distribution of generators and use it
+        # to spawn a vehicle.
+        spawn = choices(self.vehicle_factories, self.generator_ps
+                        )[0].create_vehicle() if (random() < self.p) else None
 
-        spawn: Vehicle
-        if self.queued_spawn is not None:
-            # There's a queued spawn that didn't make it last timestep.
-            # Take it out of the queue and try spawning it again.
-            spawn = self.queued_spawn
-            self.queued_spawn = None
-        else:
-            # Roll to spawn a new vehicle.
-            if random() < self.p:
-                # Pick a generator to use based on the distribution of
-                # generators and use it to spawn a vehicle.
-                spawn = choices(self.vehicle_factories,
-                                self.generator_ps)[0].create_vehicle()
-            else:
-                # No vehicle spawned. Return nothing.
-                return None
+        # Find every downstream lane that this vehicle can enter and still
+        # reach its destination. Add both to the queue.
+        if spawn is not None:
+            spawnable_lanes: List[RoadLane] = []
+            for lane in self.downstream.lanes:
+                if len(spawn.next_movements(lane.end_coord,
+                                            at_least_one=False)) > 0:
+                    spawnable_lanes.append(lane)
+            # If we find that no lanes work, ever, error.
+            if len(spawnable_lanes) == 0:
+                raise RuntimeError("Spawned vehicle has no eligible lanes.")
+            self.queue.append((spawn, spawnable_lanes))
 
-        # Determine which lane to spawn the vehicle in by shuffling through the
-        # lanes in the downstream road until we find the first lane that works
-        # for the spawned vehicle's next movement. If we find that no lanes
-        # work, ever, error.
-        can_reach_destination: bool = False
-        for lane in sample(self.downstream.lanes,
-                           k=len(self.downstream.lanes)):
-            if len(spawn.next_movements(lane.end_coord,
-                                        at_least_one=False)) > 0:
-                can_reach_destination = True
-                # Check if the lane it's trying to spawn into has enough space.
-                if lane.room_to_enter() > (
-                        spawn.length * 2*SHARED.SETTINGS.length_buffer_factor
-                ):
-                    # If so, place it in the downstream buffer and return it.
+        # Loop through queue to check for vehicles we can dispatch.
+        blocked_lanes: Set[RoadLane] = set()
+        for vehicle_to_transfer, eligible_lanes in self.queue:
+
+            # Sort eligible lanes by those that have the fewest options, with
+            # ties broken randomly so we don't systematically prefer a lane for
+            # spawning, e.g., prefer through only lanes for vehicles that just
+            # want to go forward, and leave multiuse lanes for turning vehicles
+            # unless the through lanes are full.
+            # TODO: edit eligible_lanes to prefer as above
+            #       but is leaving the right lane empty always realistic?
+            #       perhaps it should be some sort of probability distribution
+            #       based on the relative number of movements
+            shuffle(eligible_lanes)
+
+            # Check if any of the eligible lanes have room for this vehicle.
+            # If one of them does, transfer this vehicle onto that lane and
+            # block it from accepting new transfers this timestep. If none of
+            # them do, block all eligible lanes from accepting vehicles later
+            # in the queue from spawning in those lanes so this queued vehicle
+            # can enter one of them later.
+            vehicle_can_transfer: bool = False
+            for lane in eligible_lanes:
+                if (lane not in blocked_lanes) and (lane.room_to_enter() > (
+                    vehicle_to_transfer.length * 2 *
+                    SHARED.SETTINGS.length_buffer_factor
+                )):
+                    vehicle_can_transfer = True
+
                     self.downstream.transfer_vehicle(VehicleTransfer(
-                        vehicle=spawn,
+                        vehicle=vehicle_to_transfer,
                         section=VehicleSection.FRONT,
                         d_left=None,
                         pos=lane.end_coord
                     ))
                     self.downstream.transfer_vehicle(VehicleTransfer(
-                        vehicle=spawn,
+                        vehicle=vehicle_to_transfer,
                         section=VehicleSection.CENTER,
                         d_left=None,
                         pos=lane.end_coord
                     ))
                     self.downstream.transfer_vehicle(VehicleTransfer(
-                        vehicle=spawn,
+                        vehicle=vehicle_to_transfer,
                         section=VehicleSection.REAR,
                         d_left=None,
                         pos=lane.end_coord
                     ))
-                    return spawn
-        if can_reach_destination:
-            # At least one of the lanes could spawn this vehicle, but none of
-            # them had enough room for it. Queue it for the next timestep.
-            self.queued_spawn = spawn
-            return None
-        else:
-            # None of the lanes work for the vehicle's desired movement.
-            raise RuntimeError("Spawned vehicle has no eligible lanes.")
+
+                    blocked_lanes.add(lane)
+
+            if not vehicle_can_transfer:
+                blocked_lanes.update(eligible_lanes)
+
+            # Quit if all lanes are blocked
+            if len(blocked_lanes) == len(self.downstream.lanes):
+                break
+
+        # Pass newly spawned vehicle back to the Simulator if there is one
+        return spawn
