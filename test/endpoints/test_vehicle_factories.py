@@ -2,13 +2,14 @@ from __future__ import annotations
 from typing import Type
 
 from pytest import raises
+from pytest_mock import MockerFixture
 
-from aimsim.vehicles.automated import AutomatedVehicle
+from aimsim.vehicles import AutomatedVehicle
 from aimsim.endpoints.factories import VehicleFactory, GaussianVehicleFactory
 import aimsim.shared as SHARED
 
 
-def test_gvf_creation():
+def test_gvf_creation(mocker: MockerFixture):
     if not SHARED.SETTINGS.config_file_already_read:
         SHARED.SETTINGS.read()
 
@@ -32,7 +33,8 @@ def test_gvf_creation():
     assert gvf_varied.create_vehicle().max_acceleration != 3
 
 
-def test_vehicle_types(f: Type[VehicleFactory] = GaussianVehicleFactory):
+def test_vehicle_types(mocker: MockerFixture,
+                       f: Type[VehicleFactory] = GaussianVehicleFactory):
     if not SHARED.SETTINGS.config_file_already_read:
         SHARED.SETTINGS.read()
 
@@ -58,6 +60,7 @@ def test_vehicle_types(f: Type[VehicleFactory] = GaussianVehicleFactory):
 
 
 def test_mismatched_vehicle_types_and_probs(
+    mocker: MockerFixture,
         f: Type[VehicleFactory] = GaussianVehicleFactory):
     if not SHARED.SETTINGS.config_file_already_read:
         SHARED.SETTINGS.read()
@@ -72,6 +75,7 @@ def test_mismatched_vehicle_types_and_probs(
 
 
 def test_destination_matching(
+    mocker: MockerFixture,
         f: Type[VehicleFactory] = GaussianVehicleFactory):
     if not SHARED.SETTINGS.config_file_already_read:
         SHARED.SETTINGS.read()

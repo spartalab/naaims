@@ -18,6 +18,7 @@ class VehicleRemover(Configurable, Downstream):
     def __init__(self, upstream: Road) -> None:
         """Create a new vehicle remover."""
         self.upstream = upstream
+        super().__init__()
 
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
