@@ -1,13 +1,14 @@
 from __future__ import annotations
-from typing import (TYPE_CHECKING, Tuple, Iterable, Optional, List, Dict, Set,
-                    NamedTuple)
+from typing import TYPE_CHECKING, Tuple, Optional, List, Dict, Set
 
-import aimsim.shared as SHARED
 from aimsim.lane import Lane, LateralDeviation, VehicleProgress, ScheduledExit
-from aimsim.util import (Coord, VehicleSection, SpeedUpdate,
-                         VehicleTransfer,
+from aimsim.util import (Coord, VehicleSection, SpeedUpdate, VehicleTransfer,
                          CollisionError, TooManyProgressionsError)
-from aimsim.trajectories import Trajectory
+
+if TYPE_CHECKING:
+    from aimsim.trajectories import Trajectory
+    from aimsim.intersection import Intersection
+    from aimsim.vehicles import Vehicle
 
 
 class RoadLane(Lane):
@@ -20,47 +21,33 @@ class RoadLane(Lane):
     def __init__(self,
                  trajectory: Trajectory,
                  width: float,
+                 speed_limit: int,
                  len_entrance_region: float,
                  len_approach_region: float,
-                 speed_limit: int,
                  offset: Coord = Coord(0, 0),
                  upstream_is_spawner: bool = False,
                  downstream_is_remover: bool = False) -> None:
         """Create a new road lane."""
 
-        self.start_coord: Coord = Coord(trajectory.start_coord.x + offset.x,
-                                        trajectory.start_coord.y + offset.y)
-        self.end_coord: Coord = Coord(trajectory.end_coord.x + offset.x,
-                                      trajectory.end_coord.y + offset.y)
-        self.hash = hash(self.start_coord + self.end_coord)
-        # TODO: Copy the provided trajectory, changing the start and end coords
-        #       to match the provied offsets.
-        raise NotImplementedError("TODO")
-
-        super().__init__(trajectory=trajectory,
-                         speed_limit=speed_limit)
+        super().__init__(trajectory=trajectory.clone_with_offset(offset),
+                         width=width, speed_limit=speed_limit)
         self.upstream_is_spawner: bool = upstream_is_spawner
         self.downstream_is_remover: bool = downstream_is_remover
         self.downstream_intersection: Optional[Intersection] = None
 
-        # TODO: use len_entrance_region and len_approach_region to calculate
-        #       the proportional cutoffs for the three regions, for use in the
-        #       the speed update and step functions
         # Note that we start at the front of the lane and work back, so
         # proportions decrease as we go on.
+        self.entrance_end: float = len_entrance_region/self.trajectory.length
+        self.lcregion_end: float = (1-len_approach_region+len_entrance_region
+                                    ) / self.trajectory.length
         # self.approach_end: float = 1
-        self.lcregion_end: float = 0.6
-        self.entrance_end: float = 0.3
 
-        # Cache the exit time and speed of the exit of the last vehicle with
-        # permission to enter the intersection. This will be used for
-        # estimating when the next vehicle looking for permission to enter the
-        # intersection will reach the intersection calculations.
+        # Prepare to cache the exit time and speed of the exit of the last
+        # vehicle with permission to enter the intersection.
+        #
+        # This will be used for estimating when the next vehicle looking for
+        # permission to enter the intersection will reach it.
         self.latest_scheduled_exit: Optional[ScheduledExit] = None
-
-        raise NotImplementedError("TODO")
-
-        super().__init__(trajectory, width, speed_limit=speed_limit)
 
     def connect_downstream_intersection(self, downstream: Intersection
                                         ) -> None:
@@ -161,7 +148,7 @@ class RoadLane(Lane):
             return None
         else:
             return self.downstream_intersection.\
-                stopping_distance_to_last_vehicle(self.end_coord)
+                stopping_distance_to_last_vehicle(self.trajectory.end_coord)
 
     def has_vehicle_exited(self, progress: VehicleProgress) -> bool:
         """Check if a vehicle has exited from road the lane.
@@ -286,7 +273,8 @@ class RoadLane(Lane):
             if ((first_index is None) and
                     (not vehicle.permission_to_enter_intersection)):
                 # We found the first vehicle without permission.
-                its_target = vehicle.next_movements(self.end_coord)[0]
+                its_target = vehicle.next_movements(
+                    self.trajectory.end_coord)[0]
                 if (targets is not None) and (its_target not in targets):
                     # The first vehicle's movement doesn't match any of the
                     # movements we're targetting, so return None.
@@ -302,7 +290,8 @@ class RoadLane(Lane):
                     break
             elif targets is not None:
                 # Check if this vehicle has the same target as the first one.
-                if vehicle.next_movements(self.end_coord)[0] in targets:
+                if vehicle.next_movements(
+                        self.trajectory.end_coord)[0] in targets:
                     # It does, so the series is longer.
                     series_length += 1
                 else:
@@ -333,7 +322,7 @@ class RoadLane(Lane):
         """
 
         vehicle = self.vehicles[vehicle_index]
-        p = self.vehicle_progress[vehicle].rear
+        progress = self.vehicle_progress[vehicle].rear
 
         # Determine what exit parameters we're targetting.
         if (last_rear_exit is None) and (self.latest_scheduled_exit is None):

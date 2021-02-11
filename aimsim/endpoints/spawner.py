@@ -13,10 +13,11 @@ from aimsim.archetypes import Configurable, Upstream
 from aimsim.util import VehicleTransfer, MissingConnectionError, VehicleSection
 from aimsim.endpoints.factories import (VehicleFactory,
                                         GaussianVehicleFactory)
+from aimsim.road import Road
 
 if TYPE_CHECKING:
     from aimsim.vehicles import Vehicle
-    from aimsim.road import Road, RoadLane
+    from aimsim.road import RoadLane
 
 
 class VehicleSpawner(Configurable, Upstream):
@@ -24,9 +25,9 @@ class VehicleSpawner(Configurable, Upstream):
     def __init__(self,
                  downstream: Road,
                  vpm: float,  # vehicles per minute
-                 generator_ps: List[float],
                  generator_type: List[Type[VehicleFactory]],
-                 generator_specs: List[Dict[str, Any]]
+                 generator_specs: List[Dict[str, Any]],
+                 generator_probabilities: List[float]
                  ) -> None:
         """Create a new vehicle spawner.
 
@@ -36,18 +37,19 @@ class VehicleSpawner(Configurable, Upstream):
             vpm: float
                 Target number of vehicles to spawn per minute. Used in a
                 Poisson distribution.
-            generator_ps: List[float]
-                The probability of using a specific VehicleFactory.
             generator_type: List[Type[VehicleFactory]]
                 The types of generators to init.
             generator_specs: List[Dict[str, Any]]
                 The specs of the generators to init.
+            generator_probabilities: List[float]
+                The probability of using a specific VehicleFactory.
         """
 
-        if len(generator_type) != len(generator_specs) != len(generator_ps):
-            raise ValueError("The number of generator types and specs must "
-                             "match.")
-        if sum(generator_ps) != 1:
+        if len(generator_type) != len(generator_specs) != \
+                len(generator_probabilities):
+            raise ValueError("The number of generator types, specs, and "
+                             "probabilities must match.")
+        if sum(generator_probabilities) != 1:
             raise ValueError("The generator probabilities must sum to 1.")
 
         self.downstream = downstream
@@ -55,7 +57,7 @@ class VehicleSpawner(Configurable, Upstream):
         # Given vehicles per minute and a Poisson process, calculate the
         # probability of spawning a vehicle in each timestep.
         # veh/min * min/sec * s
-        self.p = (vpm/60) * SHARED.SETTINGS.TIMESTEP_LENGTH
+        self.spawn_probability = (vpm/60) * SHARED.SETTINGS.TIMESTEP_LENGTH
         # Specifically, this is the probability of spawning at least one
         # vehicle in each timestep, but we assume that the probability of
         # spawning more than one vehicle is so low and difficulty of spawning
@@ -64,7 +66,7 @@ class VehicleSpawner(Configurable, Upstream):
 
         # Record generator use probabilities and create the vehicle generators
         # from the given specifications.
-        self.generator_ps: List[float] = generator_ps
+        self.generator_probabilities: List[float] = generator_probabilities
         self.vehicle_factories: List[VehicleFactory] = []
         for i in range(len(generator_type)):
             self.vehicle_factories.append(
@@ -119,7 +121,7 @@ class VehicleSpawner(Configurable, Upstream):
         return cls(
             downstream=spec['downstream'],
             vpm=spec['vpm'],
-            generator_ps=spec['generator_ps'],
+            generator_probabilities=spec['generator_ps'],
             generator_type=spec['generator_types'],
             generator_specs=spec['generator_specs']
         )
@@ -129,21 +131,22 @@ class VehicleSpawner(Configurable, Upstream):
 
         if self.downstream is None:
             raise MissingConnectionError("No downstream object.")
-        elif self.downstream is not Road:
+        elif type(self.downstream) is not Road:
             raise MissingConnectionError("Downstream object is not a Road.")
 
         # Roll to spawn a new vehicle. If the roll is successful, pick a
         # generator to use based on the distribution of generators and use it
         # to spawn a vehicle.
-        spawn = choices(self.vehicle_factories, self.generator_ps
-                        )[0].create_vehicle() if (random() < self.p) else None
+        spawn = choices(self.vehicle_factories, self.generator_probabilities
+                        )[0].create_vehicle() if (
+                            random() < self.spawn_probability) else None
 
         # Find every downstream lane that this vehicle can enter and still
         # reach its destination. Add both to the queue.
         if spawn is not None:
             spawnable_lanes: List[RoadLane] = []
             for lane in self.downstream.lanes:
-                if len(spawn.next_movements(lane.end_coord,
+                if len(spawn.next_movements(lane.trajectory.end_coord,
                                             at_least_one=False)) > 0:
                     spawnable_lanes.append(lane)
             # If we find that no lanes work, ever, error.
@@ -183,20 +186,20 @@ class VehicleSpawner(Configurable, Upstream):
                     self.downstream.transfer_vehicle(VehicleTransfer(
                         vehicle=vehicle_to_transfer,
                         section=VehicleSection.FRONT,
-                        d_left=None,
-                        pos=lane.end_coord
+                        distance_left=None,
+                        pos=lane.trajectory.end_coord
                     ))
                     self.downstream.transfer_vehicle(VehicleTransfer(
                         vehicle=vehicle_to_transfer,
                         section=VehicleSection.CENTER,
-                        d_left=None,
-                        pos=lane.end_coord
+                        distance_left=None,
+                        pos=lane.trajectory.end_coord
                     ))
                     self.downstream.transfer_vehicle(VehicleTransfer(
                         vehicle=vehicle_to_transfer,
                         section=VehicleSection.REAR,
-                        d_left=None,
-                        pos=lane.end_coord
+                        distance_left=None,
+                        pos=lane.trajectory.end_coord
                     ))
 
                     blocked_lanes.add(lane)

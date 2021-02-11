@@ -72,6 +72,20 @@ class Trajectory(Configurable):
             traversibility_factors=spec['traversibility_factors']
         )
 
+    def clone_with_offset(self, offset: Coord) -> Trajectory:
+        """Create a clone of this lane offset by some (x,y) distance."""
+        return type(self)(
+            start_coord=Coord(self.start_coord.x + offset.x,
+                              self.start_coord.y + offset.y),
+            end_coord=Coord(self.end_coord.x + offset.x,
+                            self.end_coord.y + offset.y),
+            reference_coords=[
+                Coord(c.x + offset.x, c.y + offset.y)
+                for c in self.reference_coords
+            ],
+            traversibility_factors=self.traversibility_factors
+        )
+
     @abstractmethod
     def get_position(self, proportion: float) -> Coord:
         """Should return the Coord associated with a proportional progress."""
@@ -87,7 +101,6 @@ class Trajectory(Configurable):
             a = self.get_position(proportion)
             b = self.get_position(proportion + eps)
 
-        # TODO: check this math
         dx = b.x - a.x
         dy = b.y - a.y
         return acos(dx / sqrt(dx**2 + dy**2))

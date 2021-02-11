@@ -19,15 +19,12 @@ from typing import (TYPE_CHECKING, Tuple, Iterable, Optional, List, Dict, Set,
 from warnings import warn
 
 import aimsim.shared as SHARED
-from aimsim.util import (Coord, VehicleSection, SpeedUpdate,
-                         VehicleTransfer,
+from aimsim.util import (Coord, VehicleSection, SpeedUpdate, VehicleTransfer,
                          CollisionError, TooManyProgressionsError)
 
 if TYPE_CHECKING:
-    from aimsim.archetypes import Upstream
     from aimsim.vehicles import Vehicle
     from aimsim.trajectories import Trajectory
-    from aimsim.intersection import Intersection
 
 
 class LateralDeviation:
@@ -105,9 +102,6 @@ class Lane(ABC):
         # Initialize data structures
         self.vehicles: List[Vehicle] = []
         self.vehicle_progress: Dict[Vehicle, VehicleProgress] = {}
-        self.hash: int
-
-        raise NotImplementedError("TODO")
 
     # Support functions for speed updates
 
@@ -146,8 +140,9 @@ class Lane(ABC):
         new_speed: Dict[Vehicle, SpeedUpdate] = {}
 
         # Track preceding vehicle in order to avoid colliding with it.
+        # (accel_update will check if there's a vehicle in the downstream.)
         preceding: Optional[Vehicle] = None
-        # self.vehicles should be in order of decreasing progress
+        # self.vehicles is in order of decreasing progress
         for vehicle in self.vehicles:
             vehicle_in_jurisdiction, p, section = self.controls_this_speed(
                 vehicle)
@@ -155,18 +150,8 @@ class Lane(ABC):
                 # A vehicle being in to_slow overrides any acceleration logic
                 # defined in accel_update, instead telling the vehicle to start
                 # braking no matter what.
-
-                # TODO: (runtime) Due to the seams between intersections and
-                #       roads, the acceleration behavior during the window
-                #       where a leading vehicle transfers but a following
-                #       vehicle hasn't may be an issue. The following vehicle,
-                #       not seeing any vehicles ahead, will floor it. If this
-                #       following vehicle's acceleration is much higher than
-                #       both its braking ability and the preceding vehicle's
-                #       acceleration, this could be an issue.
-                a_new = (vehicle.__max_braking if (vehicle in to_slow)
-                         else self.accel_update(vehicle, section, p, preceding)
-                         )
+                a_new = (vehicle.max_braking if (vehicle in to_slow) else
+                         self.accel_update(vehicle, section, p, preceding))
                 new_speed[vehicle] = self.speed_update(vehicle, p, a_new)
 
             preceding = vehicle
@@ -292,11 +277,11 @@ class Lane(ABC):
         """
         effective_speed_limit = self.effective_speed_limit(p, vehicle)
         if vehicle.velocity > effective_speed_limit:
-            return vehicle.__max_braking
+            return vehicle.max_braking
         elif vehicle.velocity == effective_speed_limit:
             return 0
         else:  # vehicle.v < effective_speed_limit
-            return vehicle.__max_acceleration
+            return vehicle.max_acceleration
 
     def accel_update_following(self,
                                vehicle: Vehicle,
@@ -318,8 +303,8 @@ class Lane(ABC):
         this vehicle.
         """
 
-        sd = ((1-p)*self.trajectory.length if stopping_distance is None
-              else stopping_distance)
+        stopping_distance = ((1-p)*self.trajectory.length if
+                             stopping_distance is None else stopping_distance)
 
         effective_speed_limit = self.effective_speed_limit(p, vehicle)
 
@@ -387,7 +372,7 @@ class Lane(ABC):
             new_progress_packet = self.update_vehicle_progress(
                 vehicle=vehicle,
                 old_progress=self.vehicle_progress[vehicle],
-                last_progress=last_progress
+                preceding_section_progress=last_progress
             )
             new_vehicle_progress = new_progress_packet[0]
             last_progress = new_progress_packet[1]
@@ -442,7 +427,7 @@ class Lane(ABC):
 
     def update_vehicle_progress(self, vehicle: Vehicle,
                                 old_progress: VehicleProgress,
-                                last_progress: float = 1.1
+                                preceding_section_progress: float = 1.1
                                 ) -> Tuple[VehicleProgress, float,
                                            List[VehicleTransfer]]:
         """Step a single vehicle forward and track its new VehicleProgress.
@@ -451,9 +436,11 @@ class Lane(ABC):
             vehicle: Vehicle
             old_progress: VehicleProgress
                 The vehicle's progress at the last timestep.
-            last_progress: int = 1.1
-                The progress of the preceding vehicle's rear.
-                (1.1 if no preceding.)
+            preceding_section_progress: int = 1.1
+                The progress of the preceding vehicle's rear section. This will
+                be updated to sections of the current vehicle as we resolve its
+                position, to use in updating the progress of its rear sections.
+                (Defaults to 1.1 if there is no preceding vehicle.)
 
         Returns a tuple of
             VehicleProgress
@@ -467,7 +454,11 @@ class Lane(ABC):
         exiting: List[VehicleTransfer] = []
 
         # Convert the VehicleProgress tuple into a List for indexability.
-        new_vehicle_progress: List[Optional[float]] = [None]*3
+        new_vehicle_progress: List[Optional[float]] = [None, None, None]
+
+        # Find the distance traveled in this timestep.
+        distance_traveled: float = vehicle.velocity * \
+            SHARED.SETTINGS.TIMESTEP_LENGTH
 
         # Iterate through the 3 sections of the vehicle.
         for i, progress in enumerate(old_progress):
@@ -477,7 +468,7 @@ class Lane(ABC):
                 # This section of the vehicle isn't in this lane. Check if this
                 # is a valid case or not. If it is, skip the progress update
                 # for this section. If not, error.
-                if last_progress > 1:
+                if preceding_section_progress > 1:
                     # We're on the downstream end of the lane.
                     if (VehicleSection(i) in {VehicleSection.FRONT,
                                               VehicleSection.CENTER}):
@@ -499,12 +490,12 @@ class Lane(ABC):
                                        "Vehicle should not have started "
                                        "exiting already.")
                 elif VehicleSection(i) is VehicleSection.CENTER:
-                    if last_progress >= 0:
+                    if preceding_section_progress >= 0:
                         # The front of this vehicle is in the lane but this
                         # center section and the rear section are still in the
                         # upstream intersection. This is ok.
                         new_vehicle_progress[i] = progress
-                        last_progress = -1
+                        preceding_section_progress = -1
                         continue
                     else:
                         raise RuntimeError("The center of this vehicle isn't "
@@ -512,13 +503,13 @@ class Lane(ABC):
                                            "isn't the first vehicle in the "
                                            "lane.")
                 else:  # this is the rear of the vehicle
-                    if last_progress >= 0:
+                    if preceding_section_progress >= 0:
                         # The front and center of this vehicle are in this lane
                         # but this rear is still in the upstream intersection.
                         # This is ok, but if anything comes after this vehicle
                         # setting last_progress like this will make sure to
                         # flag it as an issue.
-                        last_progress = -1
+                        preceding_section_progress = -1
                     # Otherwise, the center of this vehicle is also in the
                     # upstream intersection in addition to this rear. This is
                     # ok. (If this is not the case, e.g., if there's a vehicle
@@ -526,37 +517,34 @@ class Lane(ABC):
                     # caught on the next step.)
                     new_vehicle_progress[i] = progress
                     continue
-            elif progress > last_progress:
+            elif progress > preceding_section_progress:
                 warn("Vehicles overlap in-lane. This may be a collision.")
 
             # Update relative position.
-            # TODO: Translate the real distance units vehicle.v*SHARED.timestep
-            #       into proportional progress using trajectory. If it exceeds
-            #       the length left in the lane, find the distance left to move
-            #       d_left.
-            new_progress: Optional[float]
-            d_left: float = 0
-            raise NotImplementedError("TODO")
-            new_vehicle_progress[i] = new_progress
-
-            if new_progress is None:
-                # Vehicle section has exited. Create a VehicleTransfer object
-                # from it and add it to the return list.
+            new_progress: float = progress + \
+                distance_traveled/self.trajectory.length
+            if new_progress > 1:
+                # Vehicle section has exited. Find the distance it moves past
+                # the end of the lane, create a VehicleTransfer object for it,
+                # add it to the return list, and update its section record.
                 exiting.append(VehicleTransfer(
                     vehicle=vehicle,
                     section=VehicleSection(i),
-                    d_left=d_left,
-                    pos=self.end_coord
+                    distance_left=(new_progress - 1)*self.trajectory.length,
+                    pos=self.trajectory.end_coord
                 ))
+                new_vehicle_progress[i] = None
+            else:
+                new_vehicle_progress[i] = new_progress
 
             # Remember progress of this section for the next section's checks.
-            last_progress = progress
+            preceding_section_progress = new_progress
 
         return VehicleProgress(
             front=new_vehicle_progress[0],
             center=new_vehicle_progress[1],
             rear=new_vehicle_progress[2]
-        ), last_progress, exiting
+        ), preceding_section_progress, exiting
 
     def lateral_deviation_for(self, vehicle: Vehicle,
                               new_progress: float) -> float:
@@ -630,18 +618,18 @@ class Lane(ABC):
 
         # Find how far along the lane this vehicle section will be in meters.
         d: float
-        if transfer.d_left is None:
+        if transfer.distance_left is None:
             # This is a freshly created vehicle section entering from a spawner
             # so we need to initialize its position.
             if transfer.section is VehicleSection.FRONT:
                 # Place the front vehicle section ahead at its full length plus
                 # the length of its front and rear buffers.
-                d = vehicle.__length * (
+                d = vehicle.length * (
                     1 + 2*SHARED.SETTINGS.length_buffer_factor)
             elif transfer.section is VehicleSection.CENTER:
                 # Place the center vehicle section forward at half its length
                 # plus its rear buffer.
-                d = vehicle.__length * (
+                d = vehicle.length * (
                     0.5 + SHARED.SETTINGS.length_buffer_factor)
             else:  # transfer.section is VehicleSection.REAR
                 # Place the rear of the vehicle at the very end of the lane.
@@ -650,7 +638,7 @@ class Lane(ABC):
             # This is a transfer between road and intersection or vice versa.
             # Calculate the distance the vehicle section has left to travel
             # in this step.
-            d = transfer.d_left
+            d = transfer.distance_left
 
         # Convert the real units distance d into proportional progress along
         # the lane trajectory and update the progress values.
@@ -670,4 +658,4 @@ class Lane(ABC):
     # Misc functions
 
     def __hash__(self) -> int:
-        return self.hash
+        return self.trajectory.__hash__()

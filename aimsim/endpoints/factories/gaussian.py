@@ -17,9 +17,8 @@ class GaussianVehicleFactory(VehicleFactory):
     """
 
     def __init__(self,
-                 vehicle_types: List[Type[Vehicle]],
-                 destinations: int,
-                 vehicle_type_probabilities: Optional[List[float]] = None,
+                 vehicle_type: Type[Vehicle],
+                 num_destinations: int,
                  destination_probabilities: Optional[List[float]] = None,
                  source_node_id: Optional[int] = None,
                  max_accel_mn: float = 3,  # maximum acceleration, in m/s^2
@@ -38,9 +37,8 @@ class GaussianVehicleFactory(VehicleFactory):
                  vot_sd: float = 0) -> None:
         """Create a new normally distributed VehicleFactory."""
         super().__init__(
-            vehicle_types=vehicle_types,
-            destinations=destinations,
-            vehicle_type_probabilities=vehicle_type_probabilities,
+            vehicle_type=vehicle_type,
+            num_destinations=num_destinations,
             destination_probabilities=destination_probabilities,
             source_node_id=source_node_id
         )
@@ -93,9 +91,8 @@ class GaussianVehicleFactory(VehicleFactory):
     def from_spec(cls, spec: Dict[str, Any]) -> GaussianVehicleFactory:
         """Create a new VehicleFactory using the given spec."""
         return cls(
-            vehicle_types=spec['vehicle_types'],
-            destinations=spec['destinations'],
-            vehicle_type_probabilities=spec['vehicle_type_probabilities'],
+            vehicle_type=spec['vehicle_type'],
+            num_destinations=spec['num_destinations'],
             destination_probabilities=spec['destination_probabilities'],
             source_node_id=spec['source_node_id'],
             max_accel_mn=spec['max_accel_mn'],
@@ -117,7 +114,7 @@ class GaussianVehicleFactory(VehicleFactory):
     def create_vehicle(self) -> Vehicle:
         """Create a new vehicle with normally distributed parameters."""
 
-        vtype, dest = self._generate_type_and_dest()
+        dest = self._pick_vehicle_type()
         max_accel = gauss(self.max_accel_mn, self.max_accel_sd)
         max_braking = gauss(self.max_braking_mn, self.max_braking_sd)
         length = gauss(self.length_mn, self.length_sd)
@@ -125,7 +122,7 @@ class GaussianVehicleFactory(VehicleFactory):
         throttle = gauss(self.throttle_score_mn, self.throttle_score_sd)
         tracking = gauss(self.tracking_score_mn, self.tracking_score_sd)
         vot = gauss(self.vot_mn, self.vot_sd)
-        return vtype(
+        return self.vehicle_type(
             vin=self._assign_new_vin(),
             destination=dest,
             max_accel=max_accel if max_accel > 0 else 1,

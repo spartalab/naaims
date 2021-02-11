@@ -4,16 +4,17 @@ from pytest import raises
 from pytest_mock import MockerFixture
 
 from aimsim.vehicles import AutomatedVehicle
-from aimsim.endpoints.remover import VehicleRemover
+from aimsim.endpoints import VehicleRemover
 from aimsim.util import VehicleTransfer, VehicleSection, Coord
-import aimsim.shared as SHARED
+from aimsim.road import Road
 
 
-def test_remover(mocker: MockerFixture):
+def test_remover(mocker: MockerFixture, read_shared: None):
 
-    SHARED.SETTINGS.read()
-    mock_road = mocker.patch('aimsim.road.Road')
-    remover = VehicleRemover(mock_road)
+    # Create a road object to feed to remover, skipping all the checks Road's
+    # init does because those aren't in the scope of this unit test.
+    mocker.patch.object(Road, '__init__', return_value=None)
+    remover = VehicleRemover(Road())
 
     transferring_vehicle = AutomatedVehicle(0, 0)
     another_transferring_vehicle = AutomatedVehicle(1, 0)

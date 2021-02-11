@@ -31,3 +31,15 @@ def test_connection():
 
     assert isclose(inferred.control_coord.x, 0)
     assert isclose(inferred.control_coord.y, 1)
+
+
+def test_clone():
+    a = BezierTrajectory(Coord(0, 0), Coord(1, 0), [Coord(0.5, 0)])
+
+    b: BezierTrajectory = a.clone_with_offset(Coord(1, 1))
+
+    assert type(b) == BezierTrajectory
+    assert b.start_coord == Coord(1, 1)
+    assert b.reference_coords == [Coord(1.5, 1)]
+    assert b.end_coord == Coord(2, 1)
+    assert b.control_coord == Coord(1.5, 1)

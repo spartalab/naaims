@@ -1,6 +1,6 @@
 from __future__ import annotations
 from math import pi, sqrt, tan, ceil
-from typing import List, Any
+from typing import List
 
 # import bezier
 # import numpy as np
@@ -28,7 +28,7 @@ class BezierTrajectory(Trajectory):
         super().__init__(
             start_coord=start_coord,
             end_coord=end_coord,
-            reference_coords=[],
+            reference_coords=reference_coords,
             traversibility_factors=traversibility_factors
         )
         assert len(reference_coords) == 1

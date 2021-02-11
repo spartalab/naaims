@@ -1,16 +1,14 @@
 from __future__ import annotations
-from typing import (TYPE_CHECKING, Tuple, Iterable, Optional, List, Dict, Set,
-                    NamedTuple)
+from typing import TYPE_CHECKING, Tuple, Optional, Dict
 
 import aimsim.shared as SHARED
-from aimsim.lane import Lane, LateralDeviation, VehicleProgress, ScheduledExit
-from aimsim.util import (Coord, VehicleSection, SpeedUpdate,
-                         VehicleTransfer,
-                         CollisionError, TooManyProgressionsError)
+from aimsim.lane import Lane
+from aimsim.util import VehicleSection
+from aimsim.trajectories import BezierTrajectory
 
 if TYPE_CHECKING:
     from aimsim.road import RoadLane
-    from aimsim.trajectories import BezierTrajectory
+    from aimsim.vehicles import Vehicle
 
 
 class IntersectionLane(Lane):
@@ -36,21 +34,19 @@ class IntersectionLane(Lane):
         self.upstream = start_lane
         self.downstream = end_lane
 
-        # TODO: Create a BezierTrajectory using start_coord, end_coord, and the
-        #       intersection of a line drawn from start_coord at start_heading
-        #       with a line drawn from end_coord at end_heading. Consider
-        #       precalculating the challenge rating, or having bezier traj auto
-        #       calculate a challenge rating based on curvature.
-        trajectory: BezierTrajectory
+        trajectory = BezierTrajectory.as_intersection_connector(
+            start_coord=self.upstream.trajectory.end_coord,
+            start_heading=self.upstream.trajectory.get_heading(1),
+            end_coord=self.downstream.trajectory.start_coord,
+            end_heading=self.downstream.trajectory.get_heading(0)
+        )
         super().__init__(trajectory, min(start_lane.width, end_lane.width),
                          speed_limit)
-        self.hash = hash(
-            self.trajectory.start_coord + self.trajectory.end_coord)
 
         # Calculate the shortest amount of time (in timesteps) that it takes
         # for a vehicle to fully travel across this lane.
         self.min_traversal_time = (trajectory.length/speed_limit *
-                                   SHARED.steps_per_second)
+                                   SHARED.SETTINGS.steps_per_second)
 
         # Track vehicles' lateral deviation from centerline in meters
         self.lateral_deviation: Dict[Vehicle, float] = {}

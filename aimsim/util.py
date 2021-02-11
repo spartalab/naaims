@@ -53,7 +53,7 @@ class VehicleTransfer(NamedTuple):
     """
     vehicle: Vehicle
     section: VehicleSection
-    d_left: Optional[float]
+    distance_left: Optional[float]
     pos: Coord
 
 
@@ -68,10 +68,8 @@ class MissingConnectionError(Exception):
 
 
 class TooManyProgressionsError(Exception):
-    def __init__(self,
-                 msg='More than one vehicle transitioned between lanes in the '
-                     'same timestep. This is usually result of the '
-                     'ticks_per_second config being too low. Try increasing '
-                     'it and running again.',
-                 *args, **kwargs):
-        super().__init__(msg, *args, **kwargs)
+    def __init__(self, message: str =
+                 'More than one vehicle transitioned between lanes in the same'
+                 ' timestep. This is usually result of the ticks_per_second'
+                 ' config being too low. Try increasing it and rerunning.'):
+        super().__init__(message)
