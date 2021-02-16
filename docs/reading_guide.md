@@ -47,10 +47,7 @@ Inside `aimsim/`, modules are grouped into folders by the general class of objec
 
 Unit tests will go into `aimsim/tests`.
 
-Most module names should be self explanatory and will be discussed in detail later in this reading guide, except for these:
-    - `archtypes.py` contain interfaces that spawners, removers, intersections, and roads implement
-    - `shared.py` is a module that holds instanced data that's shared across all classes (e.g., configs)
-    - `util.py` contains miscellaneous utility functions
+Most module names should be self explanatory and will be discussed in detail later in this reading guide, except for these: - `archtypes.py` contain interfaces that spawners, removers, intersections, and roads implement - `shared.py` is a module that holds instanced data that's shared across all classes (e.g., configs) - `util.py` contains miscellaneous utility functions
 
 ## Initialization
 
@@ -80,7 +77,7 @@ Each run through the step cycle is a single timestep. I except there to be at le
 
 First, lanes contained in facilities, i.e., roads and intersections, calculate the new speed and acceleration of all vehicles in its jurisdiction and return them to the Simulator for updating. (Because a vehicle's speed update is determinant on the speed of the vehicle preceding them, the update can't happen in place.)
 
-The abstract method `Facility.update_speeds()` is implemented by Road and Intersection classes. Both call `Lane.update_speeds()` which uses logic to determine first their new acceleration and then their new speed. The aimsim vehicle model assumes that vehicles have complete control over their acceleration each timestep, and uses that acceleration to calculate its new speed.
+The abstract method `Facility.get_new_speeds()` is implemented by Road and Intersection classes. Both call `Lane.get_new_speeds()` which uses logic to determine first their new acceleration and then their new speed. The aimsim vehicle model assumes that vehicles have complete control over their acceleration each timestep, and uses that acceleration to calculate its new speed.
 
 ### Step vehicles
 

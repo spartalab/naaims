@@ -4,7 +4,7 @@ This module holds all vehicle types used in the AIM simulator.
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import TypeVar, List
+from typing import TypeVar, List, Optional
 from copy import copy
 from math import pi
 
@@ -206,9 +206,14 @@ class Vehicle(ABC):
     #       Allow the chaining action to temporarily override a vehicle's max
     #       acceleration with the slowest acceleration in the chain.
 
-    def stopping_distance(self) -> float:
-        """Return the vehicle's stopping distance in meters."""
-        return self.velocity**2/(-2*self.__max_braking)
+    def stopping_distance(self, speed: Optional[float] = None) -> float:
+        """Return the vehicle's stopping distance in meters.
+
+        Defaults to the vehicle's current speed if a new one isn't provided.
+        """
+        if speed is None:
+            speed = self.velocity
+        return speed**2/(-2*self.__max_braking)
 
     def next_movements(self, start_coord: Coord, at_least_one: bool = True
                        ) -> List[Coord]:

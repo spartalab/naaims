@@ -3,7 +3,7 @@ Archetypes are abstract classes (interfaces) that road objects implement in
 order to ensure consistent communication between each other.
 
 These archetypes enforce the main simulation loop:
-    1. update_speeds (Facilities)
+    1. get_new_speeds (Facilities)
     2. step (Upstreams)
     3. process_transfers (Downstreams)
     4. update_schedule (Facilities)
@@ -39,7 +39,7 @@ class Configurable(ABC):
 
 class Facility(ABC):
     @abstractmethod
-    def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
+    def get_new_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
         """
         For roads and intersections, goes through and calculates the speed and
         acceleration of its responsible vehicles. If a vehicle is in any part

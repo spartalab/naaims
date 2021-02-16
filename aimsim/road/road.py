@@ -220,7 +220,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
 
     # Begin simulation cycle methods
 
-    def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
+    def get_new_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
         """Return speed and acceleration update for all vehicles on this road.
 
         This road is responsible for updating the speed and acceleration of all
@@ -246,7 +246,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
         # is instructing to slow down to allow for another vehicle to merge in.
         for lane in self.lanes:
             new_speeds.append(
-                lane.update_speeds(
+                lane.get_new_speeds(
                     to_slow=self.manager.vehicles_to_slow(lane)
                 )
             )

@@ -306,7 +306,7 @@ class Simulator:
         #    calculated, update vehicle speed and acceleration serially.
         new_speeds = []
         for f in self.facilities:
-            new_speeds.append(f.update_speeds())
+            new_speeds.append(f.get_new_speeds())
         new_speed = dict(update for f_update in new_speeds
                          for update in f_update.items())
         for vehicle in self.vehicles:

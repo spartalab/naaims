@@ -4,11 +4,14 @@ from aimsim.trajectories.bezier import BezierTrajectory
 from aimsim.util import Coord
 
 
+straight_trajectory = BezierTrajectory(Coord(0, 0), Coord(1, 0),
+                                       [Coord(0.5, 0)])
+
+
 def test_length():
 
     # Straight line
-    assert BezierTrajectory(Coord(0, 0), Coord(1, 0), [Coord(0.5, 0)]
-                            ).length == 1
+    assert straight_trajectory.length == 1
 
     # Symmetrical right turn
     assert isclose(BezierTrajectory(Coord(0, 0), Coord(1, 1), [Coord(0, 1)]
@@ -16,12 +19,9 @@ def test_length():
 
 
 def test_position():
-
-    a = BezierTrajectory(Coord(0, 0), Coord(1, 0), [Coord(0.5, 0)])
-
-    assert a.get_position(0) == Coord(0, 0)
-    assert a.get_position(1) == Coord(1, 0)
-    assert a.get_position(.1) == Coord(.1, 0)
+    assert straight_trajectory.get_position(0) == Coord(0, 0)
+    assert straight_trajectory.get_position(1) == Coord(1, 0)
+    assert straight_trajectory.get_position(.1) == Coord(.1, 0)
 
 
 def test_connection():
@@ -31,12 +31,11 @@ def test_connection():
 
     assert isclose(inferred.control_coord.x, 0)
     assert isclose(inferred.control_coord.y, 1)
+    assert inferred.get_position(.5) == Coord(0.25, 0.75)
 
 
 def test_clone():
-    a = BezierTrajectory(Coord(0, 0), Coord(1, 0), [Coord(0.5, 0)])
-
-    b: BezierTrajectory = a.clone_with_offset(Coord(1, 1))
+    b = straight_trajectory.clone_with_offset(Coord(1, 1))
 
     assert type(b) == BezierTrajectory
     assert b.start_coord == Coord(1, 1)

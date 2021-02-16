@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Tuple, Optional, List, Dict, Set
 
-from aimsim.lane import Lane, LateralDeviation, VehicleProgress, ScheduledExit
+from aimsim.lane import Lane, VehicleProgress, ScheduledExit
 from aimsim.util import (Coord, VehicleSection, SpeedUpdate, VehicleTransfer,
                          CollisionError, TooManyProgressionsError)
 
@@ -37,9 +37,9 @@ class RoadLane(Lane):
 
         # Note that we start at the front of the lane and work back, so
         # proportions decrease as we go on.
+        assert len_entrance_region + len_approach_region < trajectory.length
         self.entrance_end: float = len_entrance_region/self.trajectory.length
-        self.lcregion_end: float = (1-len_approach_region+len_entrance_region
-                                    ) / self.trajectory.length
+        self.lcregion_end: float = 1-len_approach_region/self.trajectory.length
         # self.approach_end: float = 1
 
         # Prepare to cache the exit time and speed of the exit of the last
@@ -59,8 +59,8 @@ class RoadLane(Lane):
 
     # Support functions for speed updates
 
-    def update_speeds(self, to_slow: Set[Vehicle] = set()
-                      ) -> Dict[Vehicle, SpeedUpdate]:
+    def get_new_speeds(self, to_slow: Set[Vehicle] = set()
+                       ) -> Dict[Vehicle, SpeedUpdate]:
         """Return all vehicles on this lane and their speed updates.
 
         On top of the processes in the parent function, this does an additional
@@ -70,7 +70,7 @@ class RoadLane(Lane):
         if ((not self.downstream_is_remover)
                 and (self.downstream_intersection is None)):
             raise RuntimeError("Missing downstream Intersection.")
-        return super().update_speeds(to_slow=to_slow)
+        return super().get_new_speeds(to_slow=to_slow)
 
     def controls_this_speed(self, vehicle: Vehicle) -> Tuple[bool, float,
                                                              VehicleSection]:
@@ -93,14 +93,15 @@ class RoadLane(Lane):
                 return False, float("inf"), VehicleSection.REAR
         else:
             # The front of this vehicle is on this road.
-            if self.upstream_is_spawner:
-                # Front of the vehicle is on this road and its rear isn't in an
-                # intersection, so this road is in control. Report the front.
-                return True, front, VehicleSection.FRONT
-            else:
+            rear = self.vehicle_progress[vehicle].rear
+            if (rear is None) and (not self.upstream_is_spawner):
                 # The vehicles is still exiting the intersection and therefore
                 # not in this road lane's jurisdiction.
                 return False, -float("inf"), VehicleSection.FRONT
+            else:
+                # Front of the vehicle is on this road and its rear isn't in an
+                # intersection, so this road is in control. Report the front.
+                return True, front, VehicleSection.FRONT
 
     def accel_update(self, vehicle: Vehicle, section: VehicleSection, p: float,
                      preceding: Optional[Vehicle]) -> float:
@@ -121,20 +122,27 @@ class RoadLane(Lane):
         #       vehicle should mirror the speed and acceleration of the vehicle
         #       still in the intersection.
 
-        if ((preceding is None) and
-                (not vehicle.permission_to_enter_intersection)):
-            # stop at the intersection line
-            return self.accel_update_following(vehicle, p)
-
-        a_follow = super().accel_update(vehicle=vehicle, section=section, p=p,
+        if self.downstream_is_remover:
+            # No need to check for situations where you stop at the
+            # intersection line because there is no intersection
+            return super().accel_update(vehicle=vehicle, section=section, p=p,
                                         preceding=preceding)
-
-        if vehicle.permission_to_enter_intersection:
-            # Follow preceding vehicle into the intersection
-            return a_follow
         else:
-            # Stop for preceding vehicle AND intersection line
-            return min(a_follow, self.accel_update_following(vehicle, p))
+            # Need to make sure we stop at the intersection line if necessary
+            if ((preceding is None) and
+                    (not vehicle.permission_to_enter_intersection)):
+                # stop at the intersection line
+                return self.accel_update_following(vehicle, p)
+
+            a_follow = super().accel_update(vehicle=vehicle, section=section,
+                                            p=p, preceding=preceding)
+
+            if vehicle.permission_to_enter_intersection:
+                # Follow preceding vehicle into the intersection
+                return a_follow
+            else:
+                # Stop for preceding vehicle AND intersection line
+                return min(a_follow, self.accel_update_following(vehicle, p))
 
     # Support functions for stepping vehicles
 

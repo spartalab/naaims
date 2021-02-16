@@ -77,7 +77,7 @@ class IntersectionLane(Lane):
         #       deviation from the lane's centerline to allow it to hit the
         #       actual speed limit if it cuts the corner.
         #
-        #       See the update_speeds todo for more information.
+        #       See the get_new_speeds todo for more information.
 
     def accel_update(self, vehicle: Vehicle, section: VehicleSection, p: float,
                      preceding: Optional[Vehicle]) -> float:

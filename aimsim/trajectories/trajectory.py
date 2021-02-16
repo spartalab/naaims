@@ -114,3 +114,6 @@ class Trajectory(Configurable):
         """
         # TODO: (low) implement this properly in child classes
         return float('inf')
+
+    def __hash__(self) -> int:
+        return hash(self.start_coord + self.end_coord)

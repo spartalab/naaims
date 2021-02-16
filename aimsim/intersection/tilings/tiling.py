@@ -19,11 +19,12 @@ from collections import deque
 import aimsim.shared as SHARED
 from aimsim.archetypes import Configurable
 from aimsim.util import Coord, SpeedUpdate, VehicleSection
-from aimsim.lane import (IntersectionLane, RoadLane, VehicleProgress,
-                         ScheduledExit)
+from aimsim.lane import VehicleProgress, ScheduledExit
 from aimsim.vehicles import Vehicle
 from aimsim.intersection.reservation import Reservation
 from aimsim.intersection.tiles import Tile, DeterministicTile
+from aimsim.intersection import IntersectionLane
+from aimsim.road import RoadLane
 
 T = TypeVar('T', bound='Tiling')
 

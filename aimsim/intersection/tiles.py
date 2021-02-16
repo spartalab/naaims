@@ -141,4 +141,6 @@ class DeterministicTile(Tile):
     """
 
     # TODO: (low) re-implement every method under deterministic reservations.
-    raise NotImplementedError("TODO")
+    def __init__(self, id: int, time: int, rejection_threshold: float = 0
+                 ) -> None:
+        raise NotImplementedError("TODO")

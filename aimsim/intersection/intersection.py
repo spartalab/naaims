@@ -20,21 +20,19 @@ The tiling handles how the manager checks for upcoming conflicts.
 """
 
 from __future__ import annotations
-import itertools
-from typing import Iterable, Type, Dict, Any, List, Tuple, Optional
-
-from pandas import DataFrame
+from typing import (TYPE_CHECKING, Iterable, Type, Dict, Any, List, Tuple,
+                    Optional)
 
 import aimsim.shared as SHARED
 from aimsim.archetypes import Configurable, Facility, Upstream, Downstream
 from aimsim.util import Coord, VehicleTransfer, SpeedUpdate, VehicleSection
-from aimsim.trajectories import Trajectory, BezierTrajectory
 from aimsim.intersection import IntersectionLane
-from aimsim.road import RoadLane
-from aimsim.road import Road
-from aimsim.endpoints import VehicleRemover
-from aimsim.vehicles import Vehicle
 from aimsim.intersection.managers import IntersectionManager, FCFSManager
+
+if TYPE_CHECKING:
+    from aimsim.endpoints import VehicleRemover
+    from aimsim.vehicles import Vehicle
+    from aimsim.road import Road, RoadLane
 
 
 class Intersection(Configurable, Facility, Upstream, Downstream):
@@ -45,7 +43,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                  connectivity: Iterable[Tuple[Road, Road, bool]],
                  manager_type: Type[IntersectionManager],
                  manager_spec: Dict[str, Any],
-                 v_max: int = SHARED.speed_limit
+                 v_max: int
                  ) -> None:
         """Create a new intersection.
 
@@ -161,12 +159,12 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
 
     # Begin simulation cycle methods
 
-    def update_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
+    def get_new_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
 
         new_speeds: List[Dict[Vehicle, SpeedUpdate]] = []
 
         for lane in self.lanes:
-            new_speeds.append(lane.update_speeds())
+            new_speeds.append(lane.get_new_speeds())
 
         return dict(update for lane_update in new_speeds
                     for update in lane_update.items())

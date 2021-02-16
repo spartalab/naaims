@@ -125,8 +125,8 @@ class Lane(ABC):
         """
         return min(self.speed_limit, self.trajectory.effective_speed_limit(p))
 
-    def update_speeds(self, to_slow: Set[Vehicle] = set()
-                      ) -> Dict[Vehicle, SpeedUpdate]:
+    def get_new_speeds(self, to_slow: Set[Vehicle] = set()
+                       ) -> Dict[Vehicle, SpeedUpdate]:
         """Return all vehicles on this lane and their speed updates.
 
         Note that this function does NOT change a vehicle's own record of its
@@ -178,7 +178,7 @@ class Lane(ABC):
         intersection.
         """
 
-        stopping_distance: float
+        available_stopping_distance: float
 
         if preceding is None:
             # Call downstream to see if there's a preceding vehicle across the
@@ -192,12 +192,12 @@ class Lane(ABC):
             elif section is VehicleSection.FRONT:
                 # The stopping distance is the sum of the downstream stopping
                 # distance plus the length left in this lane.
-                stopping_distance = downstream_stopping_distance + \
+                available_stopping_distance = downstream_stopping_distance + \
                     (1-p)*self.trajectory.length
             elif section is VehicleSection.REAR:
                 # The stopping distance is just what we have downstream because
                 # it's straddling the seam.
-                stopping_distance = downstream_stopping_distance
+                available_stopping_distance = downstream_stopping_distance
             else:
                 raise ValueError("Did not receive front or rear section p.")
         else:
@@ -210,11 +210,12 @@ class Lane(ABC):
             if preceding_vehicle_progress is None:
                 raise ValueError("Preceding vehicle not in lane.")
             else:
-                stopping_distance = self.effective_stopping_distance(
+                available_stopping_distance = self.effective_stopping_distance(
                     preceding_vehicle_progress, p,
                     preceding.stopping_distance())
-        return self.accel_update_following(vehicle, p,
-                                           stopping_distance=stopping_distance)
+        return self.accel_update_following(
+            vehicle, p, available_stopping_distance=available_stopping_distance
+        )
 
     def effective_stopping_distance(self, pre_p: float, p: float,
                                     vehicle_stopping_distance: float) -> float:
@@ -286,7 +287,8 @@ class Lane(ABC):
     def accel_update_following(self,
                                vehicle: Vehicle,
                                p: float,
-                               stopping_distance: Optional[float] = None
+                               available_stopping_distance: Optional[float
+                                                                     ] = None
                                ) -> float:
         """Return speed update to prevent collision with a preceding object.
 
@@ -294,38 +296,47 @@ class Lane(ABC):
         could be the front or rear of the vehicle depending on the situation,
         it's presented here as an input argument.
 
-        stopping_distance is how much distance the vehicle has to come to a
-        complete stop, e.g., if the preceding vehicle stops braking this
-        timestep, how much room does this vehicle have to brake before it
+        available_stopping_distance is how much distance the vehicle has to
+        come to a complete stop, e.g., if the preceding vehicle stops braking
+        this timestep, how much room does this vehicle have to brake before it
         collides with the one in front? If no value is provided this method
         assumes that there are no vehicles preceding this one and defaults to
         calculating the stopping distance as the length of lane left ahead of
         this vehicle.
         """
 
-        stopping_distance = ((1-p)*self.trajectory.length if
-                             stopping_distance is None else stopping_distance)
+        available_stopping_distance = ((1-p)*self.trajectory.length if
+                                       available_stopping_distance is None
+                                       else available_stopping_distance)
 
-        effective_speed_limit = self.effective_speed_limit(p, vehicle)
-
-        # TODO: when implementing, take into account that time is discrete so
-        #       round down when spacing.
-
+        # Check the acceleration against the speed limit.
         a_maybe = self.accel_update_uncontested(vehicle, p)
         if a_maybe < 0:  # need to brake regardless of closeness
             return a_maybe
+        elif vehicle.stopping_distance(
+            vehicle.velocity +
+                SHARED.SETTINGS.TIMESTEP_LENGTH*vehicle.max_acceleration
+        ) <= available_stopping_distance:
+            # Accelerating will still keep this vehicle in the available
+            # stopping distance. Make sure to check against the speed limit.
+            return min(a_maybe, vehicle.max_acceleration)
+        elif vehicle.stopping_distance() <= available_stopping_distance:
+            # Maintaining speed will keep this vehicle in the available
+            # stopping distance, but speeding up won't.
+            return 0
         else:
-            # TODO: Calculate the stopping distance of this vehicle assuming
-            #       it accelerates to get closer to or is already at the speed
-            #       limit. If this distance is longer than sd, brake. If not,
-            #       accelerate or brake as was calculated.
-            raise NotImplementedError("TODO")
+            # We have to brake to even have a chance of getting back to or
+            # staying in the stopping distance.
+            return vehicle.max_braking
 
     def speed_update(self, vehicle: Vehicle, p: float,
                      accel: float) -> SpeedUpdate:
         """Given a vehicle and its acceleration, update speed and return both.
 
-        Note acceleration and speed aren't 1-to-1 because of discrete time.
+        Notes:
+            1. Acceleration and speed aren't 1-to-1 because of discrete time.
+            2. This function only calculates the new speed update, but does not
+               actually change the vehicle's velocity property.
 
         p is the proportional progress associated with this vehicle. Because it
         could be the front or rear of the vehicle depending on the situation,
@@ -341,10 +352,10 @@ class Lane(ABC):
                                    acceleration=accel)
             else:
                 return SpeedUpdate(velocity=v_new, acceleration=accel)
-        # TODO: Consider enforcing the speed limit clip in accel_update instead
-        #       of here to make perturbing stochastic speed and acceleration
-        #       easier. Will need to double check for functions that assume
-        #       only 3 possible acceleration values instead of
+        # TODO: (stochasticity) Consider enforcing the speed limit clip in
+        #       accel_update instead of here to make perturbing speed and
+        #       acceleration easier. Will need to double check for functions
+        #       that assume only 3 possible acceleration values instead of
         #       accounting for a continuous range.
 
     # Support functions for stepping vehicles
@@ -610,7 +621,7 @@ class Lane(ABC):
             transfer: VehicleTransfer
             old_progress: VehicleProgress = VehicleProgress()
                 The vehicle's progress in the lane before this transfer
-                resolved, e.g. if its front section was already in the lane
+                resolved, e.g., if its front section was already in the lane
                 last timestep but now its middle section is transferring.
         """
         vehicle: Vehicle = transfer.vehicle
@@ -621,6 +632,8 @@ class Lane(ABC):
         if transfer.distance_left is None:
             # This is a freshly created vehicle section entering from a spawner
             # so we need to initialize its position.
+            # TODO: (low) Refactor so this is only possible in RoadLane and not
+            #       in IntersectionLane.
             if transfer.section is VehicleSection.FRONT:
                 # Place the front vehicle section ahead at its full length plus
                 # the length of its front and rear buffers.
