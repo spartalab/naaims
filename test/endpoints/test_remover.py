@@ -9,7 +9,7 @@ from aimsim.util import VehicleTransfer, VehicleSection, Coord
 from aimsim.road import Road
 
 
-def test_remover(mocker: MockerFixture, read_shared: None):
+def test_remover(mocker: MockerFixture, read_config: None):
 
     # Create a road object to feed to remover, skipping all the checks Road's
     # init does because those aren't in the scope of this unit test.

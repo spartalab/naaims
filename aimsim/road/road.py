@@ -20,10 +20,9 @@ Roads are divided into up to 3 sections:
 
 
 from __future__ import annotations
-from typing import (TYPE_CHECKING, Type, Optional, Iterable, Dict, Any, Tuple,
-                    Set, List)
+from typing import TYPE_CHECKING, Type, Iterable, Dict, Any, Tuple, List
+from math import sin, cos
 
-import aimsim.shared as SHARED
 from aimsim.vehicles import Vehicle
 from aimsim.trajectories import Trajectory, BezierTrajectory
 from aimsim.road.lane import RoadLane
@@ -50,14 +49,14 @@ class Road(Configurable, Facility, Upstream, Downstream):
     def __init__(self,
                  trajectory: Trajectory,
                  len_entrance_region: float,
-                 v_max: int,
-                 manager_type: Type[LaneChangeManager],
-                 manager_spec: Dict[str, Any],
+                 speed_limit: int,
                  upstream_is_spawner: bool,
                  downstream_is_remover: bool,
+                 manager_type: Type[LaneChangeManager] = DummyManager,
+                 manager_spec: Dict[str, Any] = {},
                  num_lanes: int = 1,
                  lane_width: float = 4,  # meters
-                 lane_offset_angle: Optional[float] = None,  # degrees
+                 lane_offset_angle: float = 0,  # radians
                  len_approach_region: float = 100  # meters
                  ) -> None:
         """Create a new road.
@@ -70,7 +69,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
                 for each lane found using num_lanes and lane_offset_angle.
             len_entrance_region: float
                 How long the entrance region is in meters
-            v_max: int
+            speed_limit: int
                 Speed limit on this road in km/h
             manager_type: Type[LaneChangeManager]
                 What type of LaneChangeManager to use to handle lane changes
@@ -85,7 +84,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
             lane_width: float
                 The width of each lane (assumed equal for every lane) in meters
             lane_offset_angle: float
-                Angle by which to offset each lane in degrees
+                Angle by which to offset each lane in radians
             len_approach_region: float
                 How long the approach region is in meters
 
@@ -122,14 +121,29 @@ class Road(Configurable, Facility, Upstream, Downstream):
         self.num_lanes = num_lanes
         self.lane_width = lane_width
         self.lane_offset_angle = lane_offset_angle
-        self.v_max = v_max
+        self.speed_limit = speed_limit
+
+        # Calculate lane offsets
+        spacing = Coord(lane_width*cos(lane_offset_angle),
+                        lane_width*sin(lane_offset_angle))
+        offset_count = (num_lanes-1)/2
+        starting_offset: Coord = Coord(-offset_count*spacing.x,
+                                       -offset_count*spacing.y)
+        offsets = [Coord(starting_offset.x + i*spacing.x,
+                         starting_offset.y + i*spacing.y)
+                   for i in range(num_lanes)]
 
         # Create support structures
         self.lanes: Tuple[RoadLane, ...] = tuple([RoadLane(
             trajectory=trajectory,
             width=lane_width,
-            offset=Coord(0, 0)  # TODO: calculate this correctly
-        ) for i in range(num_lanes)])
+            speed_limit=speed_limit,
+            len_entrance_region=len_entrance_region,
+            len_approach_region=len_approach_region,
+            offset=offset,
+            upstream_is_spawner=upstream_is_spawner,
+            downstream_is_remover=downstream_is_remover
+        ) for offset in offsets])
         self.manager: LaneChangeManager = manager_type.from_spec(manager_spec)
 
         # Organize lanes
@@ -186,16 +200,16 @@ class Road(Configurable, Facility, Upstream, Downstream):
         """
         return cls(
             trajectory=spec['trajectory'],
-            manager_type=spec['manager_type'],
-            manager_spec=spec['manager_spec'],
-            upstream_is_spawner=spec['upstream_is_spawner'],
-            downstream_is_remover=spec['downstream_is_remover'],
             num_lanes=spec['num_lanes'],
             lane_width=spec['lane_width'],
+            upstream_is_spawner=spec['upstream_is_spawner'],
+            downstream_is_remover=spec['downstream_is_remover'],
+            manager_type=spec.get('manager_type', DummyManager),
+            manager_spec=spec.get('manager_spec', {}),
             lane_offset_angle=spec['lane_offset_angle'],
             len_entrance_region=spec['len_entrance_region'],
             len_approach_region=spec['len_approach_region'],
-            v_max=spec['v_max']
+            speed_limit=spec['speed_limit']
         )
 
     def connect_upstream(self, upstream: Upstream) -> None:
@@ -204,7 +218,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
                 ((not self.upstream_is_spawner)
                  and (type(upstream) is VehicleSpawner))):
             raise ValueError("Incorrect Upstream type.")
-        self.upstream = upstream
+        self.__upstream = upstream
 
     def connect_downstream(self, downstream: Downstream) -> None:
         """Finalize connecting downstream object."""
@@ -212,7 +226,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
             or ((not self.downstream_is_remover)
                 and (type(downstream) is VehicleRemover))):
             raise ValueError("Incorrect Downstream type.")
-        self.downstream = downstream
+        self.__downstream = downstream
         if type(downstream) is Intersection:
             for lane in self.lanes:
                 lane.connect_downstream_intersection(
@@ -231,11 +245,11 @@ class Road(Configurable, Facility, Upstream, Downstream):
         # This only needs to be checked the first time but hopefully this
         # runtime is trivial.
         try:
-            self.upstream
+            self.__upstream
         except NameError:
             raise MissingConnectionError("No upstream object.")
         try:
-            self.downstream
+            self.__downstream
         except NameError:
             raise MissingConnectionError("No downstream object.")
 
@@ -279,7 +293,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
                 lateral_deviations=self.manager.lateral_movements(lane)
             )
             for transfer in transfers:
-                self.downstream.transfer_vehicle(transfer)
+                self.__downstream.transfer_vehicle(transfer)
 
     def process_transfers(self) -> None:
         """Incorporate new vehicles onto this road."""

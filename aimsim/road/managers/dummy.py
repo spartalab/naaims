@@ -5,7 +5,7 @@ from aimsim.road.managers.manager import LaneChangeManager
 
 if TYPE_CHECKING:
     from aimsim.lane import LateralDeviation
-    from aimsim.road import RoadLane
+    from aimsim.road.lane import RoadLane
     from aimsim.vehicles import Vehicle
 
 

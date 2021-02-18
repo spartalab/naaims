@@ -43,7 +43,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                  connectivity: Iterable[Tuple[Road, Road, bool]],
                  manager_type: Type[IntersectionManager],
                  manager_spec: Dict[str, Any],
-                 v_max: int
+                 speed_limit: int
                  ) -> None:
         """Create a new intersection.
 
@@ -72,7 +72,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                 The type of IntersectionManager to init.
             manager_spec: Dict[str, Any]
                 Specifications to create the manager with.
-            v_max: int = SHARED.speed_limit
+            speed_limit: int = SHARED.speed_limit
                 The speed limit.
         """
 
@@ -154,7 +154,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
             connectivity=spec['connectivity'],
             manager_type=spec['manager_type'],
             manager_spec=spec['manager_spec'],
-            v_max=spec['v_max']
+            speed_limit=spec['speed_limit']
         )
 
     # Begin simulation cycle methods

@@ -4,7 +4,7 @@ import aimsim.shared as SHARED
 
 
 @fixture(scope="session")
-def read_shared():
+def read_config():
     try:
         SHARED.SETTINGS.read()
     except RuntimeError:

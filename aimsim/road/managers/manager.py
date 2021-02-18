@@ -14,7 +14,7 @@ from aimsim.archetypes import Configurable
 
 if TYPE_CHECKING:
     from aimsim.lane import LateralDeviation
-    from aimsim.road import RoadLane
+    from aimsim.road.lane import RoadLane
     from aimsim.vehicles import Vehicle
 
 # [Implementation notes]
@@ -59,7 +59,7 @@ class LaneChangeManager(Configurable):
     def from_spec(cls: Type[M], spec: Dict[str, Any]) -> M:
         """Should interpret a spec dict to call the manager's init."""
         return cls(
-            lanes=spec['lanes']
+            lanes=spec.get('lanes', [])
         )
 
     @abstractmethod

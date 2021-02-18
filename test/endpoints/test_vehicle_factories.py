@@ -9,7 +9,7 @@ from aimsim.endpoints.factories import VehicleFactory, GaussianVehicleFactory
 import aimsim.shared as SHARED
 
 
-def test_gvf_creation(mocker: MockerFixture, read_shared: None):
+def test_gvf_creation(mocker: MockerFixture, read_config: None):
 
     gvf = GaussianVehicleFactory(vehicle_type=AutomatedVehicle,
                                  num_destinations=100_000,
@@ -31,7 +31,7 @@ def test_gvf_creation(mocker: MockerFixture, read_shared: None):
     assert gvf_varied.create_vehicle().max_acceleration != 3
 
 
-def test_vehicle_types(mocker: MockerFixture, read_shared: None,
+def test_vehicle_types(mocker: MockerFixture, read_config: None,
                        f: Type[VehicleFactory] = GaussianVehicleFactory):
 
     f(vehicle_type=AutomatedVehicle, num_destinations=1,
@@ -56,7 +56,7 @@ def test_vehicle_types(mocker: MockerFixture, read_shared: None,
 
 
 def test_mismatched_vehicle_types_and_probs(
-    mocker: MockerFixture, read_shared: None,
+    mocker: MockerFixture, read_config: None,
         f: Type[VehicleFactory] = GaussianVehicleFactory):
 
     with raises(ValueError):
@@ -69,7 +69,7 @@ def test_mismatched_vehicle_types_and_probs(
 
 
 def test_destination_matching(
-    mocker: MockerFixture, read_shared: None,
+    mocker: MockerFixture, read_config: None,
         f: Type[VehicleFactory] = GaussianVehicleFactory):
 
     # Breaks when no possible destination due to source exclusion
@@ -146,7 +146,7 @@ gvf_test_spec_2: Dict[str, Any] = dict(
 )
 
 
-def test_gbf_from_spec(read_shared: None,
+def test_gbf_from_spec(read_config: None,
                        f: Type[VehicleFactory] = GaussianVehicleFactory):
     f.from_spec(gvf_test_spec)
     f.from_spec(gvf_test_spec_2)
