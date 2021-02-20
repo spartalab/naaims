@@ -25,9 +25,9 @@ class VehicleSpawner(Configurable, Upstream):
     def __init__(self,
                  downstream: Road,
                  vpm: float,  # vehicles per minute
-                 generator_type: List[Type[VehicleFactory]],
-                 generator_specs: List[Dict[str, Any]],
-                 generator_probabilities: List[float]
+                 factory_types: List[Type[VehicleFactory]],
+                 factory_specs: List[Dict[str, Any]],
+                 factory_selection_probabilities: List[float]
                  ) -> None:
         """Create a new vehicle spawner.
 
@@ -37,19 +37,19 @@ class VehicleSpawner(Configurable, Upstream):
             vpm: float
                 Target number of vehicles to spawn per minute. Used in a
                 Poisson distribution.
-            generator_type: List[Type[VehicleFactory]]
-                The types of generators to init.
-            generator_specs: List[Dict[str, Any]]
-                The specs of the generators to init.
-            generator_probabilities: List[float]
+            factory_types: List[Type[VehicleFactory]]
+                The types of vehicle factories to create.
+            factory_specs: List[Dict[str, Any]]
+                The specs of the vehicle factories to create.
+            factory_selection_probabilities: List[float]
                 The probability of using a specific VehicleFactory.
         """
 
-        if len(generator_type) != len(generator_specs) != \
-                len(generator_probabilities):
+        if len(factory_types) != len(factory_specs) != \
+                len(factory_selection_probabilities):
             raise ValueError("The number of generator types, specs, and "
                              "probabilities must match.")
-        if sum(generator_probabilities) != 1:
+        if sum(factory_selection_probabilities) != 1:
             raise ValueError("The generator probabilities must sum to 1.")
 
         self.downstream = downstream
@@ -66,15 +66,12 @@ class VehicleSpawner(Configurable, Upstream):
 
         # Record generator use probabilities and create the vehicle generators
         # from the given specifications.
-        self.generator_probabilities: List[float] = generator_probabilities
-        self.vehicle_factories: List[VehicleFactory] = []
-        for i in range(len(generator_type)):
-            self.vehicle_factories.append(
-                generator_type[i].from_spec(generator_specs[i])
-            )
+        self.factory_selection_probabilities = factory_selection_probabilities
+        self.factories: List[VehicleFactory] = []
+        for i in range(len(factory_types)):
+            self.factories.append(factory_types[i].from_spec(factory_specs[i]))
 
         # Prepare a queued spawn to fill later.
-        self.queued_spawn: Optional[Vehicle] = None
         self.queue: List[Tuple[Vehicle, List[RoadLane]]] = []
 
     @staticmethod
@@ -121,13 +118,24 @@ class VehicleSpawner(Configurable, Upstream):
         return cls(
             downstream=spec['downstream'],
             vpm=spec['vpm'],
-            generator_probabilities=spec['generator_ps'],
-            generator_type=spec['generator_types'],
-            generator_specs=spec['generator_specs']
+            factory_selection_probabilities=spec[
+                'factory_selection_probabilities'],
+            factory_types=spec['factory_types'],
+            factory_specs=spec['factory_specs']
         )
 
-    def step_vehicles(self) -> Optional[Vehicle]:
-        """Decides if to spawn a vehicle. If so, processes and returns it."""
+    def step_vehicles(self) -> Tuple[Optional[Vehicle], List[Vehicle]]:
+        """Decides whether to spawn and returns spawned and entering vehicles.
+
+        Returns
+            Optional[Vehicle]   The vehicle spawned in this timestep, if there
+                                was one.
+            List[Vehicle]       The vehicle(s) that exit the spawner and enter
+                                the simulated scope. Usually the same as the
+                                spawned vehicle but may be different if road
+                                traffic prevents vehicles spawned in prior
+                                timesteps from entering at their time of spawn.
+        """
 
         if self.downstream is None:
             raise MissingConnectionError("No downstream object.")
@@ -137,7 +145,7 @@ class VehicleSpawner(Configurable, Upstream):
         # Roll to spawn a new vehicle. If the roll is successful, pick a
         # generator to use based on the distribution of generators and use it
         # to spawn a vehicle.
-        spawn = choices(self.vehicle_factories, self.generator_probabilities
+        spawn = choices(self.factories, self.factory_selection_probabilities
                         )[0].create_vehicle() if (
                             random() < self.spawn_probability) else None
 
@@ -156,7 +164,9 @@ class VehicleSpawner(Configurable, Upstream):
 
         # Loop through queue to check for vehicles we can dispatch.
         blocked_lanes: Set[RoadLane] = set()
-        for vehicle_to_transfer, eligible_lanes in self.queue:
+        vehicles_transferred: List[Vehicle] = []
+        queue_entries_to_delete: List[int] = []
+        for i, (vehicle_to_transfer, eligible_lanes) in enumerate(self.queue):
 
             # Sort eligible lanes by those that have the fewest options, with
             # ties broken randomly so we don't systematically prefer a lane for
@@ -178,8 +188,8 @@ class VehicleSpawner(Configurable, Upstream):
             vehicle_can_transfer: bool = False
             for lane in eligible_lanes:
                 if (lane not in blocked_lanes) and (lane.room_to_enter() > (
-                    vehicle_to_transfer.length * 2 *
-                    SHARED.SETTINGS.length_buffer_factor
+                    vehicle_to_transfer.length *
+                    (1 + 2 * SHARED.SETTINGS.length_buffer_factor)
                 )):
                     vehicle_can_transfer = True
 
@@ -187,22 +197,26 @@ class VehicleSpawner(Configurable, Upstream):
                         vehicle=vehicle_to_transfer,
                         section=VehicleSection.FRONT,
                         distance_left=None,
-                        pos=lane.trajectory.end_coord
+                        pos=lane.trajectory.start_coord
                     ))
                     self.downstream.transfer_vehicle(VehicleTransfer(
                         vehicle=vehicle_to_transfer,
                         section=VehicleSection.CENTER,
                         distance_left=None,
-                        pos=lane.trajectory.end_coord
+                        pos=lane.trajectory.start_coord
                     ))
                     self.downstream.transfer_vehicle(VehicleTransfer(
                         vehicle=vehicle_to_transfer,
                         section=VehicleSection.REAR,
                         distance_left=None,
-                        pos=lane.trajectory.end_coord
+                        pos=lane.trajectory.start_coord
                     ))
 
                     blocked_lanes.add(lane)
+                    vehicles_transferred.append(vehicle_to_transfer)
+                    queue_entries_to_delete.append(i)
+                else:
+                    pass
 
             if not vehicle_can_transfer:
                 blocked_lanes.update(eligible_lanes)
@@ -211,5 +225,9 @@ class VehicleSpawner(Configurable, Upstream):
             if len(blocked_lanes) == len(self.downstream.lanes):
                 break
 
+        # Delete transferred vehicles from queue
+        for i in queue_entries_to_delete:
+            del self.queue[i]
+
         # Pass newly spawned vehicle back to the Simulator if there is one
-        return spawn
+        return spawn, vehicles_transferred

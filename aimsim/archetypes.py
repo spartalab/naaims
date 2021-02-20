@@ -11,7 +11,7 @@ These archetypes enforce the main simulation loop:
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Optional, Any, List, Dict
+from typing import Optional, Any, List, Dict, Tuple
 
 from aimsim.util import VehicleTransfer, SpeedUpdate
 from aimsim.vehicles import Vehicle
@@ -61,11 +61,15 @@ class Upstream(ABC):
     """
 
     @abstractmethod
-    def step_vehicles(self) -> Optional[Vehicle]:
+    def step_vehicles(self) -> Optional[Tuple[Optional[Vehicle],
+                                              List[Vehicle]]]:
         """Should progress all vehicles over one timestep.
 
-        Returns nothing except in the case of a VehicleSpawner, which could
-        return a Vehicle pointer if it decides to spawn one.
+        Returns nothing except in the case of a VehicleSpawner, which returns a
+        Vehicle if it spawns one in this timestep, and a list of Vehicles that
+        leave the spawner and enter the simulation's physical scope (e.g., if
+        a vehicle is spawned but there's too much traffic on the road to enter
+        it into the intersection at the timestep when it's spawned).
         """
         raise NotImplementedError('Must be implemented in child class.')
 

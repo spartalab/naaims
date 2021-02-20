@@ -1,5 +1,4 @@
 from __future__ import annotations
-from abc import abstractmethod
 from typing import TYPE_CHECKING, Iterable, Dict, Tuple, Type, Any, TypeVar
 
 from aimsim.archetypes import Configurable

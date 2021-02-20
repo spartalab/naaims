@@ -11,9 +11,10 @@ adjustable granularity (Dresner and Stone 2008).
 """
 
 
+from __future__ import annotations
 from abc import abstractmethod
-from typing import (Optional, Iterable, Set, Dict, Tuple, Type, TypeVar, Any,
-                    List)
+from typing import (Optional, Iterable, Set, Dict, TYPE_CHECKING, Tuple, Type,
+                    TypeVar, Any, List)
 from collections import deque
 
 import aimsim.shared as SHARED
@@ -24,7 +25,9 @@ from aimsim.vehicles import Vehicle
 from aimsim.intersection.reservation import Reservation
 from aimsim.intersection.tiles import Tile, DeterministicTile
 from aimsim.intersection import IntersectionLane
-from aimsim.road import RoadLane
+
+if TYPE_CHECKING:
+    from aimsim.road import RoadLane
 
 T = TypeVar('T', bound='Tiling')
 

@@ -37,7 +37,7 @@ class RoadLane(Lane):
 
         # Note that we start at the front of the lane and work back, so
         # proportions decrease as we go on.
-        assert len_entrance_region + len_approach_region < trajectory.length
+        assert len_entrance_region + len_approach_region <= trajectory.length
         self.entrance_end: float = len_entrance_region/self.trajectory.length
         self.lcregion_end: float = 1-len_approach_region/self.trajectory.length
         # self.approach_end: float = 1

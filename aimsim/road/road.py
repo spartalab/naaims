@@ -30,9 +30,9 @@ from aimsim.util import (Coord, MissingConnectionError, VehicleTransfer,
                          SpeedUpdate)
 from aimsim.archetypes import Configurable, Facility, Upstream, Downstream
 from aimsim.road.managers import LaneChangeManager, DummyManager
+from aimsim.intersection import Intersection
 
 if TYPE_CHECKING:
-    from aimsim.intersection import Intersection
     from aimsim.endpoints import VehicleSpawner, VehicleRemover
 
 

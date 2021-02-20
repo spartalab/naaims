@@ -160,8 +160,8 @@ class Simulator:
                                  f" {rid} but road {spawner_rids[sid]} thinks"
                                  " it's the one.")
 
-            # Put the road in the spec
-            spec['road'] = self.roads[rid]
+            # Put the road in the spawner's spec as its downstream Facility
+            spec['downstream'] = self.roads[rid]
 
             # Create the spawner
             self.spawners[sid] = VehicleSpawner.from_spec(spec)
@@ -195,8 +195,8 @@ class Simulator:
                                  f" {rid} but road {remover_rids[vid]} thinks"
                                  " it's the one.")
 
-            # Put the road in the spec
-            spec['road'] = self.roads[rid]
+            # Put the road in remover's the spec as its upstream Facility
+            spec['upstream'] = self.roads[rid]
 
             # Create the remover
             self.removers[vid] = VehicleRemover.from_spec(spec)
@@ -229,8 +229,13 @@ class Simulator:
                                               *self.roads.values(),
                                               *self.removers.values()]
 
-        # 4. Initialize an empty set of vehicles
-        self.vehicles: Set[Vehicle] = set()
+        # 4. Initialize vehicle loggers to track vehicles in the simulator as
+        #    well as global entry, exit, and routing success for performance
+        #    evaluation. See fetch_log for more information.
+        self.vehicles_in_scope: Set[Vehicle] = set()
+        self.vehicle_entry_times: Dict[Vehicle, int] = {}
+        self.entry_exit_log: List[Tuple[int, Optional[int],
+                                        Optional[bool]]] = []
 
         # 5. If the visualize flag is enabled, draw the basemap image of
         #    roads and intersections for use later.
@@ -309,7 +314,7 @@ class Simulator:
             new_speeds.append(f.get_new_speeds())
         new_speed = dict(update for f_update in new_speeds
                          for update in f_update.items())
-        for vehicle in self.vehicles:
+        for vehicle in self.vehicles_in_scope:
             update = new_speed[vehicle]
             vehicle.velocity = update.velocity
             vehicle.acceleration = update.acceleration
@@ -322,13 +327,16 @@ class Simulator:
         #    whether to create a new vehicle and if so places it in the
         #    downstream object.
         for u in self.upstreams:
-            new_vehicle = u.step_vehicles()
-            if new_vehicle is not None:
-                self.vehicles.add(new_vehicle)
+            incoming_packet = u.step_vehicles()
+            if incoming_packet is not None:
+                spawned_vehicle, entering_vehicles = incoming_packet
+                if spawned_vehicle is not None:
+                    self.vehicle_entry_times[spawned_vehicle] = SHARED.t
+                self.vehicles_in_scope.update(entering_vehicles)
 
         # 3. Have every downstream object (roads, intersections, and vehicle
         #    removers) resolve all vehicle transfers. This finishes updates to
-        #    absolute and relative positions using speeds calculated in 1.
+        #    absolute and relative positions using speeds calculated in step 1.
         for d in self.downstreams:
             exiting_vehicles: Optional[List[Vehicle]
                                        ] = d.process_transfers()
@@ -337,9 +345,14 @@ class Simulator:
             if exiting_vehicles is not None:
                 for vehicle in exiting_vehicles:
                     # log the vehicle
-                    raise NotImplementedError("TODO")
-                    # remove it from self.vehicles
-                    self.vehicles.remove(vehicle)
+                    self.entry_exit_log.append(
+                        (self.vehicle_entry_times[vehicle], SHARED.t, True))
+                    # TODO: (multiple) determine if a vehicle successfully
+                    #       reached its destination.
+
+                    # remove it from our tracker
+                    del self.vehicle_entry_times[vehicle]
+                    self.vehicles_in_scope.remove(vehicle)
 
         # 4. Have facility managers handle their special internal logic (e.g.,
         #    lane changes and reservations).
@@ -349,6 +362,24 @@ class Simulator:
         # 5. Update shared time step and (TODO: (low)) shortest path values
         SHARED.t += 1
         SHARED.SETTINGS.pathfinder.update(None)
+
+    def fetch_log(self) -> List[Tuple[int, Optional[int], Optional[bool]]]:
+        """Returns log of times that vehicles spawned and exited the sim.
+
+        This is a list of (int, int, bool) tuples denoting
+            1. The vehicle's entry/spawning timestep
+            2. The vehicle's exit/removal timestep
+            3. Whether or not the vehicle successfully reached its intended
+               destination
+
+
+        # TODO: (logging) Collect more detailed information on vehicles in log.
+        """
+        log_image: List[Tuple[int, Optional[int],
+                              Optional[bool]]] = self.entry_exit_log.copy()
+        for vehicle in self.vehicles_in_scope:
+            log_image.append((self.vehicle_entry_times[vehicle], None, None))
+        return log_image
 
     def display(self) -> None:
         """Display the current position of all vehicles on the grid."""

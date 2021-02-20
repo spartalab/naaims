@@ -1,3 +1,5 @@
+from importlib import reload
+
 from pytest import fixture
 
 import aimsim.shared as SHARED
@@ -9,3 +11,8 @@ def read_config():
         SHARED.SETTINGS.read()
     except RuntimeError:
         pass
+
+
+@fixture
+def clean_config():
+    reload(SHARED)
