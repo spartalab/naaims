@@ -13,21 +13,21 @@ adjustable granularity (Dresner and Stone 2008).
 
 from __future__ import annotations
 from abc import abstractmethod
-from typing import (Optional, Iterable, Set, Dict, TYPE_CHECKING, Tuple, Type,
-                    TypeVar, Any, List)
-from collections import deque
+from typing import (TYPE_CHECKING, Optional, List, Set, Dict, Tuple, Type,
+                    TypeVar, Any)
 
 import aimsim.shared as SHARED
 from aimsim.archetypes import Configurable
 from aimsim.util import Coord, SpeedUpdate, VehicleSection
 from aimsim.lane import VehicleProgress, ScheduledExit
-from aimsim.vehicles import Vehicle
 from aimsim.intersection.reservation import Reservation
-from aimsim.intersection.tiles import Tile, DeterministicTile
-from aimsim.intersection import IntersectionLane
+from aimsim.intersection.tilings.tiles import StochasticTile, DeterministicTile
 
 if TYPE_CHECKING:
     from aimsim.road import RoadLane
+    from aimsim.intersection.tilings.tiles import Tile
+    from aimsim.vehicles import Vehicle
+    from aimsim.intersection import IntersectionLane
 
 T = TypeVar('T', bound='Tiling')
 
@@ -41,7 +41,7 @@ class Tiling(Configurable):
                  lanes: Dict[Coord, IntersectionLane],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
-                 tile_type: Type[Tile] = Tile,
+                 tile_type: Type[Tile] = DeterministicTile,
                  cycle: Optional[List[
                      Tuple[Set[IntersectionLane], int]
                  ]] = None
@@ -63,6 +63,7 @@ class Tiling(Configurable):
         self.downstream_road_lane_by_coord = downstream_road_lane_by_coord
         self.lanes = lanes
         self.lanes_by_endpoints = lanes_by_endpoints
+        self.tile_type = tile_type
 
         # Initialize reservation dicts.
         self.active_reservations: Dict[Vehicle, Reservation] = {}
@@ -70,7 +71,7 @@ class Tiling(Configurable):
 
         # Declare tiling stack variable.
         # (Must be implemented in child classes.)
-        self.tiles: List
+        self.tiles: List[Tuple[Tile, ...]] = []
 
         # Start up the cycle and save relevant info.
         self.cycle = cycle
@@ -101,7 +102,7 @@ class Tiling(Configurable):
 
         # Based on the spec, identify the correct tiling type
         if tile_type.lower() in {'', 'stochastic', 'stochastictile'}:
-            spec['tile_type'] = Tile
+            spec['tile_type'] = StochasticTile
         elif tile_type.lower() in {'deterministic', 'deterministictile'}:
             spec['tile_type'] = DeterministicTile
         else:
@@ -280,9 +281,9 @@ class Tiling(Configurable):
         # Fetch the desired IntersectionLane we'll be operating on and its
         # corresponding downstream lane.
         downstream_coord: Coord = new_exit.vehicle.next_movements(
-            incoming_lane.end_coord)[0]
+            incoming_lane.trajectory.end_coord)[0]
         lane: IntersectionLane = self.lanes_by_endpoints[
-            (incoming_lane.end_coord, downstream_coord)]
+            (incoming_lane.trajectory.end_coord, downstream_coord)]
         downstream_lane: RoadLane = self.downstream_road_lane_by_coord[
             downstream_coord]
 
@@ -861,7 +862,7 @@ class Tiling(Configurable):
         # using the clone's properties and proportional progress along the
         # intersection trajectory. Mark the tiles used by this reservation if
         # mark is True. Ignore feasibility if force is True.
-        raise NotImplementedError("TODO")
+
         # TODO: Expand the number of tiles based on the vehicle's throttle
         #       and tracking scores. Use tile.will_reservation_work() if not
         #       force and tile.mark() if mark.
@@ -914,11 +915,11 @@ class Tiling(Configurable):
             raise ValueError("Can't force and mark tiles at the same time.")
         raise NotImplementedError("TODO")
 
-    @abstractmethod
     def clear_marked_tiles(self, reservation: Reservation) -> None:
         """Clear tiles marked with this reservation before discarding."""
-        raise NotImplementedError("Must be implemented in child classes.")
-        # TODO: (auction) Use tile.remove_mark(reservation)
+        for tile_layer in self.tiles:
+            for tile in tile_layer:
+                tile.remove_mark(reservation)
 
     def confirm_reservation(self, reservation: Reservation, lane: RoadLane,
                             ) -> None:
@@ -935,9 +936,8 @@ class Tiling(Configurable):
         self.issue_permission(vehicle, lane, reservation.its_exit)
 
     @abstractmethod
-    def find_best_batch(self,
-                        requests: Dict[RoadLane, Iterable[Reservation]]
-                        ) -> Iterable[Tuple[RoadLane, Reservation]]:
+    def find_best_batch(self, requests: Dict[RoadLane, List[Reservation]]
+                        ) -> List[Tuple[RoadLane, Reservation]]:
         """Take potential reservation permutations and find the best batch.
 
         Take a list of potential reservations from each road lane with a
@@ -960,11 +960,11 @@ class Tiling(Configurable):
 
         raise NotImplementedError("TODO")
 
-    @abstractmethod
     def clear_potential_reservations(self) -> None:
-        """Go through all tiles and clear potential reservations markings."""
-        raise NotImplementedError("Should be implemented in child classes.")
-        # TODO: (auction) Use tile.clear_all_marks()
+        """Go through all tiles and clear potential reservation markings."""
+        for tile_layer in self.tiles:
+            for tile in tile_layer:
+                tile.remove_all_marks()
 
     # Support methods used by the Tiling
 

@@ -9,16 +9,14 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Iterable, Dict, Tuple, Type, Any, TypeVar
 
 from aimsim.archetypes import Configurable
-from aimsim.util import Coord, VehicleSection
-from aimsim.lane import ScheduledExit
-from aimsim.vehicles import Vehicle
-from aimsim.intersection.tilings import Tiling, SquareTiling, ArcTiling
-from aimsim.intersection.reservation import Reservation
-from aimsim.intersection import IntersectionLane
+from aimsim.util import Coord
+from aimsim.intersection.tilings import SquareTiling, ArcTiling
 
 if TYPE_CHECKING:
-    from aimsim.road import Road
     from aimsim.road import RoadLane
+    from aimsim.intersection import IntersectionLane
+    from aimsim.intersection.tilings import Tiling
+    from aimsim.vehicles import Vehicle
 
 M = TypeVar('M', bound='IntersectionManager')
 
@@ -117,7 +115,7 @@ class IntersectionManager(Configurable):
         self.process_requests()
 
     @abstractmethod
-    def process_requests(self):
+    def process_requests(self) -> None:
         """Should update the request queue and check for requests to accept.
 
         Check every incoming road for vehicles or platoons that are eligible to

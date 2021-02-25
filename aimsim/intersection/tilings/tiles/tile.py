@@ -6,13 +6,14 @@ two more more vehicles use the same tile, causing a collision, while still
 maximizing intersection throughput.
 """
 
-from typing import Optional, Set, Deque, Dict
+from typing import Optional, Dict
+from abc import ABC, abstractmethod
 
 from aimsim.vehicles import Vehicle
 from aimsim.intersection.reservation import Reservation
 
 
-class Tile:
+class Tile(ABC):
     """
     This default tile is stochastic because it demands more input parameters
     than a deterministic tile.
@@ -21,6 +22,7 @@ class Tile:
     # TODO: (sequence) (stochastic) Consider banning the use of stochastic AND
     #       sequenced reservations. It's supported but the overhead is a lot.
 
+    @abstractmethod
     def __init__(self, id: int, time: int, rejection_threshold: float = 0
                  ) -> None:
         """Create a new tile, including if it tracks potential requests.
@@ -38,15 +40,12 @@ class Tile:
                 reservation on this tile.)
         """
 
-        self.hash = hash((id, time))
-        # self.__confirmed = False
-        # self.__potentials: Set[PotentialReservation] = set()
-
         if rejection_threshold < 0:
             raise ValueError("Rejection threshold must be non-negative.")
+
+        self.__hash = hash((id, time))
         self.__potentials: Dict[Reservation, float] = {}
         self.__reserved_by: Dict[Optional[Vehicle], float] = {}
-        # self.__track = track
         self.__rejection_threshold = rejection_threshold
 
     # TODO: (sequence) Change all of these tile checks to account for the total
@@ -72,13 +71,12 @@ class Tile:
                 The probability that the reservation being requested uses this
                 tile. (Only used for stochastic reservations.)
         """
-        # return self.__confirmed
+
         if (len(self.__reserved_by) == 0) or (r.vehicle in self.__reserved_by):
             return True
         else:
-            return (
-                sum(v for v in self.__reserved_by.values()) + p
-            ) > self.__rejection_threshold
+            return sum(v for v in self.__reserved_by.values()) + p < \
+                self.__rejection_threshold
 
     def mark(self, r: Reservation, p: float = 1) -> None:
         """Log a potential reservation onto a tile."""
@@ -103,16 +101,6 @@ class Tile:
                 matter what. Should only be used when updating stochastic
                 reservations that have already been confirmed.
         """
-        # if self.__track and (r not in self.__potentials):
-
-        # try:
-        #     r in set(tpr.pr for tpr in self.__potentials)
-        # except:
-        #         r is not in set()):
-        #     raise RuntimeError("This request was not approved for this Tile.")
-
-        if (r is None) and (not force):
-            raise ValueError("Empty reservations must be forced.")
 
         # TODO: (low) Consider not bothering with checking if the request will
         #       work or for the force flag.
@@ -124,23 +112,10 @@ class Tile:
         else:
             raise ValueError("This request is incompatible with this tile.")
 
-    def clear_all_marks(self) -> None:
+    def remove_all_marks(self) -> None:
         """Clear all markings on this tile."""
         self.__potentials = {}
 
     def __hash__(self) -> int:
-        """Hash a tile based on its unique timespace position."""
-        return self.hash
-
-
-class DeterministicTile(Tile):
-    """
-    Does everything Tile does, except as long as p>0, we reserve the entire
-    tile. Like a regular Tile but more lightweight because all you need to do
-    is check for sums.
-    """
-
-    # TODO: (low) re-implement every method under deterministic reservations.
-    def __init__(self, id: int, time: int, rejection_threshold: float = 0
-                 ) -> None:
-        raise NotImplementedError("TODO")
+        """Return this tile's unique hash based on its spacetime position."""
+        return self.__hash

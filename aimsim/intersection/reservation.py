@@ -1,14 +1,13 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Set, Optional, List
-
-from aimsim.util import Coord
-from aimsim.vehicles import Vehicle
-from aimsim.lane import ScheduledExit
-from aimsim.intersection import IntersectionLane
+from typing import TYPE_CHECKING, Dict, Tuple, Optional
 
 if TYPE_CHECKING:
-    from aimsim.intersection.tilings import Tile
+    from aimsim.intersection.tilings.tiles import Tile
+    from aimsim.intersection.lane import IntersectionLane
+    from aimsim.util import Coord
+    from aimsim.vehicles import Vehicle
+    from aimsim.lane import ScheduledExit
 
 
 @dataclass
@@ -34,6 +33,13 @@ class Reservation:
             # TODO: (stochastic) The tiles themselves probably hold these
             #       probabilities. Are these necessary to save here?
         lane: IntersectionLane
+        its_exit: ScheduledExit
+            The scheduled time and speed of the vehicle's exit from road into
+            intersection. (Initialized as the scheduled exit of the front
+            section of the vehicle as when the reservation is created that's
+            the only information available. This is replaced by the test
+            observed time of exit when that is found.)
+            (Note: This is NOT the scheduled exit out of the intersection.)
         dependent_on: Set[Vehicle]
             The set of vehicles whose reservations this vehicle's reservation
             is dependent on, i.e., the vehicles preceding it in a sequenced
@@ -42,21 +48,14 @@ class Reservation:
             The first vehicle dependent on this vehicle's reservation, i.e.,
             the vehicle immediately following this one in a sequenced
             reservation.
-        its_exit: ScheduledExit
-            The scheduled time and speed of the vehicle's exit from road into
-            intersection. (Initialized as the scheduled exit of the front
-            section of the vehicle as when the reservation is created that's
-            the only information available. This is replaced by the test
-            observed time of exit when that is found.)
-            (Note: This is NOT the scheduled exit out of the intersection.)
     """
     vehicle: Vehicle
     res_pos: Coord
     tiles: Dict[int, Dict[Tile, float]]
     lane: IntersectionLane
-    dependent_on: Set[Vehicle]
-    dependency: Optional[Vehicle]
     its_exit: ScheduledExit
+    dependent_on: Tuple[Vehicle, ...] = ()
+    dependency: Optional[Vehicle] = None
 
     def __hash__(self) -> int:
         return hash(self.vehicle)

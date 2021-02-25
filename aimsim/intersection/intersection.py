@@ -17,20 +17,20 @@ The manager handles how vehicles progress along the lanes and if vehicles get
 to come in or not.
 
 The tiling handles how the manager checks for upcoming conflicts.
+
+The Intersection owns the IntersectionManager, which owns the Tiling, which
+owns the Tiles.
 """
 
 from __future__ import annotations
-from typing import (TYPE_CHECKING, Iterable, Type, Dict, Any, List, Tuple,
-                    Optional)
+from typing import TYPE_CHECKING, Set, Type, Dict, Any, List, Tuple, Optional
 
-import aimsim.shared as SHARED
 from aimsim.archetypes import Configurable, Facility, Upstream, Downstream
 from aimsim.util import Coord, VehicleTransfer, SpeedUpdate, VehicleSection
-from aimsim.intersection import IntersectionLane
+from aimsim.intersection.lane import IntersectionLane
 from aimsim.intersection.managers import IntersectionManager, FCFSManager
 
 if TYPE_CHECKING:
-    from aimsim.endpoints import VehicleRemover
     from aimsim.vehicles import Vehicle
     from aimsim.road import Road, RoadLane
 
@@ -38,9 +38,9 @@ if TYPE_CHECKING:
 class Intersection(Configurable, Facility, Upstream, Downstream):
 
     def __init__(self,
-                 upstream_roads: Iterable[Road],
-                 downstream_roads: Iterable[Road],
-                 connectivity: Iterable[Tuple[Road, Road, bool]],
+                 upstream_roads: List[Road],
+                 downstream_roads: List[Road],
+                 connectivity: List[Tuple[Road, Road, bool]],
                  manager_type: Type[IntersectionManager],
                  manager_spec: Dict[str, Any],
                  speed_limit: int
@@ -53,21 +53,21 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
             downstream_roads: Iterable[Road]
                 The roads onto which vehicles exit this intersection.
             connectivity: Iterable[Tuple[Road, Road, bool]]
-                Describes which lanes connect to each other, used to create
+                Describes which roads connect to each other, used to create
                 IntersectionLanes.
                 The pattern is a list of 3-tuples which correspond to:
                     0. The incoming Road
                     1. The outgoing Road
-                    2. If true, the two roads will be fully connected as best
-                       as possible. If the number of lanes don't match, defer
-                       to the Road with fewer lanes, attaching them to the
-                       corresponding lane in the other Road that results in the
-                       shortest distance and ensures that no IntersectionLane
-                       created starts or ends at the same node.
-                       If false, only one Intersection will be created between
-                       the closest pair of farthest left or right lanes on both
-                       trajectories. (This approximates a restricted turning
-                       movement.)
+                    2. A bool denoting if the two roads are fully connected,
+                       e.g., as in a normal through connection.
+                If the number of lanes don't match, defer to the incoming Road,
+                attaching them to a corresponding lane in the outgoing Road
+                that results in the shortest distance and ensures that no
+                IntersectionLane created starts or ends at the same node.
+                If false, only one Intersection will be created between
+                the closest pair of farthest left or right lanes on both
+                trajectories. (This approximates a restricted turning
+                movement.)
             manager_type: Type[IntersectionManager]
                 The type of IntersectionManager to init.
             manager_spec: Dict[str, Any]
@@ -89,16 +89,66 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                 self.downstream_road_by_coord[coord] = r
 
         # Given the upstream and downstream roads and connectivity matrix,
-        # connect the road endpoints together by creating new lanes using
-        # BezierTrajectory.as_intersection_connector() and the Coords and
-        # headings of incoming and outgoing roads.
-        self.lanes: List[IntersectionLane]
-        raise NotImplementedError("TODO")
+        # connect incoming and outgoing RoadLanes with IntersectionLanes.
+        lanes: List[IntersectionLane] = []
+        for incoming_road, outgoing_road, fully_connected in connectivity:
+
+            # Find the distance between each incoming and outgoing lane.
+            io_distances: Dict[RoadLane, Dict[RoadLane, float]] = {}
+            for incoming_lane in incoming_road.lanes:
+                for outgoing_lane in outgoing_road.lanes:
+                    dist = (
+                        (incoming_lane.trajectory.end_coord.x -
+                         outgoing_lane.trajectory.start_coord.x)**2 +
+                        (incoming_lane.trajectory.end_coord.y -
+                         outgoing_lane.trajectory.start_coord.y)**2
+                    )
+                    if incoming_lane not in io_distances:
+                        io_distances[incoming_lane] = {}
+                    io_distances[incoming_lane][outgoing_lane] = dist
+
+            unmatched_incoming_lanes: Set[RoadLane] = set(incoming_road.lanes)
+            unmatched_outgoing_lanes: Set[RoadLane] = set(outgoing_road.lanes)
+            while len(unmatched_incoming_lanes) > 0:
+                # Search all IO pairs for the shortest distance pair.
+                shortest_dist: float = float('inf')
+                shortest_pair: Tuple[RoadLane, RoadLane] = (
+                    incoming_road.lanes[0], outgoing_road.lanes[0])
+
+                # Avoid assigning multiple incoming lanes to one outgoing lane
+                # unless there aren't enough outgoing lanes left.
+                enforce_one_to_one = len(unmatched_outgoing_lanes) < \
+                    len(unmatched_incoming_lanes)
+
+                for incoming_lane in unmatched_incoming_lanes:
+                    search_outgoing = unmatched_outgoing_lanes \
+                        if enforce_one_to_one else set(outgoing_road.lanes)
+                    for outgoing_lane in search_outgoing:
+                        if io_distances[incoming_lane
+                                        ][outgoing_lane] < shortest_dist:
+                            shortest_pair = (incoming_lane, outgoing_lane)
+
+                lanes.append(IntersectionLane(shortest_pair[0],
+                                              shortest_pair[1],
+                                              speed_limit))
+                if fully_connected:
+                    # Remove connected lanes from the eligible pool, with a
+                    # more lenient check for the outgoing lane because it could
+                    # have been a multiple-to-one connection if there weren't
+                    # enough outgoing lanes.
+                    unmatched_incoming_lanes.remove(shortest_pair[0])
+                    unmatched_outgoing_lanes.discard(shortest_pair[1])
+                else:
+                    # Finding the shortest connection is enough.
+                    break
+
+        self.lanes: Tuple[IntersectionLane] = tuple(lanes)
 
         # Index the IntersectionLanes by their Coord
         self.lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                       IntersectionLane] = {
-            (lane.start_coord, lane.end_coord): lane for lane in self.lanes
+            (lane.trajectory.start_coord,
+             lane.trajectory.end_coord): lane for lane in self.lanes
         }
         self.lanes_by_start: Dict[Coord, List[IntersectionLane]] = {}
         for lane in self.lanes:
@@ -179,7 +229,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         """
 
         for lane in self.lanes:
-            transfers: Iterable[VehicleTransfer] = lane.step_vehicles()
+            transfers: List[VehicleTransfer] = lane.step_vehicles()
             for transfer in transfers:
                 self.downstream_road_by_coord[transfer.pos].transfer_vehicle(
                     transfer)

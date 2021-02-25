@@ -48,7 +48,7 @@ class BezierTrajectory(Trajectory):
         parameters then passes them to the constructor.
         """
 
-        if start_heading % pi == end_heading % pi:
+        if start_heading % 2*pi == end_heading % 2*pi:
             raise ValueError("IO lanes are parallel.")
 
         # Find the intersection of the two headings.

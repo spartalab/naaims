@@ -14,8 +14,7 @@ at init. It determines how vehicles move in 2D space.
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import (TYPE_CHECKING, Tuple, Iterable, Optional, List, Dict, Set,
-                    NamedTuple)
+from typing import TYPE_CHECKING, Tuple, Optional, List, Dict, Set, NamedTuple
 from warnings import warn
 
 import aimsim.shared as SHARED
@@ -362,7 +361,7 @@ class Lane(ABC):
 
     def step_vehicles(self,
                       lateral_deviations: Dict[Vehicle, LateralDeviation] = {}
-                      ) -> Iterable[VehicleTransfer]:
+                      ) -> List[VehicleTransfer]:
         """Execute position step for all vehicles in this lane.
 
         lateral_movements contains precalculated lateral movements for vehicles

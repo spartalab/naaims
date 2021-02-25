@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Tuple, Optional, Dict
+from math import pi
 
 import aimsim.shared as SHARED
 from aimsim.lane import Lane
@@ -38,8 +39,8 @@ class IntersectionLane(Lane):
             start_coord=self.upstream.trajectory.end_coord,
             start_heading=self.upstream.trajectory.get_heading(1),
             end_coord=self.downstream.trajectory.start_coord,
-            end_heading=self.downstream.trajectory.get_heading(0)
-        )
+            end_heading=(self.downstream.trajectory.get_heading(0) + pi) % 2*pi
+        )  # Flip the downstream heading so it's pointing into the intersection
         super().__init__(trajectory, min(start_lane.width, end_lane.width),
                          speed_limit)
 

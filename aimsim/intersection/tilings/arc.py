@@ -1,21 +1,16 @@
 from __future__ import annotations
-from abc import abstractmethod
-from typing import (Optional, Iterable, Set, Dict, TYPE_CHECKING, Tuple, Type,
-                    TypeVar, Any, List)
+from typing import TYPE_CHECKING, Optional, Set, Dict, Tuple, Type, List
 from collections import deque
 
 import aimsim.shared as SHARED
-from aimsim.archetypes import Configurable
-from aimsim.util import Coord, SpeedUpdate, VehicleSection
-from aimsim.lane import VehicleProgress, ScheduledExit
-from aimsim.vehicles import Vehicle
-from aimsim.intersection.reservation import Reservation
-from aimsim.intersection.tiles import Tile, DeterministicTile
+from aimsim.util import Coord
 from aimsim.intersection.tilings.tiling import Tiling
-from aimsim.intersection import IntersectionLane
+from aimsim.intersection.tilings.tiles import DeterministicTile
 
 if TYPE_CHECKING:
     from aimsim.road import RoadLane
+    from aimsim.intersection.tilings.tiles import Tile
+    from aimsim.intersection import IntersectionLane
 
 
 class ArcTiling(Tiling):
@@ -30,7 +25,7 @@ class ArcTiling(Tiling):
                  lanes: Dict[Coord, IntersectionLane],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
-                 tile_type: Type[Tile] = Tile,
+                 tile_type: Type[Tile] = DeterministicTile,
                  cycle: Optional[List[
                      Tuple[Set[IntersectionLane], int]
                  ]] = None

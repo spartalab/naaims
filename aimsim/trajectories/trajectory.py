@@ -9,7 +9,7 @@ The `trajectories` module implements several different ways of doing so.
 
 from __future__ import annotations
 from abc import abstractmethod
-from math import acos, sqrt
+from math import atan2, pi, sqrt
 from typing import List, Dict, Any
 
 from aimsim.archetypes import Configurable
@@ -103,7 +103,10 @@ class Trajectory(Configurable):
 
         dx = b.x - a.x
         dy = b.y - a.y
-        return acos(dx / sqrt(dx**2 + dy**2))
+        angle = atan2(dy, dx)
+        if angle < 0:
+            angle += 2*pi
+        return angle
 
     def effective_speed_limit(self, proportion: float) -> float:
         """Would use traversibility_factors to find an effective speed limit.
