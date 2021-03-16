@@ -44,8 +44,8 @@ class SignalsManager(IntersectionManager):
 
                 # Check if the downstream lane has enough room for this vehicle
                 vehicle: Vehicle = lane.vehicles[index]
-                if vehicle.__length > self.downstream_road_lane_by_coord[
-                    vehicle.next_movements(lane.end_coord)[0]
+                if vehicle.length > self.downstream_road_lane_by_coord[
+                    vehicle.next_movements(lane.trajectory.end_coord)[0]
                 ].room_to_enter(tight=False):
                     break
 
@@ -55,16 +55,20 @@ class SignalsManager(IntersectionManager):
                 # (I don't think we can do that fully accurately without
                 # simulating their entire movements, but we can at least get an
                 # approximation.)
-                this_exit: ScheduledExit = lane.soonest_exit(index)
+                this_exit = lane.soonest_exit(index)
+                if this_exit is None:
+                    # It can't exit its RoadLane in a valid way. Move on.
+                    break
                 assert self.tiling.cycle is not None
                 move_time: int
                 # TODO: (signals) Find how long it'll take for the vehicle to
-                #       cross the the IntersectionLane at max accel to the
-                #       speed limit and add a second of padding.
+                #       cross the IntersectionLane at max acceleration to the
+                #       speed limit and add a timestep of padding.
                 estimated_time_to_finish: int
                 # TODO: (signals) Estimate when it will itself finish exiting
-                #       by assuming the vehicle stays at this_exit.v to travel
-                #       its own length.
+                #       by assuming the vehicle continues to accelerate or stay
+                #       at the speed limit as it crosses its own length into
+                #       the downstream road.
                 if move_time <= self.tiling.time_left_in_cycle:
                     self.tiling.issue_permission(
                         vehicle, lane, ScheduledExit(
