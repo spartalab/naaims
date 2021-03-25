@@ -4,9 +4,9 @@ This module holds all vehicle types used in the AIM simulator.
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import TypeVar, List, Optional
+from typing import Tuple, TypeVar, List, Optional
 from copy import copy
-from math import pi
+from math import cos, pi, sin
 
 import aimsim.shared as SHARED
 from aimsim.util import Coord
@@ -158,6 +158,7 @@ class Vehicle(ABC):
 
     @property
     def max_braking(self) -> float:
+        """The max braking rate for this vehicle in m/s^2. Always negative."""
         return self.__max_braking
 
     @property
@@ -225,6 +226,71 @@ class Vehicle(ABC):
         """
         return SHARED.SETTINGS.pathfinder.next_movements(
             start_coord, self.__destination, at_least_one)
+
+    def get_outline(self, buffer: bool = False, static_buffer: float = 0
+                    ) -> Tuple[Coord, Coord, Coord, Coord]:
+        """Return the vehicle's rectangular outline as four coordinates.
+
+        Starts with the front left corner and works its way around clockwise.
+        """
+        if static_buffer < 0:
+            raise ValueError("Static buffer must be nonnegative.")
+
+        # Heading is the angle of the front of the car
+        # Length vector from center to car front
+        forward_vector = self.vector_forward()
+        length_correction = Coord(forward_vector.x*(1+static_buffer),
+                                  forward_vector.y*(1+static_buffer))
+        # Width vector from center to car right
+        right_vector = self.vector_right()
+        width_correction = Coord(right_vector.x*(1+static_buffer),
+                                 right_vector.y*(1+static_buffer))
+        return (Coord(
+            self.pos.x + length_correction.x - width_correction.x,
+            self.pos.y + length_correction.y - width_correction.y
+        ), Coord(
+            self.pos.x + length_correction.x + width_correction.x,
+            self.pos.y + length_correction.y + width_correction.y
+        ), Coord(
+            self.pos.x - length_correction.x + width_correction.x,
+            self.pos.y - length_correction.y + width_correction.y
+        ), Coord(
+            self.pos.x - length_correction.x - width_correction.x,
+            self.pos.y - length_correction.y - width_correction.y
+        ))
+
+    def vector_forward(self) -> Coord:
+        """Return the vector of the car's front half as a relative Coord.
+
+        Points from the center of the vehicle to the center of the front
+        bumper.
+        """
+        return Coord(cos(self.heading)*self.length/2,
+                     sin(self.heading)*self.length/2)
+
+    def vector_rear(self) -> Coord:
+        """Return the vector of the car's rear half as a relative Coord.
+
+        Points from the center of the vehicle to the center of the rear bumper.
+        """
+        front = self.vector_right()
+        return Coord(-front.x, -front.y)
+
+    def vector_right(self) -> Coord:
+        """Return the vector of the car's right half as a relative Coord.
+
+        Points from the center of the vehicle to the center of its right side.
+        """
+        return Coord(cos(self.heading-pi/2)*self.width/2,
+                     sin(self.heading-pi/2)*self.width/2)
+
+    def vector_left(self) -> Coord:
+        """Return the vector of the car's left half as a relative Coord.
+
+        Points from the center of the vehicle to the center of its left side.
+        """
+        right = self.vector_right()
+        return Coord(-right.x, -right.y)
 
     def clone_for_request(self: V) -> V:
         """Return a clone of this vehicle to test a reservation request."""

@@ -68,17 +68,16 @@ class StopSignManager(IntersectionManager):
             lane = self.queue.pop(0)
             v_index = lane.first_without_permission()
             assert v_index is not None
-            front_exit = self.queued_exits[lane]
-            del self.queued_exits[lane]
+            front_exit = self.queued_exits.pop(lane)
             vehicle = front_exit.vehicle
             length_traversal_time = ceil(sqrt(
                 2*vehicle.length*(1+2*SHARED.SETTINGS.length_buffer_factor) /
                 vehicle.max_acceleration))
+            # TODO: Alter traversal time to account for speed limit.
             rear_exit = ScheduledExit(vehicle, VehicleSection.REAR,
                                       front_exit.t + length_traversal_time,
                                       vehicle.max_acceleration *
-                                      length_traversal_time
-                                      )
+                                      length_traversal_time)
             self.tiling.issue_permission(vehicle, lane, rear_exit)
             vehicle.permission_to_enter_intersection = True
             self.anyone_permitted_in_intersection = True

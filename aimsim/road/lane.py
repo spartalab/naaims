@@ -327,7 +327,8 @@ class RoadLane(Lane):
                preceding vehicle.
             2. If the vehicle is even partially in an intersection, it's
                guaranteed to never need to brake to avoid collision.
-        Given these conditions, we can accurately predict how a vehicle will
+        Given these conditions and the exit timing and velocity of the vehicle
+        preceding it, we can predict when and how fast a specific vehicle will
         exit a RoadLane into an intersection, with the only control variable
         being when the intersection issues it permission to enter, which
         affects if and when it starts braking before reaching the intersection.
@@ -347,20 +348,22 @@ class RoadLane(Lane):
         preceding vehicle at most once (i.e., they can't keep trading leads),
         so we need only focus on the time-position of both vehicles at the
         moment the preceding vehicle reaches v_max, t_crit. If the trailing
-        meets the vehicle exactly at that time (or can never meet the preceding
-        vehicle), we know that we've found the soonest exit, and what side of
-        x_p(t_crit) we land on is also informative.
+        vehicle meets the preceding one vehicle exactly at that time, or can
+        never meet the preceding vehicle because the preceding vehicle is
+        moving faster than the trailing one from the start, we know that we've
+        found the soonest exit. What side x_p(t_crit) we land on is also
+        informative for the purposes of finding the exact minimum t_b.
 
-        This function will do three things:
+        This function does three things:
         1. Find the fastest exit x(t, 0) and check if it's the soonest exit,
-           returning if x(t_crit, 0) <= x(t_crit).
+           returning if x(t_crit, 0) <= x_p(t_crit).
         2. Find the slowest reasonable exit x(t, t_max) (i.e., that doesn't
            require braking to 0 velocity and waiting) and check if it's still
            too fast and causes a collision by checking if x(t_crit) is greater
            than x_p(t_crit). If so, return None.
         3. Binary search x(t_crit, t_b) over t_b with direction indicated by
            x_p(t_crit) - x(t_crit, b). Return the fastest exit found with
-           resolution up to the length of a simulated timestep.
+           error up to the length of a simulated timestep.
 
         Parameters
             vehicle_index: int
@@ -372,8 +375,8 @@ class RoadLane(Lane):
         """
 
         # TODO: (performance) Implement timeout dependent on the estimated
-        #       arrival time, e.g. wait (t_current-t_arrival)/2. Maybe don't do
-        #       it here since some functions assume that it returns.
+        #       arrival time, e.g., wait (t_current-t_arrival)/2. Maybe don't
+        #       do it here since some functions assume that it returns.
 
         # Fetch the relevant information
         vehicle: Vehicle = self.vehicles[vehicle_index]
@@ -395,8 +398,8 @@ class RoadLane(Lane):
 
         # 1. Evaluate the free flow case with no preceding exit to find the
         #    ScheduledExit that gets to the intersection as fast as possible.
-        t_to_speed_limit: float = (v_max - v0)/a
-        x_to_v_max: float = v0*t_to_speed_limit + (a/2)*t_to_speed_limit**2
+        t_to_v_max: float = (v_max - v0)/a
+        x_to_v_max: float = v0*t_to_v_max + (a/2)*t_to_v_max**2
         t_fastest_exit: float
         v_fastest_exit: float
         if x_to_v_max > x_to_intersection:
@@ -406,7 +409,7 @@ class RoadLane(Lane):
             v_fastest_exit = v0 + a*t_fastest_exit
         else:
             # The vehicle will exit after reaching the speed limit.
-            t_fastest_exit = ceil(t_to_speed_limit +
+            t_fastest_exit = ceil(t_to_v_max +
                                   (x_to_intersection - x_to_v_max)/v_max)
             v_fastest_exit = v_max
         exit: ScheduledExit = ScheduledExit(vehicle, VehicleSection.REAR,
@@ -485,7 +488,7 @@ class RoadLane(Lane):
             # Spend some time at the speed limit before braking.
             x_at_v_max: float = x_to_intersection - x_to_v_max - \
                 x_brake_from_v_max
-            t_slowest_exit = t_to_speed_limit + t_brake_from_v_max + \
+            t_slowest_exit = t_to_v_max + t_brake_from_v_max + \
                 x_at_v_max / v_max
             t_brake_max = t_brake_from_v_max
             t_brake_largest_seen_at_v_max = t_brake_max
@@ -557,7 +560,7 @@ class RoadLane(Lane):
                     b/2*t_brake_guess**2
                 x_guess_at_v_max = x_to_intersection - x_to_v_max \
                     - x_brake_guess_from_v_max
-                t_exit_guess = t_to_speed_limit + x_guess_at_v_max / v_max + \
+                t_exit_guess = t_to_v_max + x_guess_at_v_max / v_max + \
                     t_brake_guess
                 v_guess = v_max - t_brake_guess*t_exit_guess
             else:

@@ -262,6 +262,9 @@ class Tiling(Configurable):
                 should be included in the returned list of reservations.
         """
 
+        # TODO: (performance) Implement some request timeout function, like
+        #       (t_current-t_arrival)/2.
+
         # Fetch the vehicle index or indices of the lane's request.
         indices = incoming_lane.first_without_permission(sequence=sequence)
         if indices is None:
@@ -819,8 +822,7 @@ class Tiling(Configurable):
 
     @abstractmethod
     def pos_to_tiles(self, lane: IntersectionLane, t: int,
-                     clone: Vehicle, progress: VehicleProgress,
-                     reservation: Reservation,
+                     clone: Vehicle, reservation: Reservation,
                      force: bool = False, mark: bool = False
                      ) -> Optional[Dict[Tile, float]]:
         """Return a vehicle's tiles and percentage used if it works.
@@ -851,10 +853,12 @@ class Tiling(Configurable):
         if force and mark:
             raise ValueError("Can't force and mark tiles at the same time.")
 
-        timesteps_from_now = t - SHARED.t
-
-        # If the tilings created so far doesn't cover this future timestep yet,
+        # At this point in the cycle, everything is fully resolved at timestep
+        # SHARED.t. t > SHARED.t so we need to extend the tile stack to t. If
+        # the tilings created so far doesn't cover this future timestep yet,
         # keep creating new layers until we reach this timestep.
+        assert t > SHARED.t
+        timesteps_from_now = t - SHARED.t
         while len(self.tiles) < timesteps_from_now:
             self._add_new_layer()
 
@@ -913,7 +917,6 @@ class Tiling(Configurable):
         """
         if force and mark:
             raise ValueError("Can't force and mark tiles at the same time.")
-        raise NotImplementedError("TODO")
 
     def clear_marked_tiles(self, reservation: Reservation) -> None:
         """Clear tiles marked with this reservation before discarding."""

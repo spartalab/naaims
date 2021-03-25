@@ -45,7 +45,7 @@ class Tile(ABC):
 
         self.__hash = hash((id, time))
         self.__potentials: Dict[Reservation, float] = {}
-        self.__reserved_by: Dict[Optional[Vehicle], float] = {}
+        self.__reserved_by: Dict[Optional[int], float] = {}  # by VIN
         self.__rejection_threshold = rejection_threshold
 
     # TODO: (sequence) Change all of these tile checks to account for the total
@@ -72,7 +72,11 @@ class Tile(ABC):
                 tile. (Only used for stochastic reservations.)
         """
 
-        if (len(self.__reserved_by) == 0) or (r.vehicle in self.__reserved_by):
+        if (len(self.__reserved_by) == 0) or \
+                (r.vehicle.vin in self.__reserved_by):
+            # TODO: What if the same vehicle wants to use this Tile in
+            #       different reservations?
+            # TODO: (stochastic) Or with different probabilities?
             return True
         else:
             return sum(v for v in self.__reserved_by.values()) + p < \
@@ -105,10 +109,7 @@ class Tile(ABC):
         # TODO: (low) Consider not bothering with checking if the request will
         #       work or for the force flag.
         if force or self.will_reservation_work(r, p):
-            if r is not None:
-                self.__reserved_by[r.vehicle] = p
-            else:
-                self.__reserved_by[r] = p
+            self.__reserved_by[r.vehicle.vin if r is not None else None] = p
         else:
             raise ValueError("This request is incompatible with this tile.")
 

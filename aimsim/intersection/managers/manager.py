@@ -138,3 +138,12 @@ class IntersectionManager(Configurable):
         if vehicle.has_reservation:
             self.tiling.clear_reservation(vehicle)
             vehicle.has_reservation = False
+
+    # # Begin helper methods
+
+    # def check_empty(self) -> bool:
+    #     """Check if this intersection is empty."""
+    #     for lane in self.lanes:
+    #         if len(lane.vehicles) > 0:
+    #             return False
+    #     return True
