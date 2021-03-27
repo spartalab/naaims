@@ -8,7 +8,7 @@ from typing import List, Tuple, Dict, Optional, Set, Any
 from matplotlib import pyplot as plt
 
 import aimsim.shared as SHARED
-from aimsim.util import Coord
+from aimsim.util import Coord, SpeedUpdate
 from aimsim.pathfinder import Pathfinder
 from aimsim.archetypes import Configurable, Facility, Upstream, Downstream
 from aimsim.intersection import Intersection
@@ -309,13 +309,11 @@ class Simulator:
         #    part inside an intersection, the intersection calculates it,
         #    otherwise, the road does. Can be done in parallel. Once
         #    calculated, update vehicle speed and acceleration serially.
-        new_speeds = []
+        new_speeds: Dict[Vehicle, SpeedUpdate] = {}
         for f in self.facilities:
-            new_speeds.append(f.get_new_speeds())
-        new_speed = dict(update for f_update in new_speeds
-                         for update in f_update.items())
+            new_speeds.update(f.get_new_speeds())
         for vehicle in self.vehicles_in_scope:
-            update = new_speed[vehicle]
+            update = new_speeds[vehicle]
             vehicle.velocity = update.velocity
             vehicle.acceleration = update.acceleration
 

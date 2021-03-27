@@ -315,7 +315,7 @@ class Tiling(Configurable):
 
         # Each pass of this while loop is one pseudo-timestep.
         # (This is like a miniature version of the whole simulation loop.)
-        while (len(in_clones) > 0) and (counter < end_at):
+        while (len(in_clones) > 0) or (counter < end_at):
 
             # TODO: (low) A lot of this is repetitive. Consider modularizing.
             # TODO: (runtime) There is a lot of namespace reuse. Might cause
@@ -327,30 +327,29 @@ class Tiling(Configurable):
             preceding_vehicle_stopping_distance: Optional[float] = None
             clone_on_seam: bool = False
             for clone in downstream_clones:
-                progress_front: Optional[float
-                                         ] = downstream_progress[clone].front
+                progress_front: Optional[float] = \
+                    downstream_progress[clone].front
                 assert progress_front is not None
                 if downstream_progress[clone].rear is not None:
                     # The downstream lane is responsible for this clone's speed
-                    progress: Optional[float
-                                       ] = downstream_progress[clone].center
-                    assert progress is not None
+                    progress_center: Optional[float] = \
+                        downstream_progress[clone].center
+                    assert progress_center is not None
 
                     # Update the clone's speed and acceleration.
                     a: float
                     if preceding_vehicle_progress is None:
-                        a = downstream_lane.accel_update_uncontested(clone,
-                                                                     progress)
+                        a = downstream_lane.accel_update_uncontested(
+                            clone, progress_center)
                     else:
                         assert preceding_vehicle_stopping_distance is not None
                         a = downstream_lane.accel_update_following(
-                            clone, progress,
+                            clone, progress_center,
                             downstream_lane.effective_stopping_distance(
                                 preceding_vehicle_progress, progress_front,
                                 preceding_vehicle_stopping_distance))
-                    su: SpeedUpdate = downstream_lane.speed_update(clone,
-                                                                   progress,
-                                                                   a)
+                    su: SpeedUpdate = downstream_lane.speed_update(
+                        clone, progress_center, a)
                     clone.velocity = su.velocity
                     clone.acceleration = su.acceleration
 
