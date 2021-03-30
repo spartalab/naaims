@@ -14,8 +14,10 @@ at init. It determines how vehicles move in 2D space.
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Tuple, Optional, List, Dict, Set, NamedTuple
+from typing import TYPE_CHECKING, Tuple, Optional, List, Dict, Set, \
+    NamedTuple, TypeVar
 from warnings import warn
+# from copy import copy
 
 import aimsim.shared as SHARED
 from aimsim.util import (Coord, VehicleSection, SpeedUpdate, VehicleTransfer,
@@ -24,6 +26,8 @@ from aimsim.util import (Coord, VehicleSection, SpeedUpdate, VehicleTransfer,
 if TYPE_CHECKING:
     from aimsim.vehicles import Vehicle
     from aimsim.trajectories import Trajectory
+
+L = TypeVar('L', bound='Lane')
 
 
 class LateralDeviation:
@@ -631,8 +635,8 @@ class Lane(ABC):
         if transfer.distance_left is None:
             # This is a freshly created vehicle section entering from a spawner
             # so we need to initialize its position.
-            # TODO: (low) Refactor so this is only possible in RoadLane and not
-            #       in IntersectionLane.
+            # TODO: (clarity) Refactor so this is only possible in RoadLane and
+            #       not reachable via IntersectionLane.
             if transfer.section is VehicleSection.FRONT:
                 # Place the front vehicle section ahead at its full length plus
                 # the length of its front and rear buffers.
@@ -668,6 +672,15 @@ class Lane(ABC):
         self.vehicle_progress[vehicle] = VehicleProgress()
 
     # Misc functions
+
+    @abstractmethod
+    def clone(self: L) -> L:
+        """Should return a copy of the lane with the vehicles removed."""
+        # clone = copy(self)
+        # clone.vehicles = []
+        # clone.vehicle_progress = {}
+        # return clone
+        raise NotImplementedError("Must be implemented in child classes.")
 
     def __hash__(self) -> int:
         return self.trajectory.__hash__()

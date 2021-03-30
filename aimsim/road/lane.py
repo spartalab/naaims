@@ -1,6 +1,7 @@
 from __future__ import annotations
+from copy import copy
 from math import ceil, sqrt
-from typing import TYPE_CHECKING, Tuple, Optional, List, Dict, Set
+from typing import TYPE_CHECKING, Tuple, Optional, List, Dict, Set, TypeVar
 
 import aimsim.shared as SHARED
 from aimsim.lane import Lane, VehicleProgress, ScheduledExit
@@ -11,6 +12,8 @@ if TYPE_CHECKING:
     from aimsim.trajectories import Trajectory
     from aimsim.intersection import Intersection
     from aimsim.vehicles import Vehicle
+
+L = TypeVar('L', bound='RoadLane')
 
 
 class RoadLane(Lane):
@@ -251,13 +254,14 @@ class RoadLane(Lane):
             Tuple[int, int]
                 The first int is the index of the first vehicle in this lane's
                 approach region without permission to enter.
-                The second int is the same if sequence is False. If sequence is
-                True, it is one plus the index of the last vehicle in the
+                The second int is one plus the index of the last vehicle in the
                 sequence of vehicles beginning with the vehicle at the first
                 index of vehicles with the same desired movement through the
                 intersection.
                 This is intended for use as range(int, int).
         """
+
+        # TODO: (performance) This ought to be cacheable.
 
         if (targets is not None) and (sequence is not None):
             raise ValueError("Both target and sequence is not intended usage.")
@@ -278,8 +282,10 @@ class RoadLane(Lane):
             #       the vehicle?
             # TODO: Check that this vehicle is fully in lane. If not, ignore it
             #       since we can't calculate a SoonestExit for it.
-            if p < self.lcregion_end:
-                # This vehicle is outside of the approach area. Done checking.
+            if (p < self.lcregion_end) or \
+                    (self.vehicle_progress[vehicle].rear is None):
+                # This vehicle is outside of the approach area or not fully in
+                # the lane.
                 break
 
             if ((first_index is None) and
@@ -294,7 +300,7 @@ class RoadLane(Lane):
                 first_index = i
                 series_length = 1
                 if (targets is None) and sequence:
-                    # We want to look for futher vehicles with the same move.
+                    # We want to look for further vehicles with the same move.
                     targets = {its_target}
                 else:
                     # We've found a vehicle without permission but with a valid
@@ -311,10 +317,8 @@ class RoadLane(Lane):
                     # with the same movement. Break out of the intersection.
                     break
 
-        if first_index is None:
-            return None
-        else:
-            return first_index, first_index+series_length
+        return None if first_index is None else (first_index,
+                                                 first_index + series_length)
 
     def soonest_exit(self, vehicle_index: int,
                      last_rear_exit: Optional[ScheduledExit] = None
@@ -621,8 +625,14 @@ class RoadLane(Lane):
                 this_exit. By definition of an exit, this should have at least
                 one VehicleTransfer for the vehicle's front section.
         """
-        # TODO: Remember to clone the vehicle using vehicle.clone() before
-        #       creating and returning the VehicleTransfers.
+        # TODO: (low) This is intended to be used by intersection.tiling but
+        #       isn't, as it currently uses a heuristic where its starts
+        #       testing with the assumption that at this_exit, the vehicle's
+        #       front section has just barely crossed the intersection line
+        #       instead of the high-fidelity estimate this function is meant
+        #       to implement. The estimate is correct to within one timestep,
+        #       more or less, so it should suffice, but we could implement this
+        #       function to increase marginal accuracy.
         raise NotImplementedError("TODO")
 
     def register_latest_scheduled_exit(self, new_exit: ScheduledExit) -> None:
@@ -638,3 +648,24 @@ class RoadLane(Lane):
         if ((self.latest_scheduled_exit is None) or
                 (self.latest_scheduled_exit.t <= new_exit.t)):
             self.latest_scheduled_exit = new_exit
+
+    # Misc functions
+
+    def clone(self: L) -> L:
+        """Return a copy of the lane with vehicles and downstream removed."""
+        # clone = super().clone()
+        clone = copy(self)
+        clone.vehicles = []
+        clone.vehicle_progress = {}
+        clone.downstream_is_remover = True
+        clone.downstream_intersection = None
+        clone.latest_scheduled_exit = None
+        # TODO: (clarity) this implementation short circuits intended behavior
+        #       by claiming that the cloned RoadLane doesn't end at an
+        #       intersection regardless of if it actually does, so that it
+        #       doesn't try calling the intersection it was originally
+        #       connected to and mixing the cloned and original environments.
+        #       This is helpful for check_request usage but not intended
+        #       behavior; consider adding overrides to the constructor for this
+        #       use case.
+        return clone

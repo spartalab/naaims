@@ -13,12 +13,15 @@ adjustable granularity (Dresner and Stone 2008).
 
 from __future__ import annotations
 from abc import abstractmethod
+from aimsim.trajectories import trajectory
+from aimsim.vehicles.vehicle import V
+from aimsim import intersection
 from typing import (TYPE_CHECKING, Optional, List, Set, Dict, Tuple, Type,
                     TypeVar, Any)
 
 import aimsim.shared as SHARED
 from aimsim.archetypes import Configurable
-from aimsim.util import Coord, SpeedUpdate, VehicleSection
+from aimsim.util import Coord, SpeedUpdate, VehicleSection, VehicleTransfer
 from aimsim.lane import VehicleProgress, ScheduledExit
 from aimsim.intersection.reservation import Reservation
 from aimsim.intersection.tilings.tiles import StochasticTile, DeterministicTile
@@ -226,8 +229,9 @@ class Tiling(Configurable):
         vehicle.permission_to_enter_intersection = True
         lane.register_latest_scheduled_exit(rear_exit)
 
-    def check_request(self, incoming_lane: RoadLane, mark: bool = False,
-                      sequence: bool = False) -> List[Reservation]:
+    def check_request(self, incoming_road_lane_original: RoadLane,
+                      mark: bool = False, sequence: bool = False
+                      ) -> List[Reservation]:
         """If a lane's request(s) work, return the potential Reservation(s).
 
         Check if a lane's reservation (plural if the sequence flag is True)
@@ -249,8 +253,9 @@ class Tiling(Configurable):
         lane as well, assume they simply disappear.
 
         Parameters
-            incoming_lane: RoadLane
+            incoming_road_lane_original: RoadLane
                 The incoming road lane to check for working reservations.
+                (It'll be duplicated so that's why it's called _original.)
             mark: bool
                 Whether or not to mark tiles to check for conflicts between
                 potential reservations on different intersection lanes.
@@ -266,531 +271,281 @@ class Tiling(Configurable):
         #       (t_current-t_arrival)/2.
 
         # Fetch the vehicle index or indices of the lane's request.
-        indices = incoming_lane.first_without_permission(sequence=sequence)
+        indices = incoming_road_lane_original.first_without_permission(
+            sequence=sequence)
         if indices is None:
             # There are no requesting vehicles in this lane, so return.
             return []
         else:
             counter = indices[0]
             end_at = indices[1]
+            originals = incoming_road_lane_original.vehicles[counter:end_at]
 
-        # Find when the test starts by fetching the time of the projected
-        # entrance of the first vehicle in the request sequence.
-        new_exit: Optional[ScheduledExit] = incoming_lane.soonest_exit(counter)
+        # Fetch the projected entrance of the first vehicle in the request
+        # sequence and set its time as the start of the reservation test.
+        new_exit: Optional[ScheduledExit] = \
+            incoming_road_lane_original.soonest_exit(counter)
         if new_exit is None:
             raise RuntimeError("Soonest exit should have returned a "
                                "ScheduledExit but didn't.")
-
-        # Fetch the desired IntersectionLane we'll be operating on and its
-        # corresponding downstream lane.
-        downstream_coord: Coord = new_exit.vehicle.next_movements(
-            incoming_lane.trajectory.end_coord)[0]
-        lane: IntersectionLane = self.lanes_by_endpoints[
-            (incoming_lane.trajectory.end_coord, downstream_coord)]
-        downstream_lane: RoadLane = self.downstream_road_lane_by_coord[
-            downstream_coord]
-
-        # Track what timestep our test is in. The test starts when the first
-        # vehicle in the sequence is scheduled to exit its road lane and enter
-        # the intersection.
         test_t = new_exit.t
 
+        # Fetch and clone the request's incoming lane, IntersectionLane, and
+        # outgoing lane.
+        incoming_road_lane = incoming_road_lane_original.clone()
+        downstream_coord: Coord = new_exit.vehicle.next_movements(
+            incoming_road_lane.trajectory.end_coord)[0]
+        intersection_lane: IntersectionLane = self.lanes_by_endpoints[
+            (incoming_road_lane.trajectory.end_coord, downstream_coord)
+        ].clone()
+        outgoing_road_lane: RoadLane = self.downstream_road_lane_by_coord[
+            downstream_coord].clone()
+
         # Initialize data structures used for reservations.
-        originals: Dict[Vehicle, Vehicle] = {}
+        clone_to_original: Dict[Vehicle, Vehicle] = {}
         test_reservations: Dict[Vehicle, Reservation] = {}
         valid_reservations: List[Reservation] = []
+        last_exit: Optional[ScheduledExit] = None
 
-        # Initialize data structures used for clones in the intersection.
-        in_clones: List[Vehicle] = []
-        in_progress: Dict[Vehicle, VehicleProgress] = {}
+        # Mock the simulation loop until all vehicles in the test sequence
+        # have spawned, progressed, and exited the intersection lane. Refer to
+        # simulator.step() for more details on the simulation loop.
+        # Note that clones are only spawned into the test environment at the
+        # timestep when they first enter the intersection, and are removed as
+        # soon as they exit the intersection.
+        while (len(intersection_lane.vehicles) > 0) or (counter < end_at):
 
-        # Declare data structures used for clones still entering.
-        incoming_progress: Optional[VehicleProgress] = None
-        last_exit: ScheduledExit
+            # 1.  Update speeds for all vehicles. (Speed updates are controlled
+            #     by the intersection so only calling the intersection lane's
+            #     get_new_speeds function is necessary.)
+            for vehicle, update in intersection_lane.get_new_speeds().items():
+                vehicle.velocity = update.velocity
+                vehicle.acceleration = update.acceleration
 
-        # Initialize data structures used for clones that have partially or
-        # fully exited the intersection.
-        downstream_clones: List[Vehicle] = []
-        downstream_progress: Dict[Vehicle, VehicleProgress] = {}
+            # 2a. Use the updated speeds to progress the position of the clone
+            #     on the downstream lane. (Error if the clone's center section
+            #     exits the road lane as we'll no longer be able to update its
+            #     position. This shouldn't happen; if it does the outgoing road
+            #     is way too short.)
+            transfers = outgoing_road_lane.step_vehicles()
+            if len(transfers) > 0:
+                for transfer in transfers:
+                    if transfer.section is VehicleSection.CENTER:
+                        raise RuntimeError("Outgoing road too short.")
+                del transfer
+            del transfers
 
-        # Each pass of this while loop is one pseudo-timestep.
-        # (This is like a miniature version of the whole simulation loop.)
-        while (len(in_clones) > 0) or (counter < end_at):
-
-            # TODO: (low) A lot of this is repetitive. Consider modularizing.
-            # TODO: (runtime) There is a lot of namespace reuse. Might cause
-            #       some unintentional errors if values aren't reset as
-            #       expected. Consider addressing.
-
-            # Update speeds for clones on the downstream road lane.
-            preceding_vehicle_progress: Optional[float] = None
-            preceding_vehicle_stopping_distance: Optional[float] = None
-            clone_on_seam: bool = False
-            for clone in downstream_clones:
-                progress_front: Optional[float] = \
-                    downstream_progress[clone].front
-                assert progress_front is not None
-                if downstream_progress[clone].rear is not None:
-                    # The downstream lane is responsible for this clone's speed
-                    progress_center: Optional[float] = \
-                        downstream_progress[clone].center
-                    assert progress_center is not None
-
-                    # Update the clone's speed and acceleration.
-                    a: float
-                    if preceding_vehicle_progress is None:
-                        a = downstream_lane.accel_update_uncontested(
-                            clone, progress_center)
-                    else:
-                        assert preceding_vehicle_stopping_distance is not None
-                        a = downstream_lane.accel_update_following(
-                            clone, progress_center,
-                            downstream_lane.effective_stopping_distance(
-                                preceding_vehicle_progress, progress_front,
-                                preceding_vehicle_stopping_distance))
-                    su: SpeedUpdate = downstream_lane.speed_update(
-                        clone, progress_center, a)
-                    clone.velocity = su.velocity
-                    clone.acceleration = su.acceleration
-
-                    # Update preceding data for the next loop.
-                    preceding_vehicle_progress = downstream_progress[clone
-                                                                     ].rear
-                    preceding_vehicle_stopping_distance = clone.stopping_distance()
-                else:
-                    # This clone is still transferring from intersection to
-                    # road, so the intersection is responsible for its speed.
-                    # This is the last clone on the downstream lane.
-                    if preceding_vehicle_progress is not None:
-                        # Calculate the stopping distance for this clone for
-                        # the intersection lane to use after exiting this loop.
-                        assert preceding_vehicle_stopping_distance is not None
-                        preceding_vehicle_stopping_distance = downstream_lane.\
-                            effective_stopping_distance(
-                                preceding_vehicle_progress,
-                                progress_front,
-                                preceding_vehicle_stopping_distance)
-                    clone_on_seam = True
-                    break
-
-            # Calculate the stopping distance across the road-intersection seam
-            # Case 1: There are no vehicles downstream, so preceding_sd is
-            #         None. This is the default sd so nothing to do.
-            # Case 2: There's a vehicle on the seam. preceding_sd is not None
-            #         because it was already defined in the downstream loop's
-            #         else block.
-            # Case 3: There are vehicles downstream but none on the seam.
-            #         Calculate the stopping distance on the downstream lane
-            #         here and add the stopping distance in the intersection
-            #         lane distance in the next loop.
-            if (preceding_vehicle_stopping_distance is not None) and (
-                    not clone_on_seam):
-                assert preceding_vehicle_progress is not None
-                preceding_vehicle_stopping_distance = downstream_lane.effective_stopping_distance(
-                    preceding_vehicle_progress, 0,
-                    preceding_vehicle_stopping_distance)
-
-            # Update speeds for clones on the intersection lane.
-            preceding_vehicle_progress = None
-            for clone in in_clones:
-                # The intersection lane is responsible for the speed update of
-                # all vehicles even partially in itself.
-                progress = in_progress[clone].front
-                if progress is not None:
-                    if (preceding_vehicle_progress is None) and (
-                            preceding_vehicle_stopping_distance is not None):
-                        # See Case 3 in the preceding code block. Add the
-                        # stopping distance between this vehicle and the end of
-                        # the lane.
-                        preceding_vehicle_stopping_distance = lane.effective_stopping_distance(
-                            1, progress, preceding_vehicle_stopping_distance)
-                elif in_progress[clone].rear is not None:
-                    progress = in_progress[clone].rear
-                else:
-                    raise ValueError("Can't fetch p, clone has already exited")
-
-                # Update the clone's speed and acceleration.
-                assert progress is not None
-                a = lane.accel_update_following(clone, progress,
-                                                stopping_distance=preceding_vehicle_stopping_distance)
-                su = lane.speed_update(clone, progress, a)
-                clone.velocity = su.velocity
-                clone.acceleration = su.acceleration
-
-                # Update preceding data for the next cycle.
-                preceding_vehicle_progress = downstream_progress[clone].rear
-                preceding_vehicle_stopping_distance = clone.stopping_distance()
-
-            # There is at most one vehicle on the incoming lane, and it will
-            # always be at least partially in the intersection lane, so no
-            # speed update necessary.
-
-            # Progress clones on the downstream lane.
-            last_p: float = 1.1
-            to_remove: List[Vehicle] = []
-            for clone in downstream_clones:
-                # Update the clone's progress in the downstream road lane,
-                # binning the transfers.
-                (downstream_progress[clone], last_p, _
-                 ) = downstream_lane.update_vehicle_progress(
-                     clone, downstream_progress[clone], last_p)
-
-                # Check if the vehicle has started to exit the lane. If it
-                # starts exiting at all, just disappear it entirely.
-                if downstream_progress[clone].front is None:
-                    if clone in in_progress:
-                        raise RuntimeError("Clone is exiting the downstream "
-                                           "lane before it's left the "
-                                           "intersection. Downstream road "
-                                           "might be too short.")
-                    del downstream_progress[clone]
-                    to_remove.append(clone)
-
-                # Update the clone's position using the downstream road lane if
-                # it's partially in the intersection but its center isn't.
-                # Update its reservation with its used tiles as well.
-                if clone in in_progress:
-                    progress = downstream_progress[clone].center
-                    if progress is not None:
-                        downstream_lane.update_vehicle_position(
-                            clone, progress)
-                        tiles_used = self.pos_to_tiles(lane, test_t, clone,
-                                                       in_progress[clone],
-                                                       test_reservations[clone
-                                                                         ],
-                                                       mark=mark)
-                        if tiles_used is not None:
-                            test_reservations[clone].tiles[test_t] = tiles_used
-                        else:
-                            # No test reservation is valid, so scrap them all
-                            # and just return the complete list after removing
-                            # the dependency on the last valid reservation if
-                            # it exists.
-                            if len(valid_reservations) > 0:
-                                valid_reservations[-1].dependency = None
-
-                            # Remove tile markings associated with invalid
-                            # test_reservations if they had any.
-                            if mark:
-                                for r in test_reservations.values():
-                                    self.clear_marked_tiles(r)
-
-                            return valid_reservations
-
-            # Finalize removals from the downstream lane.
-            for clone in to_remove:
-                downstream_clones.remove(clone)
-
-            # Progress clones in the intersection lane.
-            last_p = 1.1
-            to_remove = []
-            for i, clone in enumerate(in_clones):
-                # Update the clone's progress in the intersection.
-                (in_progress[clone], last_p, transfers
-                 ) = lane.update_vehicle_progress(clone, in_progress[clone],
-                                                  last_p)
-
-                # Check if the vehicle has fully exited the intersection.
-                if all((p is None) for p in in_progress[clone]):
-                    # If so, check if its edge buffer tiles are usable.
+            # 2b. Progress positions for clones in the intersection lane and
+            # 3a. transfer exiting vehicle sections onto the downstream lane.
+            # 4a. If a clone has fully exited, check the edge buffer tiles of
+            #     their reservation, and if they work separately delete the
+            #     clone from the downstream road lane as we no longer need to
+            #     check its position in the intersection.
+            transfers = intersection_lane.step_vehicles()
+            for transfer in transfers:
+                if transfer.section is VehicleSection.REAR:
+                    # Clone is fully exiting the incoming road lane and fully
+                    # entering the intersection lane in this timestep.
+                    clone: Vehicle = transfer.vehicle
                     reservation: Reservation = test_reservations[clone]
+
+                    # Attach buffer tiles to this exiting reservation request
+                    # and check if these tiles are free.
                     edge_buffer_tiles = self.edge_tile_buffer(
-                        lane, test_t, clone, reservation, prepend=False,
-                        mark=mark)
-                    if edge_buffer_tiles is not None:
-                        # Attach tiles and finalize the reservation.
-                        reservation.tiles = {**reservation.tiles,
-                                             **edge_buffer_tiles}
-                        del in_progress[clone]
-                        valid_reservations.append(test_reservations[clone])
-                        del test_reservations[clone]
-                        to_remove.append(clone)
-                    else:
-                        # No test reservation is valid, so scrap them all
-                        # and just return the complete list after removing the
-                        # dependency on the last valid reservation if it exists
+                        intersection_lane, test_t, clone, reservation,
+                        prepend=False, mark=mark)
+                    if edge_buffer_tiles is None:
+                        # Not only is this reservation not possible, all clones
+                        # behind it also have invalid reservations, so we can
+                        # terminate the test here and return the valid list
+                        # after removing the last reservation's reference to
+                        # this invalid request.
                         if len(valid_reservations) > 0:
                             valid_reservations[-1].dependency = None
-
                         # Remove tile markings associated with invalid
                         # test_reservations if they had any.
                         if mark:
                             for r in test_reservations.values():
                                 self.clear_marked_tiles(r)
-
                         return valid_reservations
-
-                # Move vehicle sections onto the downstream road lane on exit.
-                center_transitioned: bool = False
-                for transfer in transfers:
-                    if clone not in downstream_progress:
-                        downstream_clones.append(clone)
-                        downstream_progress[clone] = VehicleProgress()
-                    downstream_progress[clone] = downstream_lane.\
-                        transfer_to_progress(transfer,
-                                             downstream_progress[clone])
-                    if transfer.section is VehicleSection.CENTER:
-                        # The clone's center section transitioned and its
-                        # position must be updated by the downstream lane.
-                        progress = downstream_progress[clone].center
-                        assert progress is not None
-                        downstream_lane.update_vehicle_position(
-                            clone, progress)
-                        center_transitioned = True
-
-                # Update its position if its center is in the intersection.
-                progress = in_progress[clone].center
-                if progress is not None:
-                    lane.update_vehicle_position(clone, progress)
-
-                # Update its reservation with its used tiles if its position
-                # was calculated in this loop.
-                if (progress is not None) or center_transitioned:
-                    tiles_used = self.pos_to_tiles(lane, test_t, clone,
-                                                   in_progress[clone],
-                                                   test_reservations[clone],
-                                                   mark=mark)
-                    if tiles_used is not None:
-                        test_reservations[clone].tiles[test_t] = tiles_used
                     else:
-                        # Scrap all test_reservations after this one and stop
-                        # spawning new ones.
+                        # This reservation request is compatible with existing
+                        # reservations and can be confirmed. Attach the buffer
+                        # tiles to reservation, finalize it, and delete it from
+                        # from the downstream road lane now that it's exited
+                        # the intersection.
+                        reservation.tiles.update(edge_buffer_tiles)
+                        valid_reservations.append(test_reservations[clone])
+                        del test_reservations[clone]
+                        outgoing_road_lane.vehicles = []
+                        del outgoing_road_lane.vehicle_progress[clone], clone
+                outgoing_road_lane.enter_vehicle_section(transfer)
+            del transfers, transfer
 
-                        # Figure out where to look to decouple from the
-                        # preceding reservation.
-                        if i == 0:
-                            # We don't just have to decouple from the preceding
-                            # reservation, we know for sure that no test
-                            # reservation is valid, so we can scrap them all
-                            # and just return the valid reservations list.
-
-                            if len(valid_reservations) > 0:
-                                # Need to look in valid_reservations for the
-                                # prior reseration to decouple.
-                                valid_reservations[-1].dependency = None
-
-                            # Remove tile markings associated with invalid
-                            # test_reservations if they had any.
-                            if mark:
-                                for r in test_reservations.values():
-                                    self.clear_marked_tiles(r)
-
-                            return valid_reservations
-                        else:
-                            # Decouple from the prior reservation.
-                            test_reservations[in_clones[i-1]].dependency = None
-
-                        # Delete the clones after this one, their progress, and
-                        # remove their marked tiles.
-                        to_remove += in_clones[i:]
-                        for clone_to_del in in_clones[i:]:
-                            if mark:
-                                self.clear_marked_tiles(
-                                    test_reservations[clone_to_del])
-                            del originals[clone_to_del]
-                            del test_reservations[clone_to_del]
-                            del in_progress[clone_to_del]
-                        incoming_progress = None
-
-                        # Stop spawning new clones.
-                        counter = end_at
-
-                        # Break out of the loop since we don't need to update
-                        # the positions of any following clones (but we still
-                        # need to continue looping to verify that reservations
-                        # ahead of this one are valid).
-                        break
-
-            # Finalize removals from the intersection lane.
-            for clone in to_remove:
-                in_clones.remove(clone)
-
-            # Progress the clone in the incoming road lane forward, if there is
-            # one there. Transfer exiting section(s) to the intersection lane.
-            if incoming_progress is not None:
-                clone = in_clones[-1]
-
-                # Need to determine if and how to update clone position.
-                # There are three cases:
-                #   1. Center started and ended in intersection.
-                #      Position and tile update handled earlier.
-                #   2. Center started in road and ended in intersection.
-                #      Position update to be done but handled by intersection.
-                #   3. Center started and ended in road.
-                #      Position update to be done, handled by road.
-                center_started_in_road: bool = (incoming_progress.center
-                                                is not None)
-                pos_updated: bool = False
-
-                (incoming_progress, _, transfers
-                 ) = incoming_lane.update_vehicle_progress(
-                    clone, incoming_progress, 1.1)
-
-                # Handle the forward transfer of any sections exiting the road
-                # lane into the intersection
-                for transfer in transfers:
-                    # Note: Clones spawn partially in the intersection, so
-                    #       there's no need to create an entry for it.
-                    in_progress[clone] = lane.transfer_to_progress(
-                        transfer, in_progress[clone])
-
-                    if transfer.section is VehicleSection.CENTER:
-                        # Case 2. Update vehicle position using intersection.
-                        progress = in_progress[clone].center
-                        assert progress is not None
-                        lane.update_vehicle_position(clone, progress)
-                        pos_updated = True
-
-                if center_started_in_road and (not pos_updated):
-                    # Case 3. Update vehicle position using road.
-                    progress = incoming_progress.center
-                    assert progress is not None
-                    incoming_lane.update_vehicle_position(clone, progress)
-
-                # If the clone has fully entered the intersection, delete its
-                # incoming progress, find the scheduled exit of its rear
-                # section, and update the clone's reservation with it.
-                if all((p is None) for p in incoming_progress):
-                    last_exit = ScheduledExit(vehicle=originals[clone],
+            # 2c. Progress the position of the clone on the upstream road and
+            # 3b. transfer section(s) transitioning from road to intersection.
+            transfers = incoming_road_lane.step_vehicles()
+            for transfer in transfers:
+                intersection_lane.enter_vehicle_section(transfer)
+                clone = transfer.vehicle
+                if transfer.section is VehicleSection.REAR:
+                    last_exit = ScheduledExit(vehicle=clone_to_original[clone],
                                               section=VehicleSection.REAR,
                                               t=test_t, v=clone.velocity)
                     test_reservations[clone].its_exit = last_exit
-                    incoming_progress = None
+                del clone
+            del transfers, transfer
 
-                if center_started_in_road:
-                    # Case 2 and 3. Find the tiles used by this clone.
-                    tiles_used = self.pos_to_tiles(lane, test_t, clone,
-                                                   in_progress[clone],
-                                                   test_reservations[clone],
-                                                   mark=mark)
-                    if tiles_used is not None:
-                        test_reservations[clone].tiles[test_t] = tiles_used
-                    else:
-                        # Scrap this reservation and stop spawning new ones.
-                        # This is the last test reservation so there are no
-                        # others to delete.
+            # 4b. Check and log the tiles used by all clones still in the
+            #     intersection after the speed and position update. If a
+            #     clone's used tiles are incompatible with a confirmed
+            #     reservation, reject its request and all following.
+            to_remove: List[Vehicle] = []
+            for i, clone in enumerate(intersection_lane.vehicles):
+                tiles_used = self.pos_to_tiles(intersection_lane, test_t,
+                                               clone,
+                                               test_reservations[clone],
+                                               mark=mark)
+                if tiles_used is not None:
+                    test_reservations[clone].tiles[test_t] = tiles_used
+                else:
+                    # Scrap all test_reservations after this one and stop
+                    # spawning new ones.
 
-                        # Figure out where to look to decouple from the
-                        # preceding reservation.
-                        if in_clones[0] is clone:
-                            # This is the only clone with an incomplete
-                            # reservation.
+                    # If this is the first clone still in the intersection, we
+                    # can simply terminate the test here since no clone still
+                    # in the intersection can have a valid reservation.
+                    if i == 0:
+                        if len(valid_reservations) > 0:
+                            # Need to decouple from the last confirmed res.
+                            valid_reservations[-1].dependency = None
 
-                            if len(valid_reservations) > 0:
-                                # Need to look in valid_reservations for the
-                                # prior reseration to decouple.
-                                valid_reservations[-1].dependency = None
-
-                            # Remove tile markings associated with invalid
-                            # test_reservations.
-                            if mark:
-                                self.clear_marked_tiles(
-                                    test_reservations[clone])
-
-                            return valid_reservations
-                        else:
-                            # Decouple from the prior reservation.
-                            test_reservations[in_clones[-1]].dependency = None
-
-                        # Delete this clone and its records.
-                        to_remove.append(clone)
+                        # Remove tile markings associated with all invalid
+                        # test reservations if there were any.
                         if mark:
-                            self.clear_marked_tiles(test_reservations[clone])
-                        del originals[clone]
-                        del test_reservations[clone]
-                        del in_progress[clone]
-                        incoming_progress = None
+                            for r in test_reservations.values():
+                                self.clear_marked_tiles(r)
 
-                        # Stop spawning new clones.
-                        counter = end_at
+                        return valid_reservations
+                    # Otherwise we need to scrap the data for all clones at or
+                    # behind this one with the rejected request. Start by
+                    # decoupling from the prior reservation request.
+                    test_reservations[intersection_lane.vehicles[i-1]
+                                      ].dependency = None
 
-            # Try to spawn the next clone during the same timestep as when the
-            # last one fully enters.
-            if incoming_progress is None:
+                    # Delete the clones after this one, their progress, and
+                    # unmarked their marked tiles if necessary.
+                    to_remove += intersection_lane.vehicles[i:]
+                    for clone_to_del in intersection_lane.vehicles[i:]:
+                        if mark:
+                            self.clear_marked_tiles(
+                                test_reservations[clone_to_del])
+                        del clone_to_original[clone_to_del]
+                        del test_reservations[clone_to_del]
 
-                # Check if there's a clone ready to enter (or if we already
-                # found one and are just waiting for its time to enter).
-                if (counter < end_at) and (new_exit is None):
-                    new_exit = incoming_lane.soonest_exit(counter, last_exit)
+                    # Delete the clone on the upstream lane and stop spawning
+                    # new clones.
+                    if len(incoming_road_lane.vehicles) > 0:
+                        clone = incoming_road_lane.vehicles[0]
+                        del incoming_road_lane.vehicle_progress[clone]
+                        incoming_road_lane.vehicles = []
+                    counter = end_at
 
-                # Check if it's time for new_exit to enter the intersection.
-                # TODO: (runtime) Should this be an equality check?
-                if (new_exit is not None) and (new_exit.t >= test_t):
-                    # It's time for this vehicle to enter.
-                    # Fetch the new exit's progress and transfer.
-                    (incoming_progress, transfers
-                     ) = incoming_lane.progress_at_exit(counter, new_exit)
+                    # Break out of the loop since we don't need to update
+                    # the positions of any following clones (but we still
+                    # need to continue the test to verify that the remaining
+                    # requests ahead of this one are valid).
+                    break
+            del clone
 
-                    # Grab the original vehicle, its testing clone, and the
-                    # ordered list of all clones ahead of it in sequence.
+            # 4c. Finalize removals from the intersection lane.
+            for clone in to_remove:
+                intersection_lane.vehicles.remove(clone)
+                del intersection_lane.vehicle_progress[clone]
+            del clone, to_remove
+
+            # 4d. Spawn the next clone if it's time, it's possible, and there
+            #     are still clones to spawn.
+            if (len(incoming_road_lane.vehicles) == 0) and (counter < end_at):
+                # Find and cache when and how the next clone enters.
+                if new_exit is None:
+                    new_exit = incoming_road_lane_original.soonest_exit(
+                        counter, last_exit)
+
+                assert new_exit is not None
+                if new_exit.t >= test_t:
+                    # The next vehicle's time has come. Clone the vehicle and
+                    # initialize its reservation.
                     original: Vehicle = new_exit.vehicle
-                    clone = transfers[0].vehicle
-                    prior_clones: List[Vehicle] = downstream_clones + in_clones
-
-                    # Initialize its reservation. We can dump this later if it
-                    # turns out adding this vehicle doesn't work.
+                    clone = original.clone_for_request()
                     reservation = Reservation(
                         vehicle=original,
-                        res_pos=lane.trajectory.start_coord,
+                        res_pos=intersection_lane.trajectory.start_coord,
                         tiles={},
-                        lane=lane,
-                        dependent_on=set(
-                            originals[c] for c in prior_clones),
+                        lane=intersection_lane,
+                        dependent_on=tuple(originals[counter+1:]),
                         dependency=None,
                         its_exit=new_exit
                     )
 
-                    # Find the progress of the clone in the intersection.
-                    for transfer in transfers:
-                        progress: VehicleProgress = lane.transfer_to_progress(
-                            transfer)
+                    # At this time, the front of the vehicle should just be
+                    # entering the intersection lane, and the rest of the
+                    # vehicle should still be upstream. (This isn't exactly 1:1
+                    # with simulated behavior as vehicles can travel slightly
+                    # into the intersection as they enter, but it'll be
+                    # accurate to within one timestep.)
+                    # TODO: (low) Replace the just-entering heuristc with
+                    #       RoadLane.progress_at_exit(counter, new_exit)
 
-                    # Update this clone's position.
-                    if incoming_progress.center is not None:
-                        incoming_lane.update_vehicle_position(
-                            clone, incoming_progress.center)
-                    elif in_progress[clone].center is not None:
-                        progress = in_progress[clone].center
-                        assert progress is not None
-                        lane.update_vehicle_position(clone, progress)
-                    else:
-                        raise RuntimeError("Can't find vehicle center.")
+                    # Load its center and rear sections onto the incoming lane.
+                    incoming_road_lane.add_vehicle(clone)
+                    incoming_road_lane.enter_vehicle_section(VehicleTransfer(
+                        clone, VehicleSection.CENTER,
+                        incoming_road_lane.trajectory.length - clone.length *
+                        (.5 + SHARED.SETTINGS.length_buffer_factor),
+                        incoming_road_lane.trajectory.start_coord))
+                    incoming_road_lane.enter_vehicle_section(VehicleTransfer(
+                        clone, VehicleSection.REAR,
+                        incoming_road_lane.trajectory.length - clone.length *
+                        (1 + 2*SHARED.SETTINGS.length_buffer_factor),
+                        incoming_road_lane.trajectory.start_coord))
+
+                    # Transfer its front section onto the intersection lane.
+                    intersection_lane.enter_vehicle_section(VehicleTransfer(
+                        clone, VehicleSection.FRONT, 0,
+                        intersection_lane.trajectory.start_coord))
 
                     # Check if its tiles work.
-                    tiles_used = self.pos_to_tiles(lane, test_t, clone,
-                                                   progress,
-                                                   reservation,
+                    # TODO: This section is repetitive. Can we modularize it?
+                    tiles_used = self.pos_to_tiles(intersection_lane, test_t,
+                                                   clone, reservation,
                                                    mark=mark)
-                    edge_tiles_used = self.edge_tile_buffer(lane, test_t,
-                                                            clone,
-                                                            reservation,
-                                                            prepend=True,
-                                                            mark=mark)
-                    if ((edge_tiles_used is not None)
-                            and (tiles_used is not None)):
+                    edge_tiles_used = self.edge_tile_buffer(
+                        intersection_lane, test_t, clone, reservation,
+                        prepend=True, mark=mark)
+                    if (edge_tiles_used is not None) and \
+                            (tiles_used is not None):
                         # Register these edge buffer tiles and regular tiles to
                         # the new reservation, which has no tiles used yet.
                         reservation.tiles = edge_tiles_used
                         reservation.tiles[test_t] = tiles_used
 
-                        # Register this vehicle as the dependency of its
-                        # preceding clone, if there is one.
-                        if len(in_clones) > 0:
+                        # Register this vehicle's reservation as dependent on
+                        # its preceding clone's reservation, if there is one.
+                        if len(intersection_lane.vehicles) > 0:
                             # The last reservation hasn't been confirmed as
                             # valid yet, so look in test_reservations.
-                            test_reservations[in_clones[-1]
+                            test_reservations[intersection_lane.vehicles[-1]
                                               ].dependency = original
                         elif len(valid_reservations) > 0:
                             # The last reservation has been confirmed as valid,
                             # so look in valid_reservations.
                             valid_reservations[-1].dependency = original
                         # Otherwise, this is the first reservation, so there's
-                        # no prior reservation to be dependent on.
+                        # no prior reservation for it to be dependent on.
 
                         # Add the new clone to the test data structures.
-                        in_clones.append(clone)
-                        originals[clone] = original
-                        in_progress[clone] = progress
+                        clone_to_original[clone] = original
                         test_reservations[clone] = reservation
 
                         # Move the clone tracker up.
@@ -801,20 +556,19 @@ class Tiling(Configurable):
                     else:
                         # Scrap this reservation and stop spawning new ones.
                         # We didn't register this clone to most of the usual
-                        # structures, so there's less to do than usual.
+                        # structures, so there's less to do than in other
+                        # rejection cases.
 
-                        if len(in_clones) == 0:
-                            # No test reservation is valid, so scrap them all
-                            # and just return the valid reservations list.
+                        if len(intersection_lane.vehicles) == 0:
+                            # No reservation still being tested is workable, so
+                            # scrap them all and just return the reservations
+                            # already confirmed to be valid.
                             return valid_reservations
-
-                        # Delete this clone's progress
-                        incoming_progress = None
 
                         # Stop spawning new clones
                         counter = end_at
 
-            # Increment the timesteps ahead counter
+            # 5. Update the test environment time step.
             test_t += 1
 
         return valid_reservations

@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Tuple, Optional, Dict
+from copy import copy
+from typing import TYPE_CHECKING, Tuple, Optional, Dict, TypeVar
 from math import pi
 
 import aimsim.shared as SHARED
@@ -10,6 +11,8 @@ from aimsim.trajectories import BezierTrajectory
 if TYPE_CHECKING:
     from aimsim.road import RoadLane
     from aimsim.vehicles import Vehicle
+
+L = TypeVar('L', bound='IntersectionLane')
 
 
 class IntersectionLane(Lane):
@@ -147,3 +150,13 @@ class IntersectionLane(Lane):
         """
         super().add_vehicle(vehicle)
         self.lateral_deviation[vehicle] = 0
+
+    # Misc functions
+
+    def clone(self: L) -> L:
+        """Return a copy of the lane with vehicle-specific data removed."""
+        clone = copy(self)
+        clone.vehicles = []
+        clone.vehicle_progress = {}
+        clone.lateral_deviation = {}
+        return clone
