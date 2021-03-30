@@ -549,9 +549,13 @@ class SquareTiling(Tiling):
         raise NotImplementedError("TODO")
 
     def _add_new_layer(self) -> None:
-        """Extend the tiling stack by one timestep."""
-        # TODO: Is self.tiles[0] the current timestep or the next timestep?
-        new_timestep = SHARED.t + len(self.tiles)
+        """Extend the tiling stack by one timestep.
+
+        At this point in the cycle, everything is fully resolved at timestep
+        SHARED.t, so the first layer in the tile stack (i.e., index 0)
+        represents time SHARED.t+1.
+        """
+        new_timestep = SHARED.t + 1 + len(self.tiles)
         self.tiles.append(
             tuple([
                 tuple([self.tile_type(yi*self.y_tile_count + xi,

@@ -607,7 +607,8 @@ class Tiling(Configurable):
             raise ValueError("Can't force and mark tiles at the same time.")
 
         # At this point in the cycle, everything is fully resolved at timestep
-        # SHARED.t. t > SHARED.t so we need to extend the tile stack to t. If
+        # SHARED.t, so the first layer in the tile stack represents time
+        # SHARED.t+1. t > SHARED.t so we need to extend the tile stack to t. If
         # the tilings created so far doesn't cover this future timestep yet,
         # keep creating new layers until we reach this timestep.
         assert t > SHARED.t
@@ -730,5 +731,9 @@ class Tiling(Configurable):
 
         Tiling depth is created as needed. Calling this function will create a
         new layer in the tiling process.
+
+        At this point in the cycle, everything is fully resolved at timestep
+        SHARED.t, so the first layer in the tile stack (i.e., index 0)
+        represents time SHARED.t+1.
         """
         raise NotImplementedError("Must be implemented in child classes.")
