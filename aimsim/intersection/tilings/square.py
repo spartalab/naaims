@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Set, Dict, Tuple, Type, List
-from math import ceil, copysign, floor
+from math import ceil, floor
 
 import aimsim.shared as SHARED
 from aimsim.util import Coord
@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from aimsim.vehicles import Vehicle
     from aimsim.intersection import IntersectionLane
     from aimsim.intersection.reservation import Reservation
-    from aimsim.lane import VehicleProgress
 
 
 class SquareTiling(Tiling):
@@ -66,26 +65,10 @@ class SquareTiling(Tiling):
                 if xy.y > self.max_y:
                     self.max_y = xy.y
 
-        # # Tiles are inclusive of their bottom and left borders, so add one row
-        # # or column of padding if the intersection's top or right edges fall on
-        # # the top or right of the grid.
-        # x_tile_count = (self.max_x - self.min_x)/self.tile_width
-        # y_tile_count = (self.max_y - self.min_y)/self.tile_width
-        # self.x_tile_count = ceil(x_tile_count) + \
-        #     (1 if x_tile_count % 1 == 0 else 0)
-        # self.y_tile_count = ceil(y_tile_count) + \
-        #     (1 if y_tile_count % 1 == 0 else 0)
-
         x_tile_count = (self.max_x - self.min_x)/self.tile_width
         y_tile_count = (self.max_y - self.min_y)/self.tile_width
         self.x_tile_count = ceil(x_tile_count)
         self.y_tile_count = ceil(y_tile_count)
-
-        # Tiles are inclusive of their bottom and left borders, so vehicles
-        # going off-grid on the top or right borders must be specially
-        # accommodated by pos_to_tile by having their shapes end just before
-        # the top or right border.
-        self.eps_length = self.tile_width*1e-3
 
         # Normalize the origin to be the bottom left Coord of this grid. The
         # Tiles will be stored left-to-right, top-to-bottom but the y-axis will
@@ -122,6 +105,12 @@ class SquareTiling(Tiling):
         timestep given its position if the reservation is possible. If not,
         return None (unless the force flag is True, in which case return the
         tiles used regardless of whether the tiles allow it).
+
+        We adopt the convention that points are assigned to tiles based on
+        their floored x and y values, except in the case of points on the upper
+        or left boundary of the tile space (self.y_tile_count or
+        self.x_tile_count); in these cases, we assign that point to the tile
+        that they're on the upper or right edge of (the ceil).
 
         Parameters
             lane: IntersectionLane
@@ -161,7 +150,9 @@ class SquareTiling(Tiling):
                 y_min = oy
             if oy > y_max:
                 y_max = oy
-            # TODO: If tweaking bound check, cap at self.y_tile_count-1.
+        # The largest possible y-tile is one less than self.y_tile_count.
+        if y_max == self.y_tile_count:
+            y_max -= 1
         # Initialize lists for the x-range associated with each y-value.
         x_mins: List[int] = [-1]*(y_max-y_min+1)
         x_maxes: List[int] = x_mins.copy()
@@ -259,38 +250,32 @@ class SquareTiling(Tiling):
         if (  # dx=0, vertical line, and the fixed x is out of bounds
             (m == 0) and ((point.x < 0) or (point.x >= self.x_tile_count))
         ) or (  # dy=0, horizontal line, and the fixed y is out of bounds
-            (m == float('inf')) and ((point.x < 0)
-                                     or (point.x >= self.x_tile_count))
+            (m == float('inf')) and
+            ((point.y < 0) or (point.y >= self.y_tile_count))
         ):
             return None
-        # TODO: Fix if changing upper edge behavior.
 
         point_on_grid: bool = True
         x_closest: float
         y_closest: float
         # Find the x-value on the grid closest to the point.
-        if point.x > self.x_tile_count - self.eps_length:
+        if point.x > self.x_tile_count:
             point_on_grid = False
-            x_closest = self.x_tile_count - self.eps_length
+            x_closest = self.x_tile_count
         elif point.x < 0:
             point_on_grid = False
             x_closest = 0
         else:
             x_closest = point.x
         # Find the y-value on the grid closest to the point.
-        if point.y > self.y_tile_count - self.eps_length:
+        if point.y > self.y_tile_count:
             point_on_grid = False
-            y_closest = self.y_tile_count - self.eps_length
+            y_closest = self.y_tile_count
         elif point.y < 0:
             point_on_grid = False
             y_closest = 0
         else:
             y_closest = point.y
-        # Note that because Tiles are inclusive of their lower and left borders
-        # but not their upper and right borders, we need to do a bit of
-        # correction when points are above (> self.y_tile_count) or to the
-        # right (> self.x_tile_count) of the grid using self.eps_length.
-        # TODO: Is this better than a simple boundary check?
 
         # We can return the point here if we've determined that it's on grid.
         if point_on_grid:
@@ -379,20 +364,35 @@ class SquareTiling(Tiling):
         y_min: int
         y_max: int
 
-        # TODO: Alter flooring if changing to inclusive of top right borders.
+        # Recall that points are assigned to tiles based on their floored x and
+        # y values, except in the case of points on the upper or left boundary
+        # of the tile space, which are assigned to the edge tile they border.
         if dy == 0:  # horizontal or a single point
-            y_min = y_max = floor(start.y)
+            y_min = floor(start.y) if start.y < self.y_tile_count - 1 \
+                else self.y_tile_count-1
             x_mins.append(floor(min(start.x, end.x)))
             x_maxes.append(floor(max(start.x, end.x)))
+            if x_maxes[0] == self.x_tile_count:
+                x_maxes[0] -= 1
+                if x_mins[0] == self.x_tile_count:
+                    x_mins[0] -= 1
         elif dx == 0:  # vertical
             y_min = floor(min(start.y, end.y))
             y_max = floor(max(start.y, end.y))
+            if y_max == self.y_tile_count:
+                y_max -= 1
+                if y_min == self.y_tile_count:
+                    y_min -= 1
             x_value = floor(start.x)
+            if x_value == self.x_tile_count:
+                x_value -= 1
             x_mins = [x_value]*(y_max-y_min+1)
             x_maxes = x_mins.copy()
         else:
             # Progress through every pixel the ray intersects using the
             # algorithm from http://www.cse.yorku.ca/~amana/research/grid.pdf
+            # with some modifications to account for finite line segments and
+            # the upper/right boundary case.
 
             # Set up the line segment equation and bounds
             m = dx/dy
@@ -411,13 +411,21 @@ class SquareTiling(Tiling):
             if dy < 0:  # down right or left, maxes
                 y_max = floor(start.y)
                 y_min = floor(end.y)
+                if y_max == self.y_tile_count:
+                    y_max -= 1
+                    if y_min == self.y_tile_count:
+                        y_min -= -1
                 x_maxes: List[int] = [-1]*(y_max-y_min+1)
                 step_y = -1
                 x_of_next_y_tile = x_of_y(floor(start.y))
             else:  # up right or left, mins
                 y_min = floor(start.y)
                 y_max = floor(end.y)
-                x_mins: List[int] = [-1]*(y_max-y_min)
+                if y_max == self.y_tile_count:
+                    y_max -= 1
+                    if y_min == self.y_tile_count:
+                        y_min -= -1
+                x_mins: List[int] = [-1]*(y_max-y_min+1)
                 step_y = 1
                 x_of_next_y_tile = x_of_y(ceil(start.y))
             x_to_next_y_tile: float = abs(start.x - x_of_next_y_tile)
@@ -430,19 +438,67 @@ class SquareTiling(Tiling):
             x_delta_y: float = abs(1/m)
 
             # Find Tile coordinates of the starting Tile and log them.
+            # Accommodate the special cases where the line segment starts on
+            # the upper or right boundaries but does not reach the lower or
+            # right bounds of the tile it's in. Remember that straight lines
+            # have already been accounted for.
             x: int = floor(start.x)
             y: int = floor(start.y)
-            x_mins[y - y_min] = x_maxes[y - y_min] = x
-            # TODO: Consider adding special case checks at top or right border
-            #       here and in the loop. Basically just, if x or y==x or y
-            #       tile count, mark the tile at tile_count-1.
+            if (x == self.x_tile_count) and (y == self.y_tile_count) and \
+                (floor(end.y) == self.y_tile_count-1) and \
+                    (floor(end.x) == self.x_tile_count-1):
+                # Starts in top right corner and line segment does not leave
+                # the tile. Manually mark the min or max and return.
+                if len(x_mins) > 0:
+                    x_mins[0] = self.x_tile_count - 1
+                else:
+                    x_maxes[0] = self.x_tile_count - 1
+                return y_min, x_mins, x_maxes
+            if y == self.y_tile_count:
+                x_end = floor(end.x)
+                if (floor(end.y) == self.y_tile_count-1) and \
+                        ((x_end == x) or (
+                            (self.x_tile_count >= x >= self.x_tile_count-1) and
+                            (self.x_tile_count >= x_end >= self.x_tile_count-1)
+                        )):
+                    # Line segment does not leave the tile. Manually mark the
+                    # min or max and return.
+                    if len(x_mins) > 0:
+                        x_mins[0] = self.x_tile_count - 1
+                    else:
+                        x_maxes[0] = self.x_tile_count - 1
+                    return y_min, x_mins, x_maxes
+                y -= 1
+                x_to_next_y_tile += x_delta_y
+            if x == self.x_tile_count:
+                x -= 1
+                y_end = floor(end.y)
+                if (floor(end.x) == self.x_tile_count-1) and \
+                        ((y_end == y) or (
+                            (self.y_tile_count >= y >= self.y_tile_count-1) and
+                            (self.y_tile_count >= y_end >= self.y_tile_count-1)
+                        )):
+                    # Line segment does not leave the tile. Manually mark the
+                    # min or max and return.
+                    if len(x_mins) > 0:
+                        x_mins[0] = x
+                    else:
+                        x_maxes[0] = x
+                    return y_min, x_mins, x_maxes
+                x_to_next_x_tile += x_delta_x
+
+            # Log the x max or min of the starting position.
+            if dy < 0:
+                x_maxes[y - y_min] = x
+            else:
+                x_mins[y - y_min] = x
 
             # Traverse the line segment Tile-by-Tile in order from start to
             # end. Track if there's already been a Tile in this x-band marked;
             # if there has, new x-Tiles traversed need only be included in
             # x_mins or x_maxes if dx points in a direction that would make the
             # last x_min or x_max logged insufficiently lenient.
-            marked: bool = False
+            marked: bool = True
             while True:  # break condition in loop
 
                 # Find if the next x-tile or the next y-tile is closer. Given
@@ -453,11 +509,15 @@ class SquareTiling(Tiling):
                     if x_to_next_x_tile > x_dist_max:
                         break
                     x += step_x
+                    if x == self.x_tile_count:
+                        break
                     x_to_next_x_tile += x_delta_x
                 else:
                     if x_to_next_y_tile > x_dist_max:
                         break
                     y += step_y
+                    if y == self.y_tile_count:
+                        break
                     x_to_next_y_tile += x_delta_y
                     marked = False
 
@@ -520,6 +580,17 @@ class SquareTiling(Tiling):
         """
         super().edge_tile_buffer(lane, t, clone, reservation, prepend, force,
                                  mark)
+
+        # TODO: Find the intersection line segment(s) of the vehicle rectangle
+        #       with the edge of the tile space.
+        #       Actually edges are weird in the case of a non-square
+        #       intersection, so this should probably just monopolize the
+        #       pos-to-tile result backwards and forward in time... possibly
+        #       with a smaller buffer size since we know exactly where the
+        #       vehicle enters the intersection.
+        #       Consider refactoring pos-to-tile so that it can return the
+        #       range over which to find tiles as opposed to the actual tiles,
+        #       so we can project forward and backward in time.
 
         raise NotImplementedError("TODO")
 
