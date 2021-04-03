@@ -55,6 +55,7 @@ class SquareTiling(Tiling):
         self.min_y: float = float('inf')
         self.max_y: float = -float('inf')
         for start, end in lanes_by_endpoints:
+            # TODO: (medium) Account for lane width.
             for xy in (start, end):
                 if xy.x < self.min_x:
                     self.min_x = xy.x
@@ -74,6 +75,16 @@ class SquareTiling(Tiling):
         # Tiles will be stored left-to-right, top-to-bottom but the y-axis will
         # be flipped to match normal coordinate schemas.
         self.origin = Coord(self.min_x, self.min_y)
+
+        # Find the (x,y) coordinates of the tile at every road lane connection
+        # to the intersection. We'll use them to buffer entries and exits into
+        # the intersection so vehicles don't crash as they enter or exit.
+        self.buffer_tile_loc: Dict[Coord, Tuple[int, int]] = {}
+        for start, end in lanes_by_endpoints:
+            if start not in lanes_by_endpoints:
+                self.buffer_tile_loc[start] = self._coord_to_tile_xy(start)
+            if end not in lanes_by_endpoints:
+                self.buffer_tile_loc[end] = self._coord_to_tile_xy(end)
 
     def check_for_collisions(self) -> None:
         """Check for collisions in the intersection."""
@@ -141,6 +152,30 @@ class SquareTiling(Tiling):
                   (c.y - self.origin.y)/self.tile_width)
             for c in clone.get_outline()))
 
+        y_min, x_mins, x_maxes = self._outline_to_tile_range(outline)
+
+        # After the outlining process is complete, loop through the min and max
+        # y-Tiles via the x-bound lists. For each y-value, add every tile
+        # between the min and max x-Tiles to the return set.
+        tiles_covered: Dict[Tile, float] = {}
+        for j in range(len(x_mins)):
+            y = y_min + j
+            for i in range(x_mins[j], x_maxes[j]+1):
+                x = x_mins[j]+i
+                tile = self.tiles[t][self.__tile_loc_to_id((x, y))]
+                p = 1  # TODO: (stochastic) probabilistic reservation
+                if tile.will_reservation_work(reservation, p):
+                    tiles_covered[tile] = 1
+                else:
+                    return None
+        # TODO: (stochastic) lane, force, mark are unused but may be useful for
+        #       stochastic reservations.
+
+        return tiles_covered
+
+    def _outline_to_tile_range(self, outline: Tuple[Coord]) \
+            -> Tuple[int, List[int], List[int]]:
+
         # Start by finding the y-range the outline covers.
         y_min: int = floor(outline[0].y)
         y_max: int = y_min
@@ -173,22 +208,7 @@ class SquareTiling(Tiling):
                 x_maxes[j + y_min_seg - y_min] = x_max
             # TODO: (shapes) This must be changed for non-convex outlines.
 
-        # After the outlining process is complete, loop through the min and max
-        # y-Tiles via the x-bound lists. For each y-value, add every tile
-        # between the min and max x-Tiles to the return set.
-        tiles_covered: Dict[Tile, float] = {}
-        for j in range(len(x_mins)):
-            y = y_min + j
-            for i in range(x_mins[j], x_maxes[j]+1):
-                x = x_mins[j]+i
-                tile = self.tiles[x][y]
-                p = 1  # TODO: (stochastic) probabilistic reservation
-                if tile.will_reservation_work(reservation, p):
-                    tiles_covered[tile] = 1
-                else:
-                    return None
-
-        return tiles_covered
+        return y_min, x_mins, x_maxes
 
     def _project_onto_grid(self, outline: Tuple[Coord]) -> Tuple[Coord]:
         """Given an outline, project it to be fully on the grid."""
@@ -538,10 +558,10 @@ class SquareTiling(Tiling):
 
         return y_min, x_mins, x_maxes
 
-    def edge_tile_buffer(self, lane: IntersectionLane, t: int,
-                         clone: Vehicle, reservation: Reservation,
-                         prepend: bool, force: bool = False, mark: bool = False
-                         ) -> Optional[Dict[int, Dict[Tile, float]]]:
+    def io_tile_buffer(self, lane: IntersectionLane, t: int,
+                       clone: Vehicle, reservation: Reservation,
+                       prepend: bool, force: bool = False, mark: bool = False
+                       ) -> Optional[Dict[int, Dict[Tile, float]]]:
         """Should return edge buffer tiles and percentages used if it works.
 
         Given a vehicle with a test-updated position, its in-lane progress, and
@@ -581,18 +601,45 @@ class SquareTiling(Tiling):
         super().edge_tile_buffer(lane, t, clone, reservation, prepend, force,
                                  mark)
 
-        # TODO: Find the intersection line segment(s) of the vehicle rectangle
-        #       with the edge of the tile space.
-        #       Actually edges are weird in the case of a non-square
-        #       intersection, so this should probably just monopolize the
-        #       pos-to-tile result backwards and forward in time... possibly
-        #       with a smaller buffer size since we know exactly where the
-        #       vehicle enters the intersection.
-        #       Consider refactoring pos-to-tile so that it can return the
-        #       range over which to find tiles as opposed to the actual tiles,
-        #       so we can project forward and backward in time.
+        if t <= SHARED.t:
+            raise ValueError("t must be a future timestep.")
+        if prepend:
+            if t == SHARED.t + 1:
+                return {}
+            # Find the tile one timestep before the current one to account for
+            # rounding errors; otherwise soonest_exit ought to guarantee that
+            # there will be no conflicts as vehicles enter the intersection.
+            while len(self.tiles) < t - SHARED.t:
+                self._add_new_layer()
+            tile = self.tiles[t-1 - SHARED.t][self.__tile_loc_to_id(
+                self.buffer_tile_loc[lane.trajectory.start_coord])]
+            if tile.will_reservation_work(reservation):
+                return {t-1: {tile: 1}}  # TODO: (stochastic) reservations.
+            else:
+                return None
+        else:
+            tile_id = self.__tile_loc_to_id(
+                self.buffer_tile_loc[lane.trajectory.end_coord])
+            timesteps_forward = 5  # TODO: How far forward?
+            while len(self.tiles) < t - SHARED.t + timesteps_forward:
+                self._add_new_layer()
+            to_return: Dict[int, Dict[Tile, float]] = {}
+            for i in range(1, timesteps_forward+1):
+                t_index = t - SHARED.t + i
+                tile = self.tiles[t_index][tile_id]
+                if not tile.will_reservation_work(reservation):
+                    return None
+                # TODO: (stochastic) reservations.
+                to_return[t_index] = {tile: 1}
+            return to_return
 
-        raise NotImplementedError("TODO")
+    def __tile_loc_to_id(self, tile_loc: Tuple[int, int]) -> int:
+        """Convert a tile's (x,y) location to its 1D integer ID.
+
+        The input parameter is a 2-tuple of integer x and y values. x denotes
+        left to right and y denotes down to up.
+        """
+        return tile_loc[1]*self.x_tile_count + tile_loc[0]
 
     def find_best_batch(self,
                         requests: Dict[RoadLane, List[Reservation]]
@@ -623,14 +670,23 @@ class SquareTiling(Tiling):
         """Extend the tiling stack by one timestep.
 
         At this point in the cycle, everything is fully resolved at timestep
-        SHARED.t, so the first layer in the tile stack (i.e., index 0)
-        represents time SHARED.t+1.
+        SHARED.t, so the first layer in the tile stack (index 0) represents
+        timestep SHARED.t+1. Adding a new layer to the stack means that
+        the new layer represents the first timestep after the current stack's
+        coverage.
         """
-        new_timestep = SHARED.t + 1 + len(self.tiles)
-        self.tiles.append(
-            tuple([
-                tuple([self.tile_type(yi*self.y_tile_count + xi,
-                                      new_timestep)
-                       for xi in range(self.x_tile_count)])
-                for yi in range(self.y_tile_count)])
-        )
+        new_timestep = SHARED.t + 1 + len(self.tiles) + 1
+        self.tiles.append(tuple([
+            self.tile_type(self.__tile_loc_to_id((x, y)), new_timestep)
+            for y in range(self.y_tile_count)
+            for x in range(self.x_tile_count)]))
+
+    def _coord_to_tile_xy(self, coord: Coord) -> Tuple[int, int]:
+        """Convert a raw Coord to tile space's (x,y) tile."""
+        x: int = floor(coord.x - self.origin.x)
+        y: int = floor(coord.y - self.origin.y)
+        if x == self.x_tile_count:
+            x -= 1
+        if y == self.y_tile_count:
+            y -= 1
+        return x, y
