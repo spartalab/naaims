@@ -65,11 +65,3 @@ class CollisionError(Exception):
 class MissingConnectionError(Exception):
     """Raised when a road doesn't find an upstream or downstream object."""
     pass
-
-
-class TooManyProgressionsError(Exception):
-    def __init__(self, message: str =
-                 'More than one vehicle transitioned between lanes in the same'
-                 ' timestep. This is usually result of the ticks_per_second'
-                 ' config being too low. Try increasing it and rerunning.'):
-        super().__init__(message)

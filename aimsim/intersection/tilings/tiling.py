@@ -13,16 +13,13 @@ adjustable granularity (Dresner and Stone 2008).
 
 from __future__ import annotations
 from abc import abstractmethod
-from aimsim.trajectories import trajectory
-from aimsim.vehicles.vehicle import V
-from aimsim import intersection
 from typing import (TYPE_CHECKING, Optional, List, Set, Dict, Tuple, Type,
                     TypeVar, Any)
 
 import aimsim.shared as SHARED
 from aimsim.archetypes import Configurable
-from aimsim.util import Coord, SpeedUpdate, VehicleSection, VehicleTransfer
-from aimsim.lane import VehicleProgress, ScheduledExit
+from aimsim.util import Coord, VehicleSection, VehicleTransfer
+from aimsim.lane import ScheduledExit
 from aimsim.intersection.reservation import Reservation
 from aimsim.intersection.tilings.tiles import StochasticTile, DeterministicTile
 
@@ -494,7 +491,7 @@ class Tiling(Configurable):
                     # with simulated behavior as vehicles can travel slightly
                     # into the intersection as they enter, but it'll be
                     # accurate to within one timestep.)
-                    # TODO: (low) Replace the just-entering heuristc with
+                    # TODO: (low) Replace the just-entering heuristic with
                     #       RoadLane.progress_at_exit(counter, new_exit)
 
                     # Load its center and rear sections onto the incoming lane.
@@ -516,7 +513,6 @@ class Tiling(Configurable):
                         intersection_lane.trajectory.start_coord))
 
                     # Check if its tiles work.
-                    # TODO: This section is repetitive. Can we modularize it?
                     tiles_used = self.pos_to_tiles(intersection_lane, test_t,
                                                    clone, reservation,
                                                    mark=mark)

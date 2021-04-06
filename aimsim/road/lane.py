@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Tuple, Optional, List, Dict, Set, TypeVar
 import aimsim.shared as SHARED
 from aimsim.lane import Lane, VehicleProgress, ScheduledExit
 from aimsim.util import (Coord, VehicleSection, SpeedUpdate, VehicleTransfer,
-                         CollisionError, TooManyProgressionsError)
+                         CollisionError)  # TODO: (low) Check for collisions.
 
 if TYPE_CHECKING:
     from aimsim.trajectories import Trajectory
@@ -504,8 +504,8 @@ class RoadLane(Lane):
         if t0 + t_slowest_exit > last_rear_exit.t:
             return None
 
-        # TODO: Check if the slowest exit is exactly the soonest one? If it is
-        #       the binary search will find it but should I just check it now?
+        # TODO: (low) Check if the slowest exit is exactly the soonest one? If
+        #       it is the binary search will find it but maybe check it now.
 
         # If we reach here, we know that somewhere between 0 brake time and the
         # brake time found in the slowest exit is the fastest possible exit.
