@@ -1,4 +1,5 @@
 from __future__ import annotations
+from aimsim.intersection.lane import IntersectionLane
 from copy import copy
 from math import ceil, sqrt
 from typing import TYPE_CHECKING, Tuple, Optional, List, Dict, Set, TypeVar
@@ -369,6 +370,10 @@ class RoadLane(Lane):
            x_p(t_crit) - x(t_crit, b). Return the fastest exit found with
            error up to the length of a simulated timestep.
 
+        Terminology note: a VALID exit is one that does not collide with the
+        preceding vehicle in the intersection, while an INVALID exit does. But,
+        just because an exit is VALID does not make it the SOONEST exit.
+
         Parameters
             vehicle_index: int
                 The index of the vehicle in self.vehicles to calculate for.
@@ -398,24 +403,14 @@ class RoadLane(Lane):
         b: float = -vehicle.max_braking
         v_max: float = self.effective_speed_limit(progress, vehicle)
         # TODO: (consistency) Variable speed limits not supported.
-        x_to_intersection: float = (1-progress)*self.trajectory.length
+        x_to_intersection: float = self._x_to_intersection(progress)
 
         # 1. Evaluate the free flow case with no preceding exit to find the
         #    ScheduledExit that gets to the intersection as fast as possible.
-        t_to_v_max: float = (v_max - v0)/a
-        x_to_v_max: float = v0*t_to_v_max + (a/2)*t_to_v_max**2
-        t_fastest_exit: float
-        v_fastest_exit: float
-        if x_to_v_max > x_to_intersection:
-            # The vehicle will exit before reaching the speed limit.
-            t_fastest_exit = ceil((-v0 + sqrt(v0**2 + 2*a*x_to_intersection)) /
-                                  vehicle.max_acceleration)
-            v_fastest_exit = v0 + a*t_fastest_exit
-        else:
-            # The vehicle will exit after reaching the speed limit.
-            t_fastest_exit = ceil(t_to_v_max +
-                                  (x_to_intersection - x_to_v_max)/v_max)
-            v_fastest_exit = v_max
+        t_to_v_max: float = self._t_to_v(v0, a, v_max)
+        x_to_v_max: float = self._x_over_constant_a(v0, a, t_to_v_max)
+        t_fastest_exit, v_fastest_exit = self._free_flow_exit(
+            v0, a, v_max, t_to_v_max, x_to_v_max, x_to_intersection)
         exit: ScheduledExit = ScheduledExit(vehicle, VehicleSection.REAR,
                                             t0 + t_fastest_exit,
                                             v_fastest_exit)
@@ -433,47 +428,159 @@ class RoadLane(Lane):
         a_p: float = last_rear_exit.vehicle.max_acceleration
         assert a_p == a
         v0_p: float = last_rear_exit.v
-        t_p: float = (v_max - v0_p) / a_p
-        x_crit: float = v0_p*t_p + a_p/2 * t_p**2
-        # The collision window is between last_rear_exit.t + [0, t_p]. If the
-        # study vehicle overtakes the preceding vehicle in this time window,
-        # it's a crash, so we'll call the furthest the preceding vehicle gets
-        # before it reaches the speed limit x_crit.
+        t_p_to_v_max: float = self._t_to_v(v0_p, a_p, v_max)
+        x_crit: float = self._x_over_constant_a(v0_p, a_p, t_p_to_v_max)
+        # The collision window is between last_rear_exit.t + [0, t_p_to_v_max].
+        # If the study vehicle overtakes the preceding vehicle in this time
+        # window, it's a crash, so we'll call the furthest the preceding
+        # vehicle gets before it reaches the speed limit x_crit.
 
-        # Check if there's enough separation between the preceding vehicle and
-        # the free flow exit to return the latter.
-        if last_rear_exit.t <= exit.t:
-            # Find the amount of possible collision time the study vehicle
-            # spends in the intersection. If none, exit is good; otherwise, we
-            # need to do more checks.
-            t_left_to_collide: float = last_rear_exit.t + t_p - exit.t
-            if t_left_to_collide <= 0:
-                return exit
+        # If the proposed exit comes after the last exit chronologically and
+        # there's enough separation between the preceding vehicle and the free
+        # flow exit, return the latter.
+        if (last_rear_exit.t <= exit.t) and self._enough_separation(
+                exit, a, v_max, last_rear_exit.t, t_p_to_v_max, x_crit):
+            return exit
+
+        # If we reach here, we know that the fastest/free flow exit is invalid.
+        # 2. Check if the slowest reasonable exit, braking to a complete stop
+        #    just as the study vehicle reaches the intersection, is valid.
+        #    (The t_brake values are used to support binary search later.)
+        (t_slowest_exit, t_brake_max, t_brake_largest_seen_at_v_max,
+         t_brake_smallest_seen_no_v_max) = self._slowest_exit(
+             v0, a, b, v_max, x_to_v_max, x_to_intersection, t_to_v_max)
+        #    Since the last exit must be moving at at least 0 speed (the speed
+        #    of this exit), if it isn't after, no reasonable exit (i.e., an
+        #    exit that doesn't involve staying stopped for some time) is valid
+        #    so we return None.
+        t_slowest_exit_zeroed: int = ceil(t0 + t_slowest_exit)
+        if t_slowest_exit_zeroed > last_rear_exit.t:
+            return None
+        elif t_slowest_exit_zeroed == last_rear_exit.t:
+            # The slowest exit is exactly the soonest one.
+            return ScheduledExit(vehicle, VehicleSection.REAR,
+                                 t_slowest_exit_zeroed, 0)
+
+        # If we reach here, we know that somewhere between 0 brake time and the
+        # brake time found in the slowest exit is the fastest possible exit.
+        # 3. Do a binary search over the braking space to find the amount of
+        #    braking time that causes the vehicle trajectories to meet just as
+        #    the preceding vehicle reaches the speed limit, indicating the
+        #    fastest possible exit.
+
+        # The critical time is when the preceding vehicle reaches the speed
+        # limit, so define it in terms of time from the present timestep.
+        t_crit: float = self._t_danger(last_rear_exit.t, t_p_to_v_max, t0)
+
+        # Set up the search to continue until the gap is smaller than the
+        # length of a timestep, defaulting to the slowest exit.
+        t_left: float = 0
+        t_right: float = t_brake_max
+        t_exit_guess: float = t_slowest_exit
+        v_guess: float = 0
+
+        def search_step(t_left: float, t_right: float,
+                        t_brake_largest_seen_at_v_max: Optional[float],
+                        t_brake_smallest_seen_no_v_max: Optional[float]
+                        ) -> Tuple[float, float, float, float]:
+            return self._t_brake_search_step(t_left, t_right,
+                                             t_brake_largest_seen_at_v_max,
+                                             t_brake_smallest_seen_no_v_max,
+                                             v0, a, b, v_max, x_to_v_max,
+                                             t_to_v_max, x_to_intersection,
+                                             x_crit, t_crit)
+
+        while t_right - t_left > SHARED.SETTINGS.TIMESTEP_LENGTH:
+            t_left, t_right, t_exit_guess, v_guess = \
+                search_step(t_left, t_right, t_brake_largest_seen_at_v_max,
+                            t_brake_smallest_seen_no_v_max)
+
+        return ScheduledExit(vehicle, VehicleSection.FRONT,
+                             ceil(t_exit_guess), v_guess)
+
+    def _x_to_intersection(self, progress: float) -> float:
+        """Return the distance to the intersection given some progress."""
+        return (1-progress)*self.trajectory.length
+
+    @staticmethod
+    def _t_to_v(v0: float, a: float, vf: float) -> float:
+        """Given v0, acceleration, and vf, find the time to reach vf."""
+        return (vf - v0)/a
+
+    @staticmethod
+    def _x_over_constant_a(v0: float, a: float, t: float) -> float:
+        """Given speed, acceleration, and time, find the distance covered."""
+        return v0*t + (a/2)*t**2
+
+    @staticmethod
+    def _free_flow_exit(v0: float, a: float, v_max: float, t_to_v_max: float,
+                        x_to_v_max: float, x_to_intersection: float
+                        ) -> Tuple[int, float]:
+        """Return the time and velocity of the free flow exit."""
+        if x_to_v_max > x_to_intersection:
+            # The vehicle will exit before reaching the speed limit.
+            t_fastest_exit = ceil((-v0 + sqrt(v0**2 + 2*a*x_to_intersection)) /
+                                  a)
+            v_fastest_exit = v0 + a*t_fastest_exit
+        else:
+            # The vehicle will exit after reaching the speed limit.
+            t_fastest_exit = ceil(t_to_v_max +
+                                  (x_to_intersection - x_to_v_max)/v_max)
+            v_fastest_exit = v_max
+        return t_fastest_exit, v_fastest_exit
+
+    @staticmethod
+    def _t_danger(t_last_exit: float, t_last_exit_to_v_max: float,
+                  t_study: float) -> float:
+        """Find the amount of possible collision time."""
+        return t_last_exit + t_last_exit_to_v_max - t_study
+
+    @staticmethod
+    def _enough_separation(exit: ScheduledExit, a: float, v_max: float,
+                           t_last_exit: float, t_last_exit_to_v_max: float,
+                           x_crit: float) -> bool:
+        """Check separation between the last exit and this free flow exit.
+
+        Find the amount of possible collision time the study vehicle spends in
+        the intersection. If it doesn't spend any, this free flow exit is good;
+        if not, we need to check the distances both exits cover in the
+        intersection to determine if they'll collide or not.
+        """
+        t_danger: float = RoadLane._t_danger(t_last_exit, t_last_exit_to_v_max,
+                                             exit.t)
+        if t_danger <= 0:
+            return True
+        else:
+            # Find the distance covered by the trailing vehicle in the time
+            # it takes for the preceding vehicle to reach the speed limit.
+            t_i_to_speed_limit: float = RoadLane._t_to_v(exit.v, a, v_max)
+            x_i: float
+            if t_i_to_speed_limit > t_danger:
+                # Won't reach the speed limit before the collision window ends.
+                x_i = RoadLane._x_over_constant_a(exit.v, a, t_danger)
             else:
-                # Find the distance covered by the trailing vehicle in the time
-                # it takes for the preceding vehicle to reach the speed limit.
-                t_i_to_speed_limit: float = (v_max - exit.v)/a
-                x_i: float
-                if t_i_to_speed_limit > t_left_to_collide:
-                    # Won't reach the speed limit before the collision window
-                    # closes.
-                    x_i = exit.v*t_left_to_collide + \
-                        a/2 * t_left_to_collide**2
-                else:
-                    x_i = exit.v*t_i_to_speed_limit + \
-                        a/2 * t_i_to_speed_limit**2 + \
-                        v_max*(t_left_to_collide - t_i_to_speed_limit)
-                if x_i <= x_crit:
-                    # This vehicle can never overtake the last exit.
-                    return exit
+                x_i = RoadLane._x_over_constant_a(exit.v, a,
+                                                  t_i_to_speed_limit) \
+                    + RoadLane._x_over_constant_a(v_max, 0, t_danger -
+                                                  t_i_to_speed_limit)
+            if x_i <= x_crit:
+                # This vehicle can never overtake the last exit.
+                return True
+        return False
 
-        # If we get this far, the fastest exit is invalid.
+    @staticmethod
+    def _slowest_exit(v0: float, a: float, b: float, v_max: float,
+                      x_to_v_max: float, x_to_intersection: float,
+                      t_to_v_max: float) -> Tuple[
+                          float, float, Optional[float], Optional[float]]:
+        """Find the slowest possible exit that doesn't stay at 0 velocity.
 
-        # 2. Check the slowest reasonable exit, braking to a complete stop just
-        #    as the study vehicle reaches the intersection.
-        t_brake_from_v_max: float = v_max/b
-        x_brake_from_v_max: float = v_max*t_brake_from_v_max - \
-            b/2 * t_brake_from_v_max**2
+        Returns a few support variables that will facilitate binary search if
+        this exit ends up being valid.
+        """
+        t_brake_from_v_max: float = RoadLane._t_to_v(v_max, -b, 0)
+        x_brake_from_v_max: float = RoadLane._x_over_constant_a(
+            v_max, -b, t_brake_from_v_max)
 
         t_slowest_exit: float
         t_brake_max: float
@@ -490,114 +597,147 @@ class RoadLane(Lane):
             t_brake_smallest_seen_no_v_max = t_brake_max
         else:
             # Spend some time at the speed limit before braking.
-            x_at_v_max: float = x_to_intersection - x_to_v_max - \
-                x_brake_from_v_max
-            t_slowest_exit = t_to_v_max + t_brake_from_v_max + \
-                x_at_v_max / v_max
+            x_at_v_max: float = RoadLane._x_at_v_max(
+                x_to_intersection, x_to_v_max, x_brake_from_v_max)
+            t_slowest_exit = RoadLane._t_of_v_max_exit(
+                t_to_v_max, t_brake_from_v_max, x_at_v_max, v_max)
             t_brake_max = t_brake_from_v_max
             t_brake_largest_seen_at_v_max = t_brake_max
+        return (t_slowest_exit, t_brake_max, t_brake_largest_seen_at_v_max,
+                t_brake_smallest_seen_no_v_max)
 
-        # Check if the slowest exit is after the last rear exit. Since the last
-        # exit must be moving at at least 0 speed (the speed of this exit), if
-        # it isn't after, no reasonable exit (i.e., an exit that doesn't
-        # involve staying stopped for some time) is valid so we return None.
-        if t0 + t_slowest_exit > last_rear_exit.t:
-            return None
+    @staticmethod
+    def _x_at_v_max(x_to_intersection: float, x_to_v_max: float,
+                    x_brake_from_v_max: float) -> float:
+        """Find the distance spent at v_max."""
+        return x_to_intersection - x_to_v_max - x_brake_from_v_max
 
-        # TODO: (low) Check if the slowest exit is exactly the soonest one? If
-        #       it is the binary search will find it but maybe check it now.
+    @staticmethod
+    def _t_of_v_max_exit(t_to_v_max: float, t_brake_from_v_max: float,
+                         x_at_v_max: float, v_max: float) -> float:
+        """Find the time an exit that stays at v_max for a bit happens."""
+        return t_to_v_max + x_at_v_max / v_max + t_brake_from_v_max
 
-        # If we reach here, we know that somewhere between 0 brake time and the
-        # brake time found in the slowest exit is the fastest possible exit.
+    @staticmethod
+    def _t_brake_search_step(t_left: float, t_right: float,
+                             t_brake_largest_seen_at_v_max: Optional[float],
+                             t_brake_smallest_seen_no_v_max: Optional[float],
+                             v0: float, a: float, b: float, v_max: float,
+                             x_to_v_max: float, t_to_v_max: float,
+                             x_to_intersection: float, x_crit: float,
+                             t_crit: float
+                             ) -> Tuple[float, float, float, float]:
+        """Execute one step of the binary search."""
 
-        # 3. Do a binary search over the braking space to find the amount of
-        #    braking time that causes the vehicle trajectories to meet just as
-        #    the preceding vehicle reaches the speed limit, indicating the
-        #    fastest possible exit.
+        t_brake_guess = t_left + (t_right - t_left)/2
+        reaches_v_max_before_intersection: bool = False
 
-        # The critical time is when the preceding vehicle reaches the speed
-        # limit, so define it in terms of time from the present timestep.
-        t_crit: float = last_rear_exit.t + t_p - SHARED.t
+        # Check if our guessed brake time is in a region known to reach the
+        # speed limit or not before reaching the intersection. If it's in
+        # an unknown region, manually check if it reaches the speed limit
+        # and update our known region.
+        (reaches_v_max_before_intersection, t_brake_largest_seen_at_v_max,
+         t_brake_smallest_seen_no_v_max) = \
+            RoadLane._reaches_v_max_before_intersection(
+            t_brake_guess, t_brake_largest_seen_at_v_max,
+            t_brake_smallest_seen_no_v_max, b, v_max, x_to_v_max,
+            x_to_intersection)
 
-        # Set up the search to continue until the gap is smaller than the
-        # length of a timestep, defaulting to the slowest exit.
-        t_left: float = 0
-        t_right: float = t_brake_max
-        t_brake_guess: float = t_brake_max
-        t_exit_guess: float = t_slowest_exit
-        v_guess: float = 0
-        while t_right - t_left > SHARED.SETTINGS.TIMESTEP_LENGTH:
-            t_brake_guess = t_left + (t_right - t_left)/2
-            reaches_v_max_before_intersection: bool = False
+        # Find the exit time and velocity, and the distance covered in the
+        # intersection.
+        t_exit_guess, v_guess = RoadLane._parameterized_exit(
+            t_brake_guess, reaches_v_max_before_intersection, v0, a, b, v_max,
+            x_to_intersection, x_to_v_max, t_to_v_max)
+        x_guess = RoadLane._x_in_intersection(v_guess, v_max, a, t_crit,
+                                              t_exit_guess)
 
-            # Check if our guessed brake time is in a region known to reach the
-            # speed limit or not before reaching the intersection. If it's in
-            # an unknown region, manually check if it reaches the speed limit
-            # then update our known region.
-            if (t_brake_largest_seen_at_v_max is not None) and \
-                    (t_brake_guess <= t_brake_largest_seen_at_v_max):
-                # The smaller t_brake is, the more likely the vehicle will
-                # reach the speed limit.
-                reaches_v_max_before_intersection = True
-            elif (t_brake_smallest_seen_no_v_max is not None) and \
-                    (t_brake_guess >= t_brake_smallest_seen_no_v_max):
-                # The larger t_brake is, the more likely the vehicle won't
-                # reach the speed limit.
+        # Check if we've found the optimal t_brake.
+        if x_guess > x_crit:  # need to brake more to not overtake
+            t_left = t_brake_guess
+        elif x_guess < x_crit:  # need to brake less to get closer
+            t_right = t_brake_guess
+        else:  # braking just enough, so we're done
+            t_left = t_right = t_brake_guess
+
+        return t_left, t_right, t_exit_guess, v_guess
+
+    @staticmethod
+    def _reaches_v_max_before_intersection(
+        t_brake_guess: float, t_brake_largest_seen_at_v_max: Optional[float],
+        t_brake_smallest_seen_no_v_max: Optional[float], b: float,
+        v_max: float, x_to_v_max: float, x_to_intersection: float
+    ) -> Tuple[bool, Optional[float], Optional[float]]:
+        """Find if the brake time reaches the speed limit before exiting.
+
+        Also updates the known region of speed updates.
+        """
+        if (t_brake_largest_seen_at_v_max is not None) and \
+                (t_brake_guess <= t_brake_largest_seen_at_v_max):
+            # The smaller t_brake is, the more likely the vehicle will
+            # reach the speed limit.
+            reaches_v_max_before_intersection = True
+        elif (t_brake_smallest_seen_no_v_max is not None) and \
+                (t_brake_guess >= t_brake_smallest_seen_no_v_max):
+            # The larger t_brake is, the more likely the vehicle won't
+            # reach the speed limit.
+            reaches_v_max_before_intersection = False
+        else:
+            # This braking time may hit the speed limit. Check here.
+            x_brake_guess_from_v_max = RoadLane._x_over_constant_a(
+                v_max, -b, t_brake_guess)
+
+            if x_to_v_max + x_brake_guess_from_v_max > x_to_intersection:
+                # Braking must start before reaching v_max.
                 reaches_v_max_before_intersection = False
+                t_brake_smallest_seen_no_v_max = t_brake_guess
             else:
-                # This braking time may hit the speed limit. Check here.
-                x_brake_guess_from_v_max = v_max*t_brake_guess - \
-                    b/2*t_brake_guess**2
+                # Vehicle reaches v_max before this braking time kicks in.
+                reaches_v_max_before_intersection = True
+                t_brake_largest_seen_at_v_max = t_brake_guess
+        return (reaches_v_max_before_intersection,
+                t_brake_largest_seen_at_v_max, t_brake_smallest_seen_no_v_max)
 
-                if x_to_v_max + x_brake_guess_from_v_max > x_to_intersection:
-                    # Braking must start before reaching v_max.
-                    reaches_v_max_before_intersection = False
-                    t_brake_smallest_seen_no_v_max = t_brake_guess
-                else:
-                    # Vehicle reaches v_max before this braking time kicks in.
-                    reaches_v_max_before_intersection = True
-                    t_brake_largest_seen_at_v_max = t_brake_guess
+    @staticmethod
+    def _parameterized_exit(t_brake_guess: float,
+                            reaches_v_max_before_intersection: bool, v0: float,
+                            a: float, b: float, v_max: float,
+                            x_to_intersection: float, x_to_v_max: float,
+                            t_to_v_max: float) -> Tuple[float, float]:
+        """Find the time and velocity of exit given t_brake_guess."""
+        if reaches_v_max_before_intersection:
+            x_brake_guess_from_v_max = RoadLane._x_over_constant_a(
+                v_max, -b, t_brake_guess)
+            x_guess_at_v_max = RoadLane._x_at_v_max(
+                x_to_intersection, x_to_v_max, x_brake_guess_from_v_max)
+            t_exit_guess = RoadLane._t_of_v_max_exit(
+                t_to_v_max, t_brake_guess, x_guess_at_v_max, v_max)
+            v_guess = v_max - t_brake_guess*b
+        else:
+            # This braking time will not hit the speed limit.
+            t_exit_guess = (-v0 + (v0**2 + 2*a**2*t_brake_guess**2 +
+                                   2*a*b*t_brake_guess**2 +
+                                   4*a*x_to_intersection)**(.5)) / a
+            v_guess = v0 + a*t_exit_guess - (a+b)*t_exit_guess
+            # See dissertation appendix for derivation.
+        return t_exit_guess, v_guess
 
-            # Find the time and velocity of exit.
-            if reaches_v_max_before_intersection:
-                x_brake_guess_from_v_max = v_max*t_brake_guess - \
-                    b/2*t_brake_guess**2
-                x_guess_at_v_max = x_to_intersection - x_to_v_max \
-                    - x_brake_guess_from_v_max
-                t_exit_guess = t_to_v_max + x_guess_at_v_max / v_max + \
-                    t_brake_guess
-                v_guess = v_max - t_brake_guess*t_exit_guess
-            else:
-                # This braking time will not hit the speed limit.
-                t_exit_guess = (-v0 + (v0**2 + 2*a**2*t_brake_guess**2 +
-                                       2*a*b*t_brake_guess**2 +
-                                       4*a*x_to_intersection)**(.5)) / a
-                v_guess = v0 + a*t_exit_guess - (a+b)*t_exit_guess
-                # See dissertation appendix for derivation.
-
-            # Find how far into the intersection this vehicle gets at t_crit.
-            t_i_guess = t_crit - t_exit_guess
-            if v_guess + a*t_i_guess > v_max:
-                # Vehicle reaches the speed limit before t_crit.
-                t_i_guess_to_v_max = (v_max - v_guess)/a
-                x_i_guess_to_v_max = v_guess*t_i_guess_to_v_max + \
-                    a/2*t_i_guess_to_v_max**2
-                t_i_guess_at_v_max = t_i_guess - t_i_guess_to_v_max
-                x_i_guess_at_v_max = v_max*t_i_guess_at_v_max
-                x_guess = x_i_guess_to_v_max + x_i_guess_at_v_max
-            else:
-                # Vehicle does not reach the speed limit before t_crit.
-                x_guess = v_guess*t_i_guess + a/2*t_i_guess**2
-
-            if x_guess > x_crit:  # need to brake more to not overtake
-                t_left = t_brake_guess
-            elif x_guess < x_crit:  # need to brake less to get closer
-                t_right = t_brake_guess
-            else:  # braking just enough, so we're done
-                break
-
-        return ScheduledExit(vehicle, VehicleSection.FRONT,
-                             ceil(t_exit_guess), v_guess)
+    @staticmethod
+    def _x_in_intersection(v_guess: float, v_max: float, a: float,
+                           t_crit: float, t_exit_guess: float) -> float:
+        """Find how far into the intersection this vehicle gets at t_crit."""
+        t_i_guess = t_crit - t_exit_guess
+        if v_guess + a*t_i_guess > v_max:
+            # Vehicle reaches the speed limit before t_crit.
+            t_i_guess_to_v_max = RoadLane._t_to_v(v_guess, a, v_max)
+            x_i_guess_to_v_max = RoadLane._x_over_constant_a(
+                v_guess, a, t_i_guess_to_v_max)
+            t_i_guess_at_v_max = t_i_guess - t_i_guess_to_v_max
+            x_i_guess_at_v_max = RoadLane._x_over_constant_a(
+                v_max, 0, t_i_guess_at_v_max)
+            return x_i_guess_to_v_max + x_i_guess_at_v_max
+        else:
+            # Vehicle does not reach the speed limit before t_crit.
+            return RoadLane._x_over_constant_a(v_guess, a, t_i_guess)
 
     def progress_at_exit(self, vehicle_index: int, this_exit: ScheduledExit
                          ) -> Tuple[VehicleProgress, List[VehicleTransfer]]:
