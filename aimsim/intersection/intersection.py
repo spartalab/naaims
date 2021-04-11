@@ -38,8 +38,8 @@ if TYPE_CHECKING:
 class Intersection(Configurable, Facility, Upstream, Downstream):
 
     def __init__(self,
-                 upstream_roads: List[Road],
-                 downstream_roads: List[Road],
+                 incoming_roads: List[Road],
+                 outgoing_roads: List[Road],
                  connectivity: List[Tuple[Road, Road, bool]],
                  manager_type: Type[IntersectionManager],
                  manager_spec: Dict[str, Any],
@@ -77,16 +77,16 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         """
 
         # Index the upstream and downstream roads by their lanes' Coords
-        self.upstream_road_lane_by_coord: Dict[Coord, RoadLane] = {}
-        self.downstream_road_lane_by_coord: Dict[Coord, RoadLane] = {}
-        self.downstream_road_by_coord: Dict[Coord, Road] = {}
-        for r in upstream_roads:
+        self.incoming_road_lane_by_coord: Dict[Coord, RoadLane] = {}
+        self.outgoing_road_lane_by_coord: Dict[Coord, RoadLane] = {}
+        self.outgoing_road_by_coord: Dict[Coord, Road] = {}
+        for r in incoming_roads:
             for coord, lane in r.lanes_by_end.items():
-                self.upstream_road_lane_by_coord[coord] = lane
-        for r in downstream_roads:
+                self.incoming_road_lane_by_coord[coord] = lane
+        for r in outgoing_roads:
             for coord, lane in r.lanes_by_start.items():
-                self.downstream_road_lane_by_coord[coord] = lane
-                self.downstream_road_by_coord[coord] = r
+                self.outgoing_road_lane_by_coord[coord] = lane
+                self.outgoing_road_by_coord[coord] = r
 
         # Given the upstream and downstream roads and connectivity matrix,
         # connect incoming and outgoing RoadLanes with IntersectionLanes.
@@ -159,10 +159,10 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                 self.lanes_by_start[coord].append(lane)
 
         # Finish the spec for the manager by providing the roads and lanes
-        manager_spec['upstream_road_lane_by_coord'
-                     ] = self.upstream_road_lane_by_coord
-        manager_spec['downstream_road_lane_by_coord'
-                     ] = self.downstream_road_lane_by_coord
+        manager_spec['incoming_road_lane_by_coord'
+                     ] = self.incoming_road_lane_by_coord
+        manager_spec['outgoing_road_lane_by_coord'
+                     ] = self.outgoing_road_lane_by_coord
         manager_spec['lanes'] = self.lanes
         manager_spec['lanes_by_endpoints'] = self.lanes_by_endpoints
 
@@ -199,8 +199,8 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         it can be handled by this method.
         """
         return cls(
-            upstream_roads=spec['upstream_roads'],
-            downstream_roads=spec['downstream_roads'],
+            incoming_roads=spec['incoming_roads'],
+            outgoing_roads=spec['outgoing_roads'],
             connectivity=spec['connectivity'],
             manager_type=spec['manager_type'],
             manager_spec=spec['manager_spec'],
@@ -231,7 +231,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         for lane in self.lanes:
             transfers: List[VehicleTransfer] = lane.step_vehicles()
             for transfer in transfers:
-                self.downstream_road_by_coord[transfer.pos].transfer_vehicle(
+                self.outgoing_road_by_coord[transfer.pos].transfer_vehicle(
                     transfer)
                 if transfer.section is VehicleSection.REAR:
                     self.manager.finish_exiting(transfer.vehicle)

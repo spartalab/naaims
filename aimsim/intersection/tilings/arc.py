@@ -20,8 +20,8 @@ class ArcTiling(Tiling):
     #       so we can enforce spacing between vehicles.
 
     def __init__(self,
-                 upstream_road_lane_by_coord: Dict[Coord, RoadLane],
-                 downstream_road_lane_by_coord: Dict[Coord, RoadLane],
+                 incoming_road_lane_by_coord: Dict[Coord, RoadLane],
+                 outgoing_road_lane_by_coord: Dict[Coord, RoadLane],
                  lanes: Dict[Coord, IntersectionLane],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
@@ -31,8 +31,8 @@ class ArcTiling(Tiling):
                  ]] = None
                  ) -> None:
         super().__init__(
-            upstream_road_lane_by_coord=upstream_road_lane_by_coord,
-            downstream_road_lane_by_coord=downstream_road_lane_by_coord,
+            incoming_road_lane_by_coord=incoming_road_lane_by_coord,
+            outgoing_road_lane_by_coord=outgoing_road_lane_by_coord,
             lanes=lanes,
             lanes_by_endpoints=lanes_by_endpoints,
             tile_type=tile_type,

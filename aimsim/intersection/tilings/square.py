@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 
 class SquareTiling(Tiling):
     def __init__(self,
-                 upstream_road_lane_by_coord: Dict[Coord, RoadLane],
-                 downstream_road_lane_by_coord: Dict[Coord, RoadLane],
+                 incoming_road_lane_by_coord: Dict[Coord, RoadLane],
+                 outgoing_road_lane_by_coord: Dict[Coord, RoadLane],
                  lanes: Dict[Coord, IntersectionLane],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
@@ -36,8 +36,8 @@ class SquareTiling(Tiling):
                 in meters.
         """
         super().__init__(
-            upstream_road_lane_by_coord=upstream_road_lane_by_coord,
-            downstream_road_lane_by_coord=downstream_road_lane_by_coord,
+            incoming_road_lane_by_coord=incoming_road_lane_by_coord,
+            outgoing_road_lane_by_coord=outgoing_road_lane_by_coord,
             lanes=lanes,
             lanes_by_endpoints=lanes_by_endpoints,
             tile_type=tile_type,
@@ -173,7 +173,7 @@ class SquareTiling(Tiling):
 
         return tiles_covered
 
-    def _outline_to_tile_range(self, outline: Tuple[Coord]) \
+    def _outline_to_tile_range(self, outline: Tuple[Coord, ...]) \
             -> Tuple[int, List[int], List[int]]:
 
         # Start by finding the y-range the outline covers.
@@ -210,7 +210,8 @@ class SquareTiling(Tiling):
 
         return y_min, x_mins, x_maxes
 
-    def _project_onto_grid(self, outline: Tuple[Coord]) -> Tuple[Coord]:
+    def _project_onto_grid(self, outline: Tuple[Coord, ...]
+                           ) -> Tuple[Coord, ...]:
         """Given an outline, project it to be fully on the grid."""
         outline_projected: List[Coord] = []
 
