@@ -386,7 +386,7 @@ class SquareTiling(Tiling):
         y_max: int
 
         # Recall that points are assigned to tiles based on their floored x and
-        # y values, except in the case of points on the upper or left boundary
+        # y values, except in the case of points on the upper or right boundary
         # of the tile space, which are assigned to the edge tile they border.
         if dy == 0:  # horizontal or a single point
             y_min = floor(start.y) if start.y < self.y_tile_count - 1 \

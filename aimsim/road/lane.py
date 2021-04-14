@@ -399,8 +399,8 @@ class RoadLane(Lane):
         # Atomize the relevant parameters for readability
         t0: float = SHARED.t
         v0: float = vehicle.velocity
-        a: float = vehicle.max_acceleration
-        b: float = -vehicle.max_braking
+        a: float = SHARED.SETTINGS.min_acceleration
+        b: float = SHARED.SETTINGS.min_braking
         v_max: float = self.effective_speed_limit(progress, vehicle)
         # TODO: (consistency) Variable speed limits not supported.
         x_to_intersection: float = self._x_to_intersection(progress)
@@ -578,9 +578,9 @@ class RoadLane(Lane):
         Returns a few support variables that will facilitate binary search if
         this exit ends up being valid.
         """
-        t_brake_from_v_max: float = RoadLane._t_to_v(v_max, -b, 0)
+        t_brake_from_v_max: float = RoadLane._t_to_v(v_max, b, 0)
         x_brake_from_v_max: float = RoadLane._x_over_constant_a(
-            v_max, -b, t_brake_from_v_max)
+            v_max, b, t_brake_from_v_max)
 
         t_slowest_exit: float
         t_brake_max: float
@@ -589,10 +589,10 @@ class RoadLane(Lane):
         t_brake_smallest_seen_no_v_max: Optional[float] = None
         if x_to_v_max + x_brake_from_v_max > x_to_intersection:
             # Need to brake before reaching v_max.
-            t_slowest_exit = (-b*v0 + (b**2*v0**2 + a*b*v0**2 - 2*a *
-                                       b*x_to_intersection*(a + b))**(.5)
+            t_slowest_exit = (-b*v0 +
+                              (2*b*(b-a)*(a*x_to_intersection + v0**2/2))**(.5)
                               ) / (a*b)
-            t_brake_max = t_slowest_exit - (b*t_slowest_exit - v0) / (a+b)
+            t_brake_max = t_slowest_exit - (b*t_slowest_exit + v0) / (b-a)
             # See dissertation appendix for derivation.
             t_brake_smallest_seen_no_v_max = t_brake_max
         else:
@@ -684,7 +684,7 @@ class RoadLane(Lane):
         else:
             # This braking time may hit the speed limit. Check here.
             x_brake_guess_from_v_max = RoadLane._x_over_constant_a(
-                v_max, -b, t_brake_guess)
+                v_max, b, t_brake_guess)
 
             if x_to_v_max + x_brake_guess_from_v_max > x_to_intersection:
                 # Braking must start before reaching v_max.
@@ -706,22 +706,22 @@ class RoadLane(Lane):
         """Find the time and velocity of exit given t_brake_guess."""
         if reaches_v_max_before_intersection:
             x_brake_guess_from_v_max = RoadLane._x_over_constant_a(
-                v_max, -b, t_brake_guess)
+                v_max, b, t_brake_guess)
             x_guess_at_v_max = RoadLane._x_at_v_max(
                 x_to_intersection, x_to_v_max, x_brake_guess_from_v_max)
             t_exit_guess = RoadLane._t_of_v_max_exit(
                 t_to_v_max, t_brake_guess, x_guess_at_v_max, v_max)
-            v_guess = v_max - t_brake_guess*b
+            v_guess = v_max + t_brake_guess*b
         else:
             # This braking time will not hit the speed limit.
-            t_exit_guess = (-v0 + (v0**2 + 2*a**2*t_brake_guess**2 +
-                                   2*a*b*t_brake_guess**2 +
-                                   4*a*x_to_intersection)**(.5)) / a
-            v_guess = v0 + a*t_exit_guess - (a+b)*t_exit_guess
+            t_exit_guess = (-v0 + (a**2 * t_brake_guess**2 -
+                                   a*b*t_brake_guess**2 + 2*a*x_to_intersection
+                                   + v0**2)) / a
+            v_guess = v0 + a*t_exit_guess + (b-a)*t_exit_guess
             # See dissertation appendix for derivation.
         return t_exit_guess, v_guess
 
-    @staticmethod
+    @ staticmethod
     def _x_in_intersection(v_guess: float, v_max: float, a: float,
                            t_crit: float, t_exit_guess: float) -> float:
         """Find how far into the intersection this vehicle gets at t_crit."""

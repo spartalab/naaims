@@ -21,7 +21,7 @@ from warnings import warn
 
 import aimsim.shared as SHARED
 from aimsim.util import (Coord, VehicleSection, SpeedUpdate, VehicleTransfer,
-                         CollisionError, TooManyProgressionsError)
+                         CollisionError)
 
 if TYPE_CHECKING:
     from aimsim.vehicles import Vehicle

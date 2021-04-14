@@ -83,7 +83,7 @@ class Settings:
         return self.__speed_limit
 
     @property
-    def max_braking(self) -> float:
+    def min_braking(self) -> float:
         if not self.config_file_already_read:
             raise self.not_read_error
         return self.__max_braking
