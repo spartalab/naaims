@@ -20,8 +20,8 @@ class StopSignManager(IntersectionManager):
     """
 
     def __init__(self,
-                 upstream_road_lane_by_coord: Dict[Coord, RoadLane],
-                 downstream_road_lane_by_coord: Dict[Coord, RoadLane],
+                 incoming_road_lane_by_coord: Dict[Coord, RoadLane],
+                 outgoing_road_lane_by_coord: Dict[Coord, RoadLane],
                  lanes: Iterable[IntersectionLane],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
@@ -29,8 +29,8 @@ class StopSignManager(IntersectionManager):
                  tiling_spec: Dict[str, Any]
                  ) -> None:
         """Create a new stop sign intersection manager."""
-        super().__init__(upstream_road_lane_by_coord,
-                         downstream_road_lane_by_coord,
+        super().__init__(incoming_road_lane_by_coord,
+                         outgoing_road_lane_by_coord,
                          lanes,
                          lanes_by_endpoints,
                          tiling_type,
@@ -44,7 +44,7 @@ class StopSignManager(IntersectionManager):
         # Check each incoming lane not in queue for a new vehicle that's
         # stopped at the intersection line. Add these lanes to the queue.
         seen_lanes = set(self.queue)
-        for lane in self.upstream_road_lane_by_coord.values():
+        for lane in self.incoming_road_lane_by_coord.values():
             if lane not in seen_lanes:
                 v_index = lane.first_without_permission()
                 if (v_index is not None) and (v_index[0] == 0):
@@ -72,11 +72,11 @@ class StopSignManager(IntersectionManager):
             vehicle = front_exit.vehicle
             length_traversal_time = ceil(sqrt(
                 2*vehicle.length*(1+2*SHARED.SETTINGS.length_buffer_factor) /
-                vehicle.max_acceleration))
+                SHARED.SETTINGS.min_acceleration))
             # TODO: Alter traversal time to account for speed limit.
             rear_exit = ScheduledExit(vehicle, VehicleSection.REAR,
                                       front_exit.t + length_traversal_time,
-                                      vehicle.max_acceleration *
+                                      SHARED.SETTINGS.min_acceleration *
                                       length_traversal_time)
             self.tiling.issue_permission(vehicle, lane, rear_exit)
             vehicle.permission_to_enter_intersection = True

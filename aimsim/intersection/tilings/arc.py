@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional, Set, Dict, Tuple, Type, List
+from typing import Any, TYPE_CHECKING, Optional, Set, Dict, Tuple, Type, List
 from collections import deque
 
 import aimsim.shared as SHARED
@@ -28,7 +28,8 @@ class ArcTiling(Tiling):
                  tile_type: Type[Tile] = DeterministicTile,
                  cycle: Optional[List[
                      Tuple[Set[IntersectionLane], int]
-                 ]] = None
+                 ]] = None,
+                 misc_spec: Dict[str, Any] = {}
                  ) -> None:
         super().__init__(
             incoming_road_lane_by_coord=incoming_road_lane_by_coord,

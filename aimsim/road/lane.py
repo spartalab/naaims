@@ -425,11 +425,9 @@ class RoadLane(Lane):
 
         # Find the time when the preceding vehicle reaches the speed limit and
         # how much distance it's covered by then.
-        a_p: float = last_rear_exit.vehicle.max_acceleration
-        assert a_p == a
         v0_p: float = last_rear_exit.v
-        t_p_to_v_max: float = self._t_to_v(v0_p, a_p, v_max)
-        x_crit: float = self._x_over_constant_a(v0_p, a_p, t_p_to_v_max)
+        t_p_to_v_max: float = self._t_to_v(v0_p, a, v_max)
+        x_crit: float = self._x_over_constant_a(v0_p, a, t_p_to_v_max)
         # The collision window is between last_rear_exit.t + [0, t_p_to_v_max].
         # If the study vehicle overtakes the preceding vehicle in this time
         # window, it's a crash, so we'll call the furthest the preceding

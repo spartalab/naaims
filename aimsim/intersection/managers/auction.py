@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 class AuctionManager(IntersectionManager):
 
     def __init__(self,
-                 upstream_road_lane_by_coord: Dict[Coord, RoadLane],
-                 downstream_road_lane_by_coord: Dict[Coord, RoadLane],
+                 incoming_road_lane_by_coord: Dict[Coord, RoadLane],
+                 outgoing_road_lane_by_coord: Dict[Coord, RoadLane],
                  lanes: Iterable[IntersectionLane],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
@@ -28,8 +28,8 @@ class AuctionManager(IntersectionManager):
                  sequencing: bool = False
                  ) -> None:
         super().__init__(
-            upstream_road_lane_by_coord=upstream_road_lane_by_coord,
-            downstream_road_lane_by_coord=downstream_road_lane_by_coord,
+            incoming_road_lane_by_coord=incoming_road_lane_by_coord,
+            outgoing_road_lane_by_coord=outgoing_road_lane_by_coord,
             lanes=lanes,
             lanes_by_endpoints=lanes_by_endpoints,
             tiling_type=tiling_type,
@@ -52,7 +52,7 @@ class AuctionManager(IntersectionManager):
         # lane) as the leader, up to the number of consecutive reservations
         # that were successful.
         requests: Dict[RoadLane, Iterable[Reservation]] = {}
-        for road_lane in self.upstream_road_lane_by_coord.values():
+        for road_lane in self.incoming_road_lane_by_coord.values():
             requests[road_lane] = self.tiling.check_request(road_lane,
                                                             mark=True,
                                                             sequence=True)

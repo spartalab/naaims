@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional, Set, Dict, Tuple, Type, List
+from typing import Any, TYPE_CHECKING, Optional, Set, Dict, Tuple, Type, List
 from math import ceil, floor
 
 import aimsim.shared as SHARED
@@ -26,7 +26,7 @@ class SquareTiling(Tiling):
                  cycle: Optional[List[
                      Tuple[Set[IntersectionLane], int]
                  ]] = None,
-                 tile_width: Optional[int] = None  # in meters
+                 misc_spec: Dict[str, Any] = {}
                  ) -> None:
         """Creates a new square (pixelated) tiling.
 
@@ -44,8 +44,9 @@ class SquareTiling(Tiling):
             cycle=cycle
         )
 
+        tile_width = misc_spec.get('tile_width')  # in meters
         if tile_width is None:
-            raise ValueError("tile_width can't be None.")
+            raise ValueError("tile_width must be provided.")
         self.tile_width = tile_width
 
         # Identify bounding box by looking for min and max x and y coordinates
@@ -599,8 +600,8 @@ class SquareTiling(Tiling):
             mark: bool = False
                 Whether to mark the tiles used with this potential reservation.
         """
-        super().edge_tile_buffer(lane, t, clone, reservation, prepend, force,
-                                 mark)
+        super().io_tile_buffer(lane, t, clone, reservation, prepend, force,
+                               mark)
 
         if t <= SHARED.t:
             raise ValueError("t must be a future timestep.")

@@ -76,10 +76,10 @@ class Vehicle(ABC):
 
         if max_accel <= 0:
             raise ValueError("max_accel must be positive")
-        if max_braking >= SHARED.SETTINGS.min_braking:
+        if max_braking > SHARED.SETTINGS.min_braking:
             raise ValueError("max_braking must be as good or better than the "
                              "max_braking set in the global config.")
-        if max_accel <= SHARED.SETTINGS.min_acceleration:
+        if max_accel < SHARED.SETTINGS.min_acceleration:
             raise ValueError("max_braking must be as good or better than the "
                              "max_braking set in the global config.")
 

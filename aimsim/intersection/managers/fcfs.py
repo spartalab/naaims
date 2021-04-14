@@ -24,7 +24,7 @@ class FCFSManager(IntersectionManager):
         # TODO: (FCFSSignals) Adjust this so that it can be changed to only
         #       look at whitelisted (i.e., non-green) lanes.
         poll_lane: Dict[RoadLane, bool] = {
-            lane: True for lane in self.upstream_road_lane_by_coord.values()}
+            lane: True for lane in self.incoming_road_lane_by_coord.values()}
 
         # While there are lanes that could still return a request we haven't
         # looked at yet, i.e., all lanes on a fresh run and then only lanes

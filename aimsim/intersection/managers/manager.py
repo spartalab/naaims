@@ -36,8 +36,8 @@ class IntersectionManager(Configurable):
     """
 
     def __init__(self,
-                 upstream_road_lane_by_coord: Dict[Coord, RoadLane],
-                 downstream_road_lane_by_coord: Dict[Coord, RoadLane],
+                 incoming_road_lane_by_coord: Dict[Coord, RoadLane],
+                 outgoing_road_lane_by_coord: Dict[Coord, RoadLane],
                  lanes: Iterable[IntersectionLane],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
@@ -50,16 +50,16 @@ class IntersectionManager(Configurable):
         in this init. If they do need to, subclasses must call this for initial
         setup, then continue in their own init to set up whatever they need to.
         """
-        self.upstream_road_lane_by_coord = upstream_road_lane_by_coord
-        self.downstream_road_lane_by_coord = downstream_road_lane_by_coord
+        self.incoming_road_lane_by_coord = incoming_road_lane_by_coord
+        self.outgoing_road_lane_by_coord = outgoing_road_lane_by_coord
         self.lanes = lanes
         self.lanes_by_endpoints = lanes_by_endpoints
 
         # Finish the spec for the manager by providing the roads and lanes
-        tiling_spec['upstream_road_lane_by_coord'
-                    ] = self.upstream_road_lane_by_coord
-        tiling_spec['downstream_road_lane_by_coord'
-                    ] = self.downstream_road_lane_by_coord
+        tiling_spec['incoming_road_lane_by_coord'
+                    ] = self.incoming_road_lane_by_coord
+        tiling_spec['outgoing_road_lane_by_coord'
+                    ] = self.outgoing_road_lane_by_coord
         tiling_spec['lanes'] = self.lanes
         tiling_spec['lanes_by_endpoints'] = self.lanes_by_endpoints
 
@@ -93,13 +93,13 @@ class IntersectionManager(Configurable):
     def from_spec(cls: Type[M], spec: Dict[str, Any]) -> M:
         """Should interpret a spec dict to call the manager's init."""
         return cls(
-            upstream_road_lane_by_coord=spec['upstream_road_lane_by_coord'],
-            downstream_road_lane_by_coord=spec[
-                'downstream_road_lane_by_coord'],
+            incoming_road_lane_by_coord=spec['incoming_road_lane_by_coord'],
+            outgoing_road_lane_by_coord=spec[
+                'outgoing_road_lane_by_coord'],
             lanes=spec['lanes'],
             lanes_by_endpoints=spec['lanes_by_endpoints'],
             tiling_type=spec['tiling_type'],
-            tiling_spec=spec['tiling_config']
+            tiling_spec=spec['tiling_spec']
         )
 
     # Begin simulation cycle methods

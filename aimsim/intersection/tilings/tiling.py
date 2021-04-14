@@ -44,7 +44,8 @@ class Tiling(Configurable):
                  tile_type: Type[Tile] = DeterministicTile,
                  cycle: Optional[List[
                      Tuple[Set[IntersectionLane], int]
-                 ]] = None
+                 ]] = None,
+                 misc_spec: Dict[str, Any] = {}
                  ) -> None:
         """Should instantiate a new Tiling.
 
@@ -120,7 +121,8 @@ class Tiling(Configurable):
             lanes=spec['lanes'],
             lanes_by_endpoints=spec['lanes_by_endpoints'],
             tile_type=spec['tile_type'],
-            cycle=spec['cycle']
+            cycle=spec.get('cycle'),
+            misc_spec=spec.get('misc_spec', {})
         )
 
     # Begin simulation cycle methods
@@ -450,7 +452,7 @@ class Tiling(Configurable):
 
                 # Attach buffer tiles to this exiting reservation request
                 # and check if these tiles are free.
-                edge_buffer_tiles = self.edge_tile_buffer(
+                edge_buffer_tiles = self.io_tile_buffer(
                     intersection_lane, test_t, clone, reservation,
                     prepend=False, mark=mark)
                 if edge_buffer_tiles is None:
@@ -645,7 +647,7 @@ class Tiling(Configurable):
         tiles_used = self.pos_to_tiles(intersection_lane, test_t,
                                        clone, reservation,
                                        mark=mark)
-        edge_tiles_used = self.edge_tile_buffer(
+        edge_tiles_used = self.io_tile_buffer(
             intersection_lane, test_t, clone, reservation,
             prepend=True, mark=mark)
         if (edge_tiles_used is not None) and (tiles_used is not None):
@@ -747,10 +749,10 @@ class Tiling(Configurable):
         #       reservation. Tweak tile implementation to account for this.
 
     @abstractmethod
-    def edge_tile_buffer(self, lane: IntersectionLane, t: int,
-                         clone: Vehicle, reservation: Reservation,
-                         prepend: bool, force: bool = False, mark: bool = False
-                         ) -> Optional[Dict[int, Dict[Tile, float]]]:
+    def io_tile_buffer(self, lane: IntersectionLane, t: int,
+                       clone: Vehicle, reservation: Reservation,
+                       prepend: bool, force: bool = False, mark: bool = False
+                       ) -> Optional[Dict[int, Dict[Tile, float]]]:
         """Should return edge buffer tiles and percentages used if it works.
 
         Given a vehicle with a test-updated position, its in-lane progress, and

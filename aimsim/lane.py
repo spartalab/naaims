@@ -153,7 +153,7 @@ class Lane(ABC):
                 # A vehicle being in to_slow overrides any acceleration logic
                 # defined in accel_update, instead telling the vehicle to start
                 # braking no matter what.
-                a_new = (vehicle.max_braking if (vehicle in to_slow) else
+                a_new = (SHARED.SETTINGS.min_braking if vehicle in to_slow else
                          self.accel_update(vehicle, section, p, preceding))
                 new_speed[vehicle] = self.speed_update(vehicle, p, a_new)
 
@@ -281,11 +281,11 @@ class Lane(ABC):
         """
         effective_speed_limit = self.effective_speed_limit(p, vehicle)
         if vehicle.velocity > effective_speed_limit:
-            return vehicle.max_braking
+            return SHARED.SETTINGS.min_braking
         elif vehicle.velocity == effective_speed_limit:
             return 0
         else:  # vehicle.v < effective_speed_limit
-            return vehicle.max_acceleration
+            return SHARED.SETTINGS.min_acceleration
 
     def accel_update_following(self,
                                vehicle: Vehicle,
@@ -317,12 +317,12 @@ class Lane(ABC):
         if a_maybe < 0:  # need to brake regardless of closeness
             return a_maybe
         elif vehicle.stopping_distance(
-            vehicle.velocity +
-                SHARED.SETTINGS.TIMESTEP_LENGTH*vehicle.max_acceleration
+            vehicle.velocity + SHARED.SETTINGS.TIMESTEP_LENGTH *
+                SHARED.SETTINGS.min_acceleration
         ) <= available_stopping_distance:
             # Accelerating will still keep this vehicle in the available
             # stopping distance. Make sure to check against the speed limit.
-            return min(a_maybe, vehicle.max_acceleration)
+            return min(a_maybe, SHARED.SETTINGS.min_acceleration)
         elif vehicle.stopping_distance() <= available_stopping_distance:
             # Maintaining speed will keep this vehicle in the available
             # stopping distance, but speeding up won't.
@@ -330,7 +330,7 @@ class Lane(ABC):
         else:
             # We have to brake to even have a chance of getting back to or
             # staying in the stopping distance.
-            return vehicle.max_braking
+            return SHARED.SETTINGS.min_braking
 
     def speed_update(self, vehicle: Vehicle, p: float,
                      accel: float) -> SpeedUpdate:
