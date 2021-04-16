@@ -213,18 +213,18 @@ class Lane(ABC):
             if preceding_vehicle_progress is None:
                 raise ValueError("Preceding vehicle not in lane.")
             else:
-                available_stopping_distance = self.effective_stopping_distance(
+                available_stopping_distance = self.available_stopping_distance(
                     preceding_vehicle_progress, p,
                     preceding.stopping_distance())
         return self.accel_update_following(
             vehicle, p, available_stopping_distance=available_stopping_distance
         )
 
-    def effective_stopping_distance(self, pre_p: float, p: float,
+    def available_stopping_distance(self, pre_p: float, p: float,
                                     vehicle_stopping_distance: float) -> float:
-        """Return the effective stopping distance.
+        """Return the available stopping distance.
 
-        Calculates the effective stopping distance for a vehicle given its
+        Calculates the available stopping distance for a vehicle. This is its
         gap to the next waypoint plus the stopping distance of that waypoint
         if it's a vehicle. (This is 0 if the waypoint is the end of the lane.)
 
@@ -269,11 +269,11 @@ class Lane(ABC):
                     return None
             assert p is not None
             assert pre_p is not None
-            return self.effective_stopping_distance(
+            return self.available_stopping_distance(
                 pre_p, p, vehicle.stopping_distance())
 
     def accel_update_uncontested(self, vehicle: Vehicle, p: float) -> float:
-        """Return accel update if there are no vehicles ahead.
+        """Return accel update if there are no conflicts ahead.
 
         p is the proportional progress associated with this vehicle. Because it
         could be the front or rear of the vehicle depending on the situation,
@@ -287,13 +287,10 @@ class Lane(ABC):
         else:  # vehicle.v < effective_speed_limit
             return SHARED.SETTINGS.min_acceleration
 
-    def accel_update_following(self,
-                               vehicle: Vehicle,
-                               p: float,
-                               available_stopping_distance: Optional[float
-                                                                     ] = None
-                               ) -> float:
-        """Return speed update to prevent collision with a preceding object.
+    def accel_update_following(self, vehicle: Vehicle, p: float,
+                               available_stopping_distance: Optional[
+                                   float] = None) -> float:
+        """Return accel update to prevent collision with a preceding object.
 
         p is the proportional progress associated with this vehicle. Because it
         could be the front or rear of the vehicle depending on the situation,
@@ -308,9 +305,9 @@ class Lane(ABC):
         this vehicle.
         """
 
-        available_stopping_distance = ((1-p)*self.trajectory.length if
-                                       available_stopping_distance is None
-                                       else available_stopping_distance)
+        available_stopping_distance = (1-p)*self.trajectory.length if \
+            available_stopping_distance is None \
+            else available_stopping_distance
 
         # Check the acceleration against the speed limit.
         a_maybe = self.accel_update_uncontested(vehicle, p)
@@ -352,7 +349,8 @@ class Lane(ABC):
             effective_speed_limit = self.effective_speed_limit(p, vehicle)
             if v_new > effective_speed_limit:
                 return SpeedUpdate(velocity=effective_speed_limit,
-                                   acceleration=accel)
+                                   acceleration=accel if vehicle.velocity <
+                                   effective_speed_limit else 0)
             else:
                 return SpeedUpdate(velocity=v_new, acceleration=accel)
         # TODO: (stochasticity) Consider enforcing the speed limit clip in
@@ -493,7 +491,8 @@ class Lane(ABC):
                     else:  # this is the rear of the vehicle
                         # If the rear is None, the vehicle should have
                         # fully exited and be out of this lane.
-                        raise RuntimeError("Exited vehicle not removed.")
+                        raise RuntimeError("Exited vehicle not removed or lane"
+                                           " is too short.")
                 elif VehicleSection(i) is VehicleSection.FRONT:
                     # last_progress is telling us that we've already looked at
                     # at least one vehicle, but if this next vehicle's front
@@ -504,18 +503,12 @@ class Lane(ABC):
                                        "Vehicle should not have started "
                                        "exiting already.")
                 elif VehicleSection(i) is VehicleSection.CENTER:
-                    if preceding_section_progress >= 0:
-                        # The front of this vehicle is in the lane but this
-                        # center section and the rear section are still in the
-                        # upstream intersection. This is ok.
-                        new_vehicle_progress[i] = progress
-                        preceding_section_progress = -1
-                        continue
-                    else:
-                        raise RuntimeError("The center of this vehicle isn't "
-                                           "in this lane even though this "
-                                           "isn't the first vehicle in the "
-                                           "lane.")
+                    # The front of this vehicle is in the lane but this
+                    # center section and the rear section are still in the
+                    # upstream intersection. This is ok.
+                    new_vehicle_progress[i] = progress
+                    preceding_section_progress = -1
+                    continue
                 else:  # this is the rear of the vehicle
                     if preceding_section_progress >= 0:
                         # The front and center of this vehicle are in this lane
@@ -558,7 +551,8 @@ class Lane(ABC):
             front=new_vehicle_progress[0],
             center=new_vehicle_progress[1],
             rear=new_vehicle_progress[2]
-        ), preceding_section_progress, exiting
+        ), preceding_section_progress if preceding_section_progress <= 1 \
+            else 1, exiting
 
     def lateral_deviation_for(self, vehicle: Vehicle,
                               new_progress: float) -> float:

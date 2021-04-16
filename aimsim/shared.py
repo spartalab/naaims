@@ -131,7 +131,7 @@ class Settings:
                 'steps_per_second': '60',
                 'speed_limit': '15',
                 'max_braking': '-2.6',  # -3.4
-                'min_acceleration': '3',  # -3.4
+                'min_acceleration': '3',  # 3.4
                 'max_vehicle_length': '5.5',  # TODO: what to do with this
                 'length_buffer_factor': '0.1'
             })
@@ -153,7 +153,7 @@ class Settings:
 
             max_braking = float(SETTINGS['max_braking'])
             if max_braking >= 0:
-                raise ValueError("max_braking must be less than 0.")
+                raise ValueError("max_braking must be negative.")
             self.__max_braking = max_braking
 
             min_acceleration = float(SETTINGS['min_acceleration'])

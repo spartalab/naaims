@@ -80,8 +80,8 @@ class Vehicle(ABC):
             raise ValueError("max_braking must be as good or better than the "
                              "max_braking set in the global config.")
         if max_accel < SHARED.SETTINGS.min_acceleration:
-            raise ValueError("max_braking must be as good or better than the "
-                             "max_braking set in the global config.")
+            raise ValueError("max_accel must be as good or better than the "
+                             "min_accel set in the global config.")
 
         self._vin = vin
 

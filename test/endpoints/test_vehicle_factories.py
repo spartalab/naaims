@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Any, Type, Dict
+from random import seed
 
 from pytest import raises
 from pytest_mock import MockerFixture
@@ -24,6 +25,7 @@ def test_gvf_creation(mocker: MockerFixture, read_config: None):
     # 1 in 100,000 chance this test fails even if working correctly lol
     assert veh0.destination != veh1.destination
 
+    seed(0)
     gvf_varied = GaussianVehicleFactory(vehicle_type=AutomatedVehicle,
                                         num_destinations=1,
                                         max_accel_mn=3,

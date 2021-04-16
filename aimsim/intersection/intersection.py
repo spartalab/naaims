@@ -142,7 +142,7 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                     # Finding the shortest connection is enough.
                     break
 
-        self.lanes: Tuple[IntersectionLane] = tuple(lanes)
+        self.lanes: Tuple[IntersectionLane, ...] = tuple(lanes)
 
         # Index the IntersectionLanes by their Coord
         self.lanes_by_endpoints: Dict[Tuple[Coord, Coord],
