@@ -218,7 +218,8 @@ class Tiling(Configurable):
 
     # Methods used by manager during reservation request handling
 
-    def issue_permission(self, vehicle: Vehicle, lane: RoadLane,
+    @staticmethod
+    def issue_permission(vehicle: Vehicle, lane: RoadLane,
                          rear_exit: ScheduledExit) -> None:
         """Issue permission to enter the intersection to a vehicle.
 

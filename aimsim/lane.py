@@ -187,7 +187,7 @@ class Lane(ABC):
             # Call downstream to see if there's a preceding vehicle across the
             # road/intersection seam.
             downstream_stopping_distance: Optional[float] = \
-                self.downstream_stopping_distance(vehicle, section)
+                self.downstream_stopping_distance()
 
             if downstream_stopping_distance is None:
                 # There's nothing to stop for. Full speed forward.
@@ -239,9 +239,7 @@ class Lane(ABC):
         return (pre_p - p)*self.trajectory.length + vehicle_stopping_distance
 
     @abstractmethod
-    def downstream_stopping_distance(self, vehicle: Vehicle,
-                                     section: VehicleSection
-                                     ) -> Optional[float]:
+    def downstream_stopping_distance(self) -> Optional[float]:
         """Should check the downstream object's required stopping distance."""
         raise NotImplementedError("Must be implemented in child classes.")
 

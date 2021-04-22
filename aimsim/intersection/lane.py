@@ -112,9 +112,7 @@ class IntersectionLane(Lane):
         #       in the velocity update the effective speed limit trims the
         #       acceleration to the speed limit if it exceeds the speed limit.
 
-    def downstream_stopping_distance(self, vehicle: Vehicle,
-                                     section: VehicleSection
-                                     ) -> Optional[float]:
+    def downstream_stopping_distance(self) -> Optional[float]:
         """Check the downstream road lane's required stopping distance."""
         return self.downstream.stopping_distance_to_last_vehicle()
 
