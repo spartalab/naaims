@@ -20,7 +20,7 @@ Roads are divided into up to 3 sections:
 
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Type, Iterable, Dict, Any, Tuple, List
+from typing import Optional, TYPE_CHECKING, Type, Iterable, Dict, Any, Tuple, List
 from math import sin, cos
 
 from aimsim.vehicles import Vehicle
@@ -157,6 +157,10 @@ class Road(Configurable, Facility, Upstream, Downstream):
         # Init buffer for incoming vehicles
         Downstream.__init__(self)
 
+        # Setup upstream and downstream items
+        self.__upstream: Optional[Upstream] = None
+        self.__downstream: Optional[Downstream] = None
+
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
         """Reads a spec string into a road spec dict."""
@@ -232,6 +236,18 @@ class Road(Configurable, Facility, Upstream, Downstream):
                 lane.connect_downstream_intersection(
                     downstream)  # type: ignore
 
+    @property
+    def upstream(self) -> Upstream:
+        if self.__upstream is None:
+            raise MissingConnectionError("No upstream object.")
+        return self.__upstream
+
+    @property
+    def downstream(self) -> Downstream:
+        if self.__downstream is None:
+            raise MissingConnectionError("No downstream object.")
+        return self.__downstream
+
     # Begin simulation cycle methods
 
     def get_new_speeds(self) -> Dict[Vehicle, SpeedUpdate]:
@@ -240,18 +256,6 @@ class Road(Configurable, Facility, Upstream, Downstream):
         This road is responsible for updating the speed and acceleration of all
         vehicles on this road that aren't partially in an intersection.
         """
-
-        # Check that Upstream and Downstream objects have been connected.
-        # This only needs to be checked the first time but hopefully this
-        # runtime is trivial.
-        try:
-            self.__upstream
-        except NameError:
-            raise MissingConnectionError("No upstream object.")
-        try:
-            self.__downstream
-        except NameError:
-            raise MissingConnectionError("No downstream object.")
 
         new_speeds: List[Dict[Vehicle, SpeedUpdate]] = []
 
@@ -293,7 +297,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
                 lateral_deviations=self.manager.lateral_movements(lane)
             )
             for transfer in transfers:
-                self.__downstream.transfer_vehicle(transfer)
+                self.downstream.transfer_vehicle(transfer)
 
     def process_transfers(self) -> None:
         """Incorporate new vehicles onto this road."""

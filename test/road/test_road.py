@@ -10,7 +10,7 @@ from aimsim.road import Road
 from aimsim.util import Coord, SpeedUpdate, VehicleTransfer, VehicleSection
 from aimsim.vehicles import AutomatedVehicle
 
-from test.lane.test_lane import straight_trajectory
+from test.test_lane import straight_trajectory
 
 
 def test_road_lane_offsets(mocker: MockerFixture, read_config: None):
@@ -102,15 +102,11 @@ def test_road_lane_offsets(mocker: MockerFixture, read_config: None):
     ))
 
 
-def test_road_step(read_config: None):
+def test_step_and_speeds(read_config: None):
     road = Road(straight_trajectory, .2*straight_trajectory.length,
                 SHARED.SETTINGS.speed_limit,
                 upstream_is_spawner=True, downstream_is_remover=True,
                 num_lanes=2)
-    # Hacky way to make upstream and downstream checks work without having to
-    # create actual Spawner and Remover objects
-    road._Road__upstream = None
-    road._Road__downstream = None
 
     # Construct copyable transfer
     veh1 = AutomatedVehicle(0, 0)
@@ -147,8 +143,8 @@ def test_road_step(read_config: None):
     new_speeds = road.get_new_speeds()
     assert len(new_speeds) == 2
     assert new_speeds[veh1] == new_speeds[veh2] == SpeedUpdate(
-        SHARED.SETTINGS.TIMESTEP_LENGTH*veh1.max_acceleration,
-        veh1.max_acceleration
+        SHARED.SETTINGS.TIMESTEP_LENGTH*SHARED.SETTINGS.min_acceleration,
+        SHARED.SETTINGS.min_acceleration
     )
 
 
