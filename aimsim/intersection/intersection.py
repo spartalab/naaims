@@ -48,9 +48,9 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         """Create a new intersection.
 
         Parameters
-            upstream_roads: Iterable[Road]
+            incoming_roads: Iterable[Road]
                 The roads from which vehicles enter this intersection.
-            downstream_roads: Iterable[Road]
+            outgoing_roads: Iterable[Road]
                 The roads onto which vehicles exit this intersection.
             connectivity: Iterable[Tuple[Road, Road, bool]]
                 Describes which roads connect to each other, used to create
@@ -79,14 +79,14 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         # Index the upstream and downstream roads by their lanes' Coords
         self.incoming_road_lane_by_coord: Dict[Coord, RoadLane] = {}
         self.outgoing_road_lane_by_coord: Dict[Coord, RoadLane] = {}
-        self.outgoing_road_by_coord: Dict[Coord, Road] = {}
+        self.outgoing_road_by_lane_coord: Dict[Coord, Road] = {}
         for r in incoming_roads:
             for coord, lane in r.lanes_by_end.items():
                 self.incoming_road_lane_by_coord[coord] = lane
         for r in outgoing_roads:
             for coord, lane in r.lanes_by_start.items():
                 self.outgoing_road_lane_by_coord[coord] = lane
-                self.outgoing_road_by_coord[coord] = r
+                self.outgoing_road_by_lane_coord[coord] = r
 
         # Given the upstream and downstream roads and connectivity matrix,
         # connect incoming and outgoing RoadLanes with IntersectionLanes.
@@ -124,9 +124,11 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                     search_outgoing = unmatched_outgoing_lanes \
                         if enforce_one_to_one else set(outgoing_road.lanes)
                     for outgoing_lane in search_outgoing:
-                        if io_distances[incoming_lane
-                                        ][outgoing_lane] < shortest_dist:
+                        dist = io_distances[incoming_lane
+                                            ][outgoing_lane]
+                        if dist < shortest_dist:
                             shortest_pair = (incoming_lane, outgoing_lane)
+                            shortest_dist = dist
 
                 lanes.append(IntersectionLane(shortest_pair[0],
                                               shortest_pair[1],
@@ -169,6 +171,9 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         # Create the manager
         self.manager: IntersectionManager = manager_type.from_spec(
             manager_spec)
+
+        # Init buffer for incoming vehicles
+        Downstream.__init__(self)
 
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
@@ -231,8 +236,8 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         for lane in self.lanes:
             transfers: List[VehicleTransfer] = lane.step_vehicles()
             for transfer in transfers:
-                self.outgoing_road_by_coord[transfer.pos].transfer_vehicle(
-                    transfer)
+                self.outgoing_road_by_lane_coord[transfer.pos
+                                                 ].transfer_vehicle(transfer)
                 if transfer.section is VehicleSection.REAR:
                     self.manager.finish_exiting(transfer.vehicle)
 

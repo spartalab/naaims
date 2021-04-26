@@ -40,6 +40,10 @@ class RoadLane(Lane):
         self.upstream_is_spawner: bool = upstream_is_spawner
         self.downstream_is_remover: bool = downstream_is_remover
         self.downstream_intersection: Optional[Intersection] = None
+        # TODO: (clarity) downstream_intersection may be unused and safe to
+        #       remove. Calling to the downstream intersection and checking if
+        #       there's space for the next vehicle may be obviated by soonest
+        #       exit and/or max acceleration assumption.
 
         # Note that we start at the front of the lane and work back, so
         # proportions decrease as we go on.

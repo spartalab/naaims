@@ -24,7 +24,7 @@ def test_position():
     assert straight_trajectory.get_position(.1) == Coord(.1, 0)
 
 
-def test_connection():
+def test_connection_90deg():
 
     inferred = BezierTrajectory.as_intersection_connector(
         Coord(0, 0), pi/2, Coord(1, 1), pi)
@@ -32,6 +32,26 @@ def test_connection():
     assert isclose(inferred.control_coord.x, 0)
     assert isclose(inferred.control_coord.y, 1)
     assert inferred.get_position(.5) == Coord(0.25, 0.75)
+
+
+def test_connection_vert():
+
+    inferred = BezierTrajectory.as_intersection_connector(
+        Coord(0, 0), pi/2, Coord(0, 1), pi/2)
+
+    assert isclose(inferred.control_coord.x, 0)
+    assert isclose(inferred.control_coord.y, .5)
+    assert inferred.get_position(.5) == Coord(0, .5)
+
+
+def test_connection_horizontal():
+
+    inferred = BezierTrajectory.as_intersection_connector(
+        Coord(0, 0), 0, Coord(1, 0), 0)
+
+    assert isclose(inferred.control_coord.x, .5)
+    assert isclose(inferred.control_coord.y, 0)
+    assert inferred.get_position(.5) == Coord(.5, 0)
 
 
 def test_clone():

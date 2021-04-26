@@ -42,10 +42,12 @@ class IntersectionLane(Lane):
             start_coord=self.upstream.trajectory.end_coord,
             start_heading=self.upstream.trajectory.get_heading(1),
             end_coord=self.downstream.trajectory.start_coord,
-            end_heading=(self.downstream.trajectory.get_heading(0) + pi) % 2*pi
-        )  # Flip the downstream heading so it's pointing into the intersection
+            end_heading=self.downstream.trajectory.get_heading(0)
+        )
         super().__init__(trajectory, min(start_lane.width, end_lane.width),
                          speed_limit)
+        assert type(self.trajectory) is BezierTrajectory
+        self.trajectory: BezierTrajectory
 
         # Calculate the shortest amount of time (in timesteps) that it takes
         # for a vehicle to fully travel across this lane.
