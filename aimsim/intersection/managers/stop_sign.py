@@ -22,7 +22,7 @@ class StopSignManager(IntersectionManager):
     def __init__(self,
                  incoming_road_lane_by_coord: Dict[Coord, RoadLane],
                  outgoing_road_lane_by_coord: Dict[Coord, RoadLane],
-                 lanes: Iterable[IntersectionLane],
+                 lanes: Tuple[IntersectionLane, ...],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
                  tiling_type: Type[Tiling],

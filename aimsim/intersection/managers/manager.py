@@ -6,7 +6,7 @@ priority policies.
 
 from __future__ import annotations
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Iterable, Dict, Tuple, Type, Any, TypeVar
+from typing import TYPE_CHECKING, Dict, Tuple, Type, Any, TypeVar
 
 from aimsim.archetypes import Configurable
 from aimsim.util import Coord
@@ -38,7 +38,7 @@ class IntersectionManager(Configurable):
     def __init__(self,
                  incoming_road_lane_by_coord: Dict[Coord, RoadLane],
                  outgoing_road_lane_by_coord: Dict[Coord, RoadLane],
-                 lanes: Iterable[IntersectionLane],
+                 lanes: Tuple[IntersectionLane, ...],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
                  tiling_type: Type[Tiling],

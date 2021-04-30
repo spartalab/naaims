@@ -19,7 +19,7 @@ class SquareTiling(Tiling):
     def __init__(self,
                  incoming_road_lane_by_coord: Dict[Coord, RoadLane],
                  outgoing_road_lane_by_coord: Dict[Coord, RoadLane],
-                 lanes: Dict[Coord, IntersectionLane],
+                 lanes: Tuple[IntersectionLane, ...],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
                  tile_type: Type[Tile] = DeterministicTile,
@@ -82,10 +82,8 @@ class SquareTiling(Tiling):
         # the intersection so vehicles don't crash as they enter or exit.
         self.buffer_tile_loc: Dict[Coord, Tuple[int, int]] = {}
         for start, end in lanes_by_endpoints:
-            if start not in lanes_by_endpoints:
-                self.buffer_tile_loc[start] = self._coord_to_tile_xy(start)
-            if end not in lanes_by_endpoints:
-                self.buffer_tile_loc[end] = self._coord_to_tile_xy(end)
+            self.buffer_tile_loc[start] = self._coord_to_tile_xy(start)
+            self.buffer_tile_loc[end] = self._coord_to_tile_xy(end)
 
     def check_for_collisions(self) -> None:
         """Check for collisions in the intersection."""
@@ -213,42 +211,72 @@ class SquareTiling(Tiling):
 
     def _project_onto_grid(self, outline: Tuple[Coord, ...]
                            ) -> Tuple[Coord, ...]:
-        """Given an outline, project it to be fully on the grid."""
-        outline_projected: List[Coord] = []
+        """Given an outline, project it to be fully on the grid.
 
+        Assumes that the provided outline is clockwise, that it touches or
+        crosses the grid outline at at least one point, and is 2-dimensional
+        (i.e., not a single line).
+        """
+        outline_projected: List[Coord] = []
+        last_point_proj: bool = False
         for i in range(len(outline)):
             start = outline[i]
             end = outline[i+1] if (i != len(outline)-1) else outline[0]
             dx = end.x - start.x
             dy = end.y - start.y
-            m = dx/dy if dy != 0 else float('inf')
+            m = dy/dx if dx != 0 else float('inf')
             b = end.y - m*end.x
 
-            potential_start = self.__first_point_on_grid(start, end, m, b)
+            potential_start = self._first_point_on_grid(start, end, m, b)
+            start_projected: bool = False
             if potential_start is None:
                 # The entire line segment isn't on the grid. Go to the next
                 # side of the shape.
                 continue
-            else:
+            elif (len(outline_projected) == 0) or \
+                    (potential_start != outline_projected[-1]):
+                # Add this start point only if it isn't the same as the end
+                # point from the last line segment.
                 outline_projected.append(potential_start)
+                # Check if the new point was projected and if so if the outline
+                # rounded a corner that needs to be added.
+                if potential_start != start:
+                    start_projected = True
+                    if last_point_proj:
+                        outline_projected = self._add_corner_to_outline(
+                            potential_start, outline_projected)
+                    last_point_proj = True
+                else:
+                    last_point_proj = False
 
             # At least some part of the line segment, possibly the start point,
             # was on the grid, so we need to check if the end point is also. If
             # not, find the closest point to the segment end point that's on
             # both the line segment and grid.
-            potential_end = self.__first_point_on_grid(end, start, m, b)
+            potential_end = self._first_point_on_grid(end, start, m, b)
             # If we were able to find a potential start point, at worst it's
             # also the potential end point, so this should never return None.
             assert potential_end is not None
-            if potential_end != potential_start:
-                outline_projected.append(potential_end)
+            if (potential_end != potential_start) and \
+                (not (i == len(outline)-1)) and \
+                    (potential_end != outline_projected[0]):
                 # If the projected segment was reduced to a single point,
-                # there's no need to add it to the outline twice.
+                # there's no need to add it to the outline twice. We can also
+                # skip adding if it's the last point in the outline and
+                # it's the same as the first point in the outline.
+                outline_projected.append(potential_end)
+                if potential_end != end:
+                    if (not start_projected) and last_point_proj:
+                        outline_projected = self._add_corner_to_outline(
+                            potential_end, outline_projected)
+                    last_point_proj = True
+                else:
+                    last_point_proj = False
 
         return tuple(outline_projected)
 
-    def __first_point_on_grid(self, point: Coord, reference: Coord,
-                              m: float, b: float) -> Optional[Coord]:
+    def _first_point_on_grid(self, point: Coord, reference: Coord,
+                             m: float, b: float) -> Optional[Coord]:
         """Return the Coord on line closest to point on the grid, if any.
 
         Trace along the line segment from point to reference with slope m and
@@ -270,9 +298,10 @@ class SquareTiling(Tiling):
         # Handle special cases where the line is either horizontal or vertical
         # and completely out of the grid.
         if (  # dx=0, vertical line, and the fixed x is out of bounds
-            (m == 0) and ((point.x < 0) or (point.x >= self.x_tile_count))
+            (m == float('inf')) and ((point.x < 0)
+                                     or (point.x >= self.x_tile_count))
         ) or (  # dy=0, horizontal line, and the fixed y is out of bounds
-            (m == float('inf')) and
+            (m == 0) and
             ((point.y < 0) or (point.y >= self.y_tile_count))
         ):
             return None
@@ -343,12 +372,14 @@ class SquareTiling(Tiling):
             x_of_y_closest = (y_closest - b) / m if m != float('inf') \
                 else point.x
             if (x_min <= x_of_y_closest <= x_max) and \
+                (0 <= x_of_y_closest <= self.x_tile_count) and \
                     (y_min <= y_closest <= y_max):
                 dist_of_y_closest = (point.x - x_of_y_closest)**2 + \
                     (point.y - y_closest)**2
         if m != float('inf'):  # Not vertical, x varies. Check x_closest.
             y_of_x_closest = m*x_closest + b if m != 0 else point.y
             if (x_min <= x_closest <= x_max) and \
+                (0 <= y_of_x_closest <= self.y_tile_count) and \
                     (y_min <= y_of_x_closest <= y_max):
                 dist_of_x_closest = (point.x - x_closest)**2 + \
                     (point.y - y_of_x_closest)**2
@@ -364,6 +395,66 @@ class SquareTiling(Tiling):
             return Coord(x_of_y_closest, y_closest)
         else:
             return None
+
+    def _add_corner_to_outline(self, proj_point: Coord,
+                               outline_projected: List[Coord]) -> List[Coord]:
+
+        # The last two points in the new outline have been projected.
+        last_point = outline_projected[-2]
+        if (last_point.x != proj_point.x) and (last_point.y != proj_point.y):
+            # There are one or more corner turns. We recall that the
+            # outline provided is clockwise and leverage this to find
+            # the cornering.
+
+            # Find where the corner turn(s) start.
+            if last_point.x == 0:
+                # Starts at the left.
+                side_start = 0
+            elif last_point.x == self.x_tile_count:
+                # Starts at the right.
+                side_start = 2
+            elif last_point.y == 0:
+                # Starts at the bottom.
+                side_start = 3
+            else:  # Starts at the top.
+                assert last_point.y == self.y_tile_count
+                side_start = 1
+
+            # Find where the corner turn(s) end.
+            if proj_point.x == 0:
+                # Ends at the left.
+                side_end = 0
+            elif proj_point.x == self.x_tile_count:
+                # Ends at the right.
+                side_end = 2
+            elif proj_point.y == 0:
+                # Ends at the bottom.
+                side_end = 3
+            else:  # Ends at the top.
+                assert proj_point.y == self.y_tile_count
+                side_end = 1
+
+            if side_start > side_end:
+                side_end += 4
+
+            for i in range(side_start, side_end):
+                i %= 4
+                # Add the corner clockwise of this side to the outline.
+                if i == 0:
+                    # top left corner
+                    corner = Coord(0, self.y_tile_count)
+                elif i == 1:
+                    # top right corner
+                    corner = Coord(self.x_tile_count,
+                                   self.y_tile_count)
+                elif i == 2:
+                    # bottom right corner
+                    corner = Coord(self.x_tile_count, 0)
+                else:  # i==3
+                    # bottom left corner
+                    corner = Coord(0, 0)
+                outline_projected.insert(-1, corner)
+        return outline_projected
 
     def _line_to_tile_ranges(self, start: Coord, end: Coord) -> \
             Tuple[int, List[int], List[int]]:
@@ -417,7 +508,7 @@ class SquareTiling(Tiling):
             # the upper/right boundary case.
 
             # Set up the line segment equation and bounds
-            m = dx/dy
+            m = dy/dx
             b = end.y - m*end.x
             # def y_of_x(x: float) -> float: return m*x+b
             def x_of_y(y: float) -> float: return (y-b)/m

@@ -54,15 +54,15 @@ class BezierTrajectory(Trajectory):
         # Find the intersection of the two headings.
         # First, check the special cases for if either heading is vertical.
         control_coord: Coord
-        start_vert = start_heading % pi == pi/2
-        end_vert = end_heading % pi == pi/2
-        if start_vert and end_vert:
-            control_coord = Coord(end_coord.x, (end_coord.y - start_coord.y)/2)
-        elif start_vert:
+        if start_heading == end_heading:
+            control_coord = Coord(
+                start_coord.x + (end_coord.x - start_coord.x)/2,
+                start_coord.y + (end_coord.y - start_coord.y)/2)
+        elif start_heading % pi == pi/2:
             control_coord = Coord(start_coord.x,
                                   tan(end_heading)*(start_coord.x-end_coord.x
                                                     ) + end_coord.y)
-        elif end_vert:
+        elif end_heading % pi == pi/2:
             control_coord = Coord(end_coord.x,
                                   tan(start_heading)*(end_coord.x-start_coord.x
                                                       ) + start_coord.y)
@@ -71,15 +71,10 @@ class BezierTrajectory(Trajectory):
             # https://math.stackexchange.com/questions/1990698/intersection-of-two-lines-each-defined-by-a-point-and-an-angle
             m0 = tan(start_heading)
             m1 = tan(end_heading)
-            if m0 == m1 == 0:
-                # Horizontal case
-                control_coord = Coord((end_coord.x - start_coord.x)/2,
-                                      end_coord.y)
-            else:
-                x = ((m0*start_coord.x - m1*end_coord.x) -
-                     (start_coord.y - end_coord.y)) / (m0 - m1)
-                y = m0*(x-start_coord.x) + start_coord.y
-                control_coord = Coord(x, y)
+            x = ((m0*start_coord.x - m1*end_coord.x) -
+                 (start_coord.y - end_coord.y)) / (m0 - m1)
+            y = m0*(x-start_coord.x) + start_coord.y
+            control_coord = Coord(x, y)
 
         # TODO (low): Calculate traversibility factors.
 

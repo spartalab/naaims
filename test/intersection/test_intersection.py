@@ -63,11 +63,13 @@ def test_init_2_lane(read_config: None):
     assert lane0traj.start_coord == road_in.lanes[1].trajectory.end_coord
     assert lane0traj.end_coord == road_out.lanes[1].trajectory.start_coord
     assert lane0traj.control_coord == (
+        lane0traj.start_coord.x +
         (lane0traj.end_coord.x - lane0traj.start_coord.x)/2,
         lane0traj.start_coord.y)
     assert lane1traj.start_coord == road_in.lanes[0].trajectory.end_coord
     assert lane1traj.end_coord == road_out.lanes[0].trajectory.start_coord
     assert lane1traj.control_coord == (
+        lane1traj.start_coord.x +
         (lane1traj.end_coord.x - lane1traj.start_coord.x)/2,
         lane1traj.start_coord.y)
 
