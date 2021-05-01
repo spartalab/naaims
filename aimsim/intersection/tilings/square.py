@@ -146,6 +146,15 @@ class SquareTiling(Tiling):
         # coordinate system using self.origin, and project it onto the grid.
         # TODO: (stochastic)? This can be replaced with any convex outline for
         #       the vehicle, e.g., the static and time buffers.
+        # TODO: (efficiency) A simpler solution would just skip the outline
+        #       projection step entirely and just do the rasterization
+        #       directly, clipping the tile range to the bounds. Pity I didn't
+        #       find/learn about this solution until I'd made this projection
+        #       solution. The clipping solution would also handle one case
+        #       outline projection doesn't: when the shape fully covers the
+        #       grid and its outline doesn't overlap the grid at all. The
+        #       outline solution might be more efficient when the shape extends
+        #       far, far off the grid, but this is unlikely with AIM.
         outline = self._project_onto_grid(tuple(
             Coord((c.x - self.origin.x)/self.tile_width,
                   (c.y - self.origin.y)/self.tile_width)
@@ -549,6 +558,17 @@ class SquareTiling(Tiling):
             step_x: int = -1 if dx < 0 else 1
             x_delta_x: float = 1
             x_delta_y: float = abs(1/m)
+            if (x_to_next_y_tile == 0) and (dy > 0):
+                # Recall that tiles are inclusive of their bottom right border.
+                # When we start on the border between y-tiles, x_to_next_y_tile
+                # will start at 0, and in this preamble we add the tile the
+                # line segment starts in. When going down (dy < 0), we traverse
+                # the next y-tile instantaneously, so we need to add it, but
+                # when we go up (dy > 0), we don't need to add the tile
+                # immediately below and so we increment x_to_next_y_tile to
+                # show that there's non-infinitesimal distance until we reach
+                # the next y value.
+                x_to_next_y_tile += x_delta_y
 
             # Find Tile coordinates of the starting Tile and log them.
             # Accommodate the special cases where the line segment starts on
@@ -618,15 +638,51 @@ class SquareTiling(Tiling):
                 # that, update the x- or y-value to match that closer tile's
                 # coordinates and calculate the x-distance of the next closest
                 # tile in the same axis.
-                if x_to_next_x_tile < x_to_next_y_tile:
-                    if x_to_next_x_tile > x_dist_max:
+                # if x_to_next_x_tile == x_to_next_y_tile:
+                #     if (x_to_next_x_tile > x_dist_max) or \
+                #         (x_to_next_y_tile > x_dist_max) or (
+                #         ((
+                #             (x_to_next_y_tile == x_dist_max) or
+                #             (x_to_next_y_tile == x_dist_max)
+                #         ) and (
+                #             ((dx > 0) and (dy > 0)) or ((dx < 0) and (dy < 0)))
+                #         )
+                #     ):
+                #         break
+                #     x += step_x
+                #     y += step_y
+                #     if (x == self.x_tile_count) or (y == self.y_tile_count):
+                #         break
+                #     x_to_next_x_tile += x_delta_x
+                #     x_to_next_y_tile += x_delta_y
+                #     marked = False
+                # Prefer x to x, equality on x_to_y vs max when going down
+                #        x to y, equality on x_to_x vs max when going up?
+                if (x_to_next_x_tile < x_to_next_y_tile) or (
+                    (x_to_next_x_tile == x_to_next_y_tile) and (dy < 0)
+                ):
+                    # if (x_to_next_x_tile > x_dist_max) or (
+                    #     ((x_to_next_y_tile == x_dist_max) and (
+                    #         ((dx > 0) and (dy > 0)) or ((dx < 0) and (dy < 0)))
+                    #      )
+                    # ):
+                    if (x_to_next_x_tile > x_dist_max) or (
+                        (x_to_next_x_tile == x_dist_max) and (dy > 0)
+                    ):
                         break
                     x += step_x
                     if x == self.x_tile_count:
                         break
                     x_to_next_x_tile += x_delta_x
                 else:
-                    if x_to_next_y_tile > x_dist_max:
+                    # if (x_to_next_y_tile > x_dist_max) or (
+                    #     (x_to_next_y_tile == x_dist_max) and (
+                    #         ((dx > 0) and (dy > 0)) or ((dx < 0) and (dy < 0))
+                    #     )
+                    # ):
+                    if (x_to_next_y_tile > x_dist_max) or (
+                        (x_to_next_y_tile == x_dist_max) and (dy < 0)
+                    ):
                         break
                     y += step_y
                     if y == self.y_tile_count:

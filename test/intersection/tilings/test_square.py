@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import List, Tuple
 from pytest import raises, approx, fixture
 
 from aimsim.util import Coord
@@ -340,3 +340,110 @@ def test_project_to_grid_in_n_out(read_config: None):
     compare_projected_outline(sq._project_onto_grid(
         (Coord(1, -1), Coord(6, 4), Coord(7, 3), Coord(2, -2))),
         (Coord(2, 0), Coord(5, 3), Coord(5, 1), Coord(4, 0)))
+
+
+def check_line_range(sq: SquareTiling, start: Coord, end: Coord,
+                     y_min_true: int, x_mins_true: List[int],
+                     x_maxes_true: List[int]):
+    y_min, x_mins, x_maxes = sq._line_to_tile_ranges(start, end)
+    assert y_min == y_min_true
+    assert x_mins == x_mins_true
+    assert x_maxes == x_maxes_true
+
+
+def test_line_to_range_down_right(read_config: None, sq: SquareTiling):
+    # Fully in
+    check_line_range(sq, Coord(0.5, 1.5), Coord(2.5, .5), 0, [], [2, 1])
+    check_line_range(sq, Coord(1, 4), Coord(3, 1), 1, [], [3, 2, 1, 1])
+
+    # Starts at edge
+    check_line_range(sq, Coord(5, 200), Coord(7, 199), 199, [], [7])
+
+    # Ends at edge
+    check_line_range(sq, Coord(98, 150), Coord(100, 147), 147, [],
+                     [99, 99, 98, 98])
+
+    # Starts and ends at edge
+    check_line_range(sq, Coord(98, 200), Coord(100, 197), 197, [],
+                     [99, 99, 98])
+
+    # Starts in corner ends inside
+    # TODO
+
+    # Starts inside ends at corner
+
+    # Starts near corner ends at edge
+
+    # Starts at edge ends near corner
+
+    # Starts near corner ends near corner
+
+
+def test_line_to_range_down_left(read_config: None, sq: SquareTiling):
+    # Fully in
+    check_line_range(sq, Coord(2.5, 1.5), Coord(.5, .5), 0, [], [1, 2])
+
+    # Starts at edge
+    check_line_range(sq, Coord(5, 200), Coord(3, 199), 199, [], [5])
+
+    # Ends at edge
+    check_line_range(sq, Coord(2, 150), Coord(0, 147), 147, [],
+                     [0, 1, 1, 2])
+
+    # Starts and ends at edge
+    check_line_range(sq, Coord(2, 200), Coord(0, 197), 197, [], [0, 1, 2])
+
+
+def test_line_to_range_up_left(read_config: None, sq: SquareTiling):
+    # Fully in
+    check_line_range(sq, Coord(2.5, .5), Coord(.5, 1.5), 0, [1, 0], [])
+
+    # Starts at edge
+    check_line_range(sq, Coord(100, 147), Coord(98, 150), 147,
+                     [99, 98, 98, 98], [])
+
+    # Ends at edge
+    check_line_range(sq, Coord(7, 199), Coord(5, 200), 199, [5], [])
+
+    # Starts and ends at edge
+    check_line_range(sq, Coord(100, 197), Coord(98, 200), 197, [99, 98, 98],
+                     [])
+
+
+def test_line_to_range_up_right(read_config: None, sq: SquareTiling):
+    # Fully in
+    check_line_range(sq, Coord(.5, .5), Coord(2.5, 1.5), 0, [0, 1], [])
+
+    # Starts at edge
+    check_line_range(sq, Coord(3, 199), Coord(5, 200), 199, [3], [])
+
+    # Ends at edge
+    check_line_range(sq, Coord(0, 147), Coord(2, 150), 147,
+                     [0, 0, 1, 1], [])
+    # Probably should be [0, 0, 1, 2]? This is a little counterintuitive but I
+    # won't sweat it yet. The no-projection-clip method would probably fix it.
+
+    # Starts and ends at edge
+    check_line_range(sq, Coord(0, 197), Coord(2, 200), 197, [0, 0, 1], [])
+
+
+def test_line_to_range_up(read_config: None, sq: SquareTiling):
+    check_line_range(sq, Coord(4, .5), Coord(4, 1.5), 0, [4, 4], [4, 4])
+    check_line_range(sq, Coord(100, 0), Coord(100, 3.5), 0, [99, 99, 99, 99],
+                     [99, 99, 99, 99])
+
+
+def test_line_to_range_down(read_config: None, sq: SquareTiling):
+    check_line_range(sq, Coord(4, 1.5), Coord(4, .5), 0, [4, 4], [4, 4])
+    check_line_range(sq, Coord(100, 200), Coord(100, 197.5), 197,
+                     [99, 99, 99], [99, 99, 99])
+
+
+def test_line_to_range_left(read_config: None, sq: SquareTiling):
+    check_line_range(sq, Coord(2.5, 1), Coord(3.5, 1), 1, [2], [3])
+    check_line_range(sq, Coord(100, 200), Coord(98.5, 200), 199, [98], [99])
+
+
+def test_line_to_range_right(read_config: None, sq: SquareTiling):
+    check_line_range(sq, Coord(3.5, 1.5), Coord(2.5, 1.5), 1, [2], [3])
+    check_line_range(sq, Coord(0, 200), Coord(2.5, 200), 199, [0], [2])
