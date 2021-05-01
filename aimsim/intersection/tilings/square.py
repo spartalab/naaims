@@ -633,31 +633,6 @@ class SquareTiling(Tiling):
             # last x_min or x_max logged insufficiently lenient.
             marked: bool = True
             while True:  # break condition in loop
-
-                # Find if the next x-tile or the next y-tile is closer. Given
-                # that, update the x- or y-value to match that closer tile's
-                # coordinates and calculate the x-distance of the next closest
-                # tile in the same axis.
-                # if x_to_next_x_tile == x_to_next_y_tile:
-                #     if (x_to_next_x_tile > x_dist_max) or \
-                #         (x_to_next_y_tile > x_dist_max) or (
-                #         ((
-                #             (x_to_next_y_tile == x_dist_max) or
-                #             (x_to_next_y_tile == x_dist_max)
-                #         ) and (
-                #             ((dx > 0) and (dy > 0)) or ((dx < 0) and (dy < 0)))
-                #         )
-                #     ):
-                #         break
-                #     x += step_x
-                #     y += step_y
-                #     if (x == self.x_tile_count) or (y == self.y_tile_count):
-                #         break
-                #     x_to_next_x_tile += x_delta_x
-                #     x_to_next_y_tile += x_delta_y
-                #     marked = False
-                # Prefer x to x, equality on x_to_y vs max when going down
-                #        x to y, equality on x_to_x vs max when going up?
                 if (x_to_next_x_tile < x_to_next_y_tile) or (
                     (x_to_next_x_tile == x_to_next_y_tile) and (dy < 0)
                 ):
@@ -675,11 +650,6 @@ class SquareTiling(Tiling):
                         break
                     x_to_next_x_tile += x_delta_x
                 else:
-                    # if (x_to_next_y_tile > x_dist_max) or (
-                    #     (x_to_next_y_tile == x_dist_max) and (
-                    #         ((dx > 0) and (dy > 0)) or ((dx < 0) and (dy < 0))
-                    #     )
-                    # ):
                     if (x_to_next_y_tile > x_dist_max) or (
                         (x_to_next_y_tile == x_dist_max) and (dy < 0)
                     ):
