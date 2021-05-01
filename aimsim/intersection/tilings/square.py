@@ -143,24 +143,12 @@ class SquareTiling(Tiling):
         super().pos_to_tiles(lane, t, clone, reservation, force, mark)
 
         # Fetch the vehicle's outline, normalize them to the grid's internal
-        # coordinate system using self.origin, and project it onto the grid.
-        # TODO: (stochastic)? This can be replaced with any convex outline for
-        #       the vehicle, e.g., the static and time buffers.
-        # TODO: (efficiency) A simpler solution would just skip the outline
-        #       projection step entirely and just do the rasterization
-        #       directly, clipping the tile range to the bounds. Pity I didn't
-        #       find/learn about this solution until I'd made this projection
-        #       solution. The clipping solution would also handle one case
-        #       outline projection doesn't: when the shape fully covers the
-        #       grid and its outline doesn't overlap the grid at all. The
-        #       outline solution might be more efficient when the shape extends
-        #       far, far off the grid, but this is unlikely with AIM.
-        outline = self._project_onto_grid(tuple(
+        # coordinate system using self.origin, and find the x and y range
+        # covered by the outline (assuming that it's convex).
+        y_min, x_mins, x_maxes = self._outline_to_tile_range(tuple(
             Coord((c.x - self.origin.x)/self.tile_width,
                   (c.y - self.origin.y)/self.tile_width)
             for c in clone.get_outline()))
-
-        y_min, x_mins, x_maxes = self._outline_to_tile_range(outline)
 
         # After the outlining process is complete, loop through the min and max
         # y-Tiles via the x-bound lists. For each y-value, add every tile
@@ -193,9 +181,6 @@ class SquareTiling(Tiling):
                 y_min = oy
             if oy > y_max:
                 y_max = oy
-        # The largest possible y-tile is one less than self.y_tile_count.
-        if y_max == self.y_tile_count:
-            y_max -= 1
         # Initialize lists for the x-range associated with each y-value.
         x_mins: List[int] = [-1]*(y_max-y_min+1)
         x_maxes: List[int] = x_mins.copy()
@@ -216,263 +201,16 @@ class SquareTiling(Tiling):
                 x_maxes[j + y_min_seg - y_min] = x_max
             # TODO: (shapes) This must be changed for non-convex outlines.
 
-        return y_min, x_mins, x_maxes
-
-    def _project_onto_grid(self, outline: Tuple[Coord, ...]
-                           ) -> Tuple[Coord, ...]:
-        """Given an outline, project it to be fully on the grid.
-
-        Assumes that the provided outline is clockwise, that it touches or
-        crosses the grid outline at at least one point, and is 2-dimensional
-        (i.e., not a single line).
-        """
-        outline_projected: List[Coord] = []
-        last_point_proj: bool = False
-        for i in range(len(outline)):
-            start = outline[i]
-            end = outline[i+1] if (i != len(outline)-1) else outline[0]
-            dx = end.x - start.x
-            dy = end.y - start.y
-            m = dy/dx if dx != 0 else float('inf')
-            b = end.y - m*end.x
-
-            potential_start = self._first_point_on_grid(start, end, m, b)
-            start_projected: bool = False
-            if potential_start is None:
-                # The entire line segment isn't on the grid. Go to the next
-                # side of the shape.
-                continue
-            elif (len(outline_projected) == 0) or \
-                    (potential_start != outline_projected[-1]):
-                # Add this start point only if it isn't the same as the end
-                # point from the last line segment.
-                outline_projected.append(potential_start)
-                # Check if the new point was projected and if so if the outline
-                # rounded a corner that needs to be added.
-                if potential_start != start:
-                    start_projected = True
-                    if last_point_proj:
-                        outline_projected = self._add_corner_to_outline(
-                            potential_start, outline_projected)
-                    last_point_proj = True
-                else:
-                    last_point_proj = False
-
-            # At least some part of the line segment, possibly the start point,
-            # was on the grid, so we need to check if the end point is also. If
-            # not, find the closest point to the segment end point that's on
-            # both the line segment and grid.
-            potential_end = self._first_point_on_grid(end, start, m, b)
-            # If we were able to find a potential start point, at worst it's
-            # also the potential end point, so this should never return None.
-            assert potential_end is not None
-            if (potential_end != potential_start) and \
-                (not (i == len(outline)-1)) and \
-                    (potential_end != outline_projected[0]):
-                # If the projected segment was reduced to a single point,
-                # there's no need to add it to the outline twice. We can also
-                # skip adding if it's the last point in the outline and
-                # it's the same as the first point in the outline.
-                outline_projected.append(potential_end)
-                if potential_end != end:
-                    if (not start_projected) and last_point_proj:
-                        outline_projected = self._add_corner_to_outline(
-                            potential_end, outline_projected)
-                    last_point_proj = True
-                else:
-                    last_point_proj = False
-
-        return tuple(outline_projected)
-
-    def _first_point_on_grid(self, point: Coord, reference: Coord,
-                             m: float, b: float) -> Optional[Coord]:
-        """Return the Coord on line closest to point on the grid, if any.
-
-        Trace along the line segment from point to reference with slope m and
-        y-intercept b, until we reach the first point that's inside the grid.
-        If there isn't a point on the line that's on the grid, return None.
-
-        Parameters
-            point: Coord
-                The point on the line we want to find the closest grid and
-                line segment point to.
-            reference: Coord
-                The other end of the line segment.
-            m: float
-                Line slope.
-            b: float
-                Line y-intercept.
-        """
-
-        # Handle special cases where the line is either horizontal or vertical
-        # and completely out of the grid.
-        if (  # dx=0, vertical line, and the fixed x is out of bounds
-            (m == float('inf')) and ((point.x < 0)
-                                     or (point.x >= self.x_tile_count))
-        ) or (  # dy=0, horizontal line, and the fixed y is out of bounds
-            (m == 0) and
-            ((point.y < 0) or (point.y >= self.y_tile_count))
-        ):
-            return None
-
-        point_on_grid: bool = True
-        x_closest: float
-        y_closest: float
-        # Find the x-value on the grid closest to the point.
-        if point.x > self.x_tile_count:
-            point_on_grid = False
-            x_closest = self.x_tile_count
-        elif point.x < 0:
-            point_on_grid = False
-            x_closest = 0
-        else:
-            x_closest = point.x
-        # Find the y-value on the grid closest to the point.
-        if point.y > self.y_tile_count:
-            point_on_grid = False
-            y_closest = self.y_tile_count
-        elif point.y < 0:
-            point_on_grid = False
-            y_closest = 0
-        else:
-            y_closest = point.y
-
-        # We can return the point here if we've determined that it's on grid.
-        if point_on_grid:
-            return point
-
-        # We've found two potential points on the grid that might be on the
-        # line segment: the point where the study point's x-value was projected
-        # onto the grid, and the point where the study point's y-value was.
-        # Find their corresponding y- and x-value and distance to the point.
-        x_of_y_closest = float('inf')
-        y_of_x_closest = float('inf')
-        dist_of_y_closest = float('inf')
-        dist_of_x_closest = float('inf')
-        dist_of_end = (point.x - reference.x)**2 + (point.y - reference.y)**2
-        # We also need to check a few special cases:
-        #   1. The line segment is horizontal or vertical and the start if off
-        #      the grid.
-        #       a. If m=0, the line segment is horizontal and y is fixed.
-        #          y-closest is guaranteed to not be valid, so no need to
-        #          consider it.
-        #       b. If m=inf, the line segment is vertical and x is fixed.
-        #          x-closest is guaranteed to not be valid, so no need to
-        #          consider it.
-        #   2. The projected point is off-segment, i.e., it goes the wrong way
-        #      along the line to be on the line segment.
-        x_min: float
-        x_max: float
-        y_min: float
-        y_max: float
-        if point.x < reference.x:
-            x_min = point.x
-            x_max = reference.x
-        else:
-            x_min = reference.x
-            x_max = point.x
-        if point.y < reference.y:
-            y_min = point.y
-            y_max = reference.y
-        else:
-            y_min = reference.y
-            y_max = point.y
-        if m != 0:  # Not horizontal, y varies. Safe to check y_closest.
-            x_of_y_closest = (y_closest - b) / m if m != float('inf') \
-                else point.x
-            if (x_min <= x_of_y_closest <= x_max) and \
-                (0 <= x_of_y_closest <= self.x_tile_count) and \
-                    (y_min <= y_closest <= y_max):
-                dist_of_y_closest = (point.x - x_of_y_closest)**2 + \
-                    (point.y - y_closest)**2
-        if m != float('inf'):  # Not vertical, x varies. Check x_closest.
-            y_of_x_closest = m*x_closest + b if m != 0 else point.y
-            if (x_min <= x_closest <= x_max) and \
-                (0 <= y_of_x_closest <= self.y_tile_count) and \
-                    (y_min <= y_of_x_closest <= y_max):
-                dist_of_x_closest = (point.x - x_closest)**2 + \
-                    (point.y - y_of_x_closest)**2
-
-        # Use the distances to determine which projected point is the closest
-        # grid point to the study point. If neither is closer to the study
-        # point than the end of the line segment is, the entire segment is
-        # off-grid so we return None.
-        min_dist = min(dist_of_end, dist_of_x_closest, dist_of_y_closest)
-        if min_dist == dist_of_x_closest:
-            return Coord(x_closest, y_of_x_closest)
-        elif min_dist == dist_of_y_closest:
-            return Coord(x_of_y_closest, y_closest)
-        else:
-            return None
-
-    def _add_corner_to_outline(self, proj_point: Coord,
-                               outline_projected: List[Coord]) -> List[Coord]:
-
-        # The last two points in the new outline have been projected.
-        last_point = outline_projected[-2]
-        if (last_point.x != proj_point.x) and (last_point.y != proj_point.y):
-            # There are one or more corner turns. We recall that the
-            # outline provided is clockwise and leverage this to find
-            # the cornering.
-
-            # Find where the corner turn(s) start.
-            if last_point.x == 0:
-                # Starts at the left.
-                side_start = 0
-            elif last_point.x == self.x_tile_count:
-                # Starts at the right.
-                side_start = 2
-            elif last_point.y == 0:
-                # Starts at the bottom.
-                side_start = 3
-            else:  # Starts at the top.
-                assert last_point.y == self.y_tile_count
-                side_start = 1
-
-            # Find where the corner turn(s) end.
-            if proj_point.x == 0:
-                # Ends at the left.
-                side_end = 0
-            elif proj_point.x == self.x_tile_count:
-                # Ends at the right.
-                side_end = 2
-            elif proj_point.y == 0:
-                # Ends at the bottom.
-                side_end = 3
-            else:  # Ends at the top.
-                assert proj_point.y == self.y_tile_count
-                side_end = 1
-
-            if side_start > side_end:
-                side_end += 4
-
-            for i in range(side_start, side_end):
-                i %= 4
-                # Add the corner clockwise of this side to the outline.
-                if i == 0:
-                    # top left corner
-                    corner = Coord(0, self.y_tile_count)
-                elif i == 1:
-                    # top right corner
-                    corner = Coord(self.x_tile_count,
-                                   self.y_tile_count)
-                elif i == 2:
-                    # bottom right corner
-                    corner = Coord(self.x_tile_count, 0)
-                else:  # i==3
-                    # bottom left corner
-                    corner = Coord(0, 0)
-                outline_projected.insert(-1, corner)
-        return outline_projected
+        # Go through the stitched range to clip tiles to between x_min, x_max,
+        # y_min, and y_max.
+        return self._clip_tile_range(y_min, x_mins, x_maxes)
 
     def _line_to_tile_ranges(self, start: Coord, end: Coord) -> \
             Tuple[int, List[int], List[int]]:
         """Given two points on the grid, find the Tiles their connection hits.
 
-        Assumes
-            1. Both start and end Coords are on the grid.
-            2. Line segments are being provided in clockwise order, to inform
-               what sides of the tiles hit are being returned.
+        Assumes line segments are being provided in clockwise order, to inform
+        what sides of the tiles hit are being returned.
 
         Uses http://www.cse.yorku.ca/~amana/research/grid.pdf to find Tiles.
 
@@ -487,34 +225,21 @@ class SquareTiling(Tiling):
         y_max: int
 
         # Recall that points are assigned to tiles based on their floored x and
-        # y values, except in the case of points on the upper or right boundary
-        # of the tile space, which are assigned to the edge tile they border.
+        # y values.
         if dy == 0:  # horizontal or a single point
-            y_min = floor(start.y) if start.y < self.y_tile_count - 1 \
-                else self.y_tile_count-1
+            y_min = floor(start.y)
             x_mins.append(floor(min(start.x, end.x)))
             x_maxes.append(floor(max(start.x, end.x)))
-            if x_maxes[0] == self.x_tile_count:
-                x_maxes[0] -= 1
-                if x_mins[0] == self.x_tile_count:
-                    x_mins[0] -= 1
         elif dx == 0:  # vertical
             y_min = floor(min(start.y, end.y))
             y_max = floor(max(start.y, end.y))
-            if y_max == self.y_tile_count:
-                y_max -= 1
-                if y_min == self.y_tile_count:
-                    y_min -= 1
             x_value = floor(start.x)
-            if x_value == self.x_tile_count:
-                x_value -= 1
             x_mins = [x_value]*(y_max-y_min+1)
             x_maxes = x_mins.copy()
         else:
             # Progress through every pixel the ray intersects using the
             # algorithm from http://www.cse.yorku.ca/~amana/research/grid.pdf
-            # with some modifications to account for finite line segments and
-            # the upper/right boundary case.
+            # with some modifications to account for finite line segments.
 
             # Set up the line segment equation and bounds
             m = dy/dx
@@ -533,20 +258,12 @@ class SquareTiling(Tiling):
             if dy < 0:  # down right or left, maxes
                 y_max = floor(start.y)
                 y_min = floor(end.y)
-                if y_max == self.y_tile_count:
-                    y_max -= 1
-                    if y_min == self.y_tile_count:
-                        y_min -= -1
                 x_maxes: List[int] = [-1]*(y_max-y_min+1)
                 step_y = -1
                 x_of_next_y_tile = x_of_y(floor(start.y))
             else:  # up right or left, mins
                 y_min = floor(start.y)
                 y_max = floor(end.y)
-                if y_max == self.y_tile_count:
-                    y_max -= 1
-                    if y_min == self.y_tile_count:
-                        y_min -= -1
                 x_mins: List[int] = [-1]*(y_max-y_min+1)
                 step_y = 1
                 x_of_next_y_tile = x_of_y(ceil(start.y))
@@ -577,48 +294,6 @@ class SquareTiling(Tiling):
             # have already been accounted for.
             x: int = floor(start.x)
             y: int = floor(start.y)
-            if (x == self.x_tile_count) and (y == self.y_tile_count) and \
-                (floor(end.y) == self.y_tile_count-1) and \
-                    (floor(end.x) == self.x_tile_count-1):
-                # Starts in top right corner and line segment does not leave
-                # the tile. Manually mark the min or max and return.
-                if len(x_mins) > 0:
-                    x_mins[0] = self.x_tile_count - 1
-                else:
-                    x_maxes[0] = self.x_tile_count - 1
-                return y_min, x_mins, x_maxes
-            if y == self.y_tile_count:
-                x_end = floor(end.x)
-                if (floor(end.y) == self.y_tile_count-1) and \
-                        ((x_end == x) or (
-                            (self.x_tile_count >= x >= self.x_tile_count-1) and
-                            (self.x_tile_count >= x_end >= self.x_tile_count-1)
-                        )):
-                    # Line segment does not leave the tile. Manually mark the
-                    # min or max and return.
-                    if len(x_mins) > 0:
-                        x_mins[0] = self.x_tile_count - 1
-                    else:
-                        x_maxes[0] = self.x_tile_count - 1
-                    return y_min, x_mins, x_maxes
-                y -= 1
-                x_to_next_y_tile += x_delta_y
-            if x == self.x_tile_count:
-                x -= 1
-                y_end = floor(end.y)
-                if (floor(end.x) == self.x_tile_count-1) and \
-                        ((y_end == y) or (
-                            (self.y_tile_count >= y >= self.y_tile_count-1) and
-                            (self.y_tile_count >= y_end >= self.y_tile_count-1)
-                        )):
-                    # Line segment does not leave the tile. Manually mark the
-                    # min or max and return.
-                    if len(x_mins) > 0:
-                        x_mins[0] = x
-                    else:
-                        x_maxes[0] = x
-                    return y_min, x_mins, x_maxes
-                x_to_next_x_tile += x_delta_x
 
             # Log the x max or min of the starting position.
             if dy < 0:
@@ -636,18 +311,11 @@ class SquareTiling(Tiling):
                 if (x_to_next_x_tile < x_to_next_y_tile) or (
                     (x_to_next_x_tile == x_to_next_y_tile) and (dy < 0)
                 ):
-                    # if (x_to_next_x_tile > x_dist_max) or (
-                    #     ((x_to_next_y_tile == x_dist_max) and (
-                    #         ((dx > 0) and (dy > 0)) or ((dx < 0) and (dy < 0)))
-                    #      )
-                    # ):
                     if (x_to_next_x_tile > x_dist_max) or (
                         (x_to_next_x_tile == x_dist_max) and (dy > 0)
                     ):
                         break
                     x += step_x
-                    if x == self.x_tile_count:
-                        break
                     x_to_next_x_tile += x_delta_x
                 else:
                     if (x_to_next_y_tile > x_dist_max) or (
@@ -655,8 +323,6 @@ class SquareTiling(Tiling):
                     ):
                         break
                     y += step_y
-                    if y == self.y_tile_count:
-                        break
                     x_to_next_y_tile += x_delta_y
                     marked = False
 
@@ -674,6 +340,34 @@ class SquareTiling(Tiling):
                     if dx < 0 or not marked:
                         x_mins[y - y_min] = x
                         marked = True
+
+        return y_min, x_mins, x_maxes
+
+    def _clip_tile_range(self, y_min: int, x_mins: List[int],
+                         x_maxes: List[int]
+                         ) -> Tuple[int, List[int], List[int]]:
+        """Go through the provided range and clip it to the grid boundaries."""
+
+        # Find how much to clip x_mins and x_maxes from above.
+        y_max = y_min + len(x_mins) - 1
+        y_above_range = y_max - (self.y_tile_count - 1) if \
+            (y_max >= self.y_tile_count) else 0
+
+        # Find how far to clip x_mins and x_maxes from below.
+        if y_min < 0:
+            y_below_range = -y_min
+            y_min = 0
+        else:
+            y_below_range = 0
+
+        # Clip x_mins and x_maxes
+        x_mins = x_mins[y_below_range:(len(x_mins)-y_above_range)]
+        x_maxes = x_maxes[y_below_range:(len(x_maxes)-y_above_range)]
+
+        for i in range(len(x_mins)):
+            x_mins[i] = 0 if x_mins[i] < 0 else x_mins[i]
+            x_maxes[i] = self.x_tile_count-1 if \
+                x_maxes[i] > self.x_tile_count else x_maxes[i]
 
         return y_min, x_mins, x_maxes
 

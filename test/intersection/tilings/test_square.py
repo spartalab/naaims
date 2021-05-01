@@ -154,194 +154,6 @@ def sq():
     return square_tiling_polygon(0, 100, 0, 200, 1)
 
 
-def test_first_on_grid_normal(read_config: None, sq: SquareTiling):
-    # Starts and finishes in
-    assert sq._first_point_on_grid(Coord(2.1, 2), Coord(2.2, 3), 1/.1, -19
-                                   ) == Coord(2.1, 2)
-
-    # Starts in and finishes out
-    assert sq._first_point_on_grid(Coord(99, 99), Coord(101, 101), 1, 0
-                                   ) == Coord(99, 99)
-
-
-def test_first_on_grid_out_in(read_config: None, sq: SquareTiling):
-    # Starts out and finishes in
-    assert sq._first_point_on_grid(Coord(-1, -1), Coord(1, 1), 1, 0
-                                   ) == Coord(0, 0)
-    assert sq._first_point_on_grid(Coord(101, 101), Coord(99, 99), 1, 0
-                                   ) == Coord(100, 100)
-    assert sq._first_point_on_grid(Coord(49, 201), Coord(51, 199), -1, 250
-                                   ) == Coord(50, 200)
-    assert sq._first_point_on_grid(Coord(-1, 52), Coord(1, 48), -2, 50
-                                   ) == Coord(0, 50)
-    assert sq._first_point_on_grid(Coord(26, -3), Coord(23, 6), -3, 75
-                                   ) == Coord(25, 0)
-    assert sq._first_point_on_grid(Coord(101, 201), Coord(0, 100), 1, 100
-                                   ) == Coord(100, 200)
-
-
-def test_first_on_grid_crosses(read_config: None, sq: SquareTiling):
-    # Starts out, crosses in, finishes out
-    assert sq._first_point_on_grid(Coord(99, 201), Coord(101, 99), -1, 300
-                                   ) == Coord(100, 200)
-    assert sq._first_point_on_grid(Coord(98, 201), Coord(101, 98), -1, 299
-                                   ) == Coord(99, 200)
-    assert sq._first_point_on_grid(Coord(-1, 199), Coord(1, 201), 1, 200
-                                   ) == Coord(0, 200)
-    assert sq._first_point_on_grid(Coord(-1, 198), Coord(2, 201), 1, 199
-                                   ) == Coord(0, 199)
-    assert sq._first_point_on_grid(Coord(99, -1), Coord(101, 1), 1, -100
-                                   ) == Coord(100, 0)
-    assert sq._first_point_on_grid(Coord(98, -1), Coord(101, 2), 1, -99
-                                   ) == Coord(99, 0)
-    assert sq._first_point_on_grid(Coord(1, -1), Coord(-1, 1), -1, 0
-                                   ) == Coord(0, 0)
-    assert sq._first_point_on_grid(Coord(2, -1), Coord(1, 2), -1, 1
-                                   ) == Coord(1, 0)
-
-
-def test_first_on_grid_out(read_config: None, sq: SquareTiling):
-    # Starts out and finishes out without ever going in
-    assert sq._first_point_on_grid(Coord(9000, 201), Coord(
-        9000, 100), float('inf'), float('inf')) is None
-    assert sq._first_point_on_grid(Coord(-9000, 201), Coord(
-        -9000, 100), float('inf'), float('inf')) is None
-    assert sq._first_point_on_grid(Coord(-9000, 2001), Coord(
-        -9000, 1000), float('inf'), float('inf')) is None
-    assert sq._first_point_on_grid(Coord(50, 9000), Coord(
-        51, 9000), 0, 9000) is None
-    assert sq._first_point_on_grid(Coord(50, -9000), Coord(
-        51, -9000), 0, -9000) is None
-    assert sq._first_point_on_grid(Coord(500, 9000), Coord(
-        501, 9000), 0, 9000) is None
-
-
-def test_first_on_grid_horizontal_vertical(read_config: None,
-                                           sq: SquareTiling):
-    # Horizontals and verticals
-    assert sq._first_point_on_grid(Coord(-1, 1), Coord(1, 1), 0, 1
-                                   ) == Coord(0, 1)
-    assert sq._first_point_on_grid(Coord(101, 1), Coord(99, 1), 0, 1
-                                   ) == Coord(100, 1)
-    assert sq._first_point_on_grid(Coord(1, -1), Coord(1, 1), float('inf'),
-                                   float('inf')) == Coord(1, 0)
-    assert sq._first_point_on_grid(Coord(1, 201), Coord(1, 199), float('inf'),
-                                   float('inf')) == Coord(1, 200)
-
-
-def compare_projected_outline(proj_outline: Tuple[Coord, ...],
-                              true_outline: Tuple[Coord, ...]):
-    for i in range(len(proj_outline)):
-        assert proj_outline[i] == approx(true_outline[i])
-
-
-def test_project_to_grid_normal(read_config: None, sq: SquareTiling):
-    compare_projected_outline(sq._project_onto_grid((Coord(1, 1), Coord(2, 2),
-                                                     Coord(3, 3))),
-                              (Coord(1, 1), Coord(2, 2), Coord(3, 3)))
-
-
-def test_project_to_grid_bot_left(read_config: None, sq: SquareTiling):
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(-2, -2), Coord(1, 4), Coord(4, 2))),
-        (Coord(0, 2), Coord(1, 4), Coord(4, 2), Coord(1, 0), Coord(0, 0)))
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(4, 2), Coord(-2, -2), Coord(1, 4))),
-        (Coord(4, 2), Coord(1, 0), Coord(0, 0), Coord(0, 2), Coord(1, 4)))
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(1, 4), Coord(4, 2), Coord(-2, -2))),
-        (Coord(1, 4), Coord(4, 2), Coord(1, 0), Coord(0, 0), Coord(0, 2)))
-
-
-def test_project_to_grid_top_left(read_config: None, sq: SquareTiling):
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(-2, 203), Coord(2, 199), Coord(-2, 197))),
-        (Coord(1, 200), Coord(2, 199), Coord(0, 198), Coord(0, 200)))
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(-2, 197), Coord(-2, 203), Coord(2, 199))),
-        (Coord(1, 200), Coord(2, 199), Coord(0, 198), Coord(0, 200)))
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(2, 199), Coord(-2, 197), Coord(-2, 203))),
-        (Coord(2, 199), Coord(0, 198), Coord(0, 200), Coord(1, 200)))
-
-
-def test_project_to_grid_top_right(read_config: None, sq: SquareTiling):
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(97, 198), Coord(100, 204), Coord(103, 200))),
-        (Coord(97, 198), Coord(98, 200), Coord(100, 200), Coord(100, 199)))
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(103, 200), Coord(97, 198), Coord(100, 204))),
-        (Coord(100, 199), Coord(97, 198), Coord(98, 200), Coord(100, 200)))
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(100, 204), Coord(103, 200), Coord(97, 198))),
-        (Coord(100, 199), Coord(97, 198), Coord(98, 200), Coord(100, 200)))
-
-
-def test_project_to_grid_bot_right(read_config: None, sq: SquareTiling):
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(98, 1), Coord(102, 3), Coord(102, -3))),
-        (Coord(98, 1), Coord(100, 2), Coord(100, 0), Coord(99, 0)))
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(102, -3), Coord(98, 1), Coord(102, 3))),
-        (Coord(99, 0), Coord(98, 1), Coord(100, 2), Coord(100, 0)))
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(102, 3), Coord(102, -3), Coord(98, 1))),
-        (Coord(99, 0), Coord(98, 1), Coord(100, 2), Coord(100, 0)))
-
-
-def test_project_to_grid_cut_left(read_config: None, sq: SquareTiling):
-    compare_projected_outline(
-        sq._project_onto_grid(
-            (Coord(-1, 196), Coord(1, 196), Coord(-1, 193))),
-        (Coord(0, 196), Coord(1, 196), Coord(0, 194.5)))
-
-
-def test_project_to_grid_cut_top(read_config: None, sq: SquareTiling):
-    compare_projected_outline(
-        sq._project_onto_grid(
-            (Coord(2, 201), Coord(5, 202), Coord(7, 201), Coord(7, 199),
-             Coord(4, 199))),
-        (Coord(7, 200), Coord(7, 199), Coord(4, 199), Coord(3, 200)))
-
-
-def test_project_to_grid_cut_right(read_config: None, sq: SquareTiling):
-    compare_projected_outline(
-        sq._project_onto_grid(
-            (Coord(99, 4), Coord(101, 4), Coord(101, 1), Coord(99, 1))),
-        (Coord(99, 4), Coord(100, 4), Coord(100, 1), Coord(99, 1)))
-
-
-def test_project_to_grid_cut_bot(read_config: None, sq: SquareTiling):
-    compare_projected_outline(
-        sq._project_onto_grid((Coord(5, 1), Coord(7, -1), Coord(3, -1))),
-        (Coord(5, 1), Coord(6, 0), Coord(4, 0)))
-
-
-def test_project_to_grid_overlay(read_config: None):
-    # Covers over and past the entire tiling grid except for a little of the
-    # bottom right corner.
-    sq = square_tiling_polygon(0, 3, 0, 5, 1)
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(-2, 3), Coord(2, -1), Coord(4, -1), Coord(4, 7), Coord(-2, 7))
-    ), (Coord(0, 1), Coord(1, 0), Coord(3, 0), Coord(3, 5), Coord(0, 5)))
-
-
-def test_project_to_grid_in_n_out(read_config: None):
-    sq = square_tiling_polygon(0, 5, 0, 5, 1)
-
-    # Goes straight through the bottom right corner without leaving a vertex in
-    # the shape.
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(3, -1), Coord(6, 2), Coord(7, 1), Coord(4, -2))),
-        (Coord(4, 0), Coord(5, 1), Coord(5, 0)))
-
-    # Like above, but does it twice such that it doesn't actually cover the
-    # bottom right corner.
-    compare_projected_outline(sq._project_onto_grid(
-        (Coord(1, -1), Coord(6, 4), Coord(7, 3), Coord(2, -2))),
-        (Coord(2, 0), Coord(5, 3), Coord(5, 1), Coord(4, 0)))
-
-
 def check_line_range(sq: SquareTiling, start: Coord, end: Coord,
                      y_min_true: int, x_mins_true: List[int],
                      x_maxes_true: List[int]):
@@ -357,26 +169,15 @@ def test_line_to_range_down_right(read_config: None, sq: SquareTiling):
     check_line_range(sq, Coord(1, 4), Coord(3, 1), 1, [], [3, 2, 1, 1])
 
     # Starts at edge
-    check_line_range(sq, Coord(5, 200), Coord(7, 199), 199, [], [7])
+    check_line_range(sq, Coord(5, 200), Coord(7, 199), 199, [], [7, 5])
 
     # Ends at edge
     check_line_range(sq, Coord(98, 150), Coord(100, 147), 147, [],
-                     [99, 99, 98, 98])
+                     [100, 99, 98, 98])
 
     # Starts and ends at edge
     check_line_range(sq, Coord(98, 200), Coord(100, 197), 197, [],
-                     [99, 99, 98])
-
-    # Starts in corner ends inside
-    # TODO
-
-    # Starts inside ends at corner
-
-    # Starts near corner ends at edge
-
-    # Starts at edge ends near corner
-
-    # Starts near corner ends near corner
+                     [100, 99, 98, 98])
 
 
 def test_line_to_range_down_left(read_config: None, sq: SquareTiling):
@@ -384,14 +185,18 @@ def test_line_to_range_down_left(read_config: None, sq: SquareTiling):
     check_line_range(sq, Coord(2.5, 1.5), Coord(.5, .5), 0, [], [1, 2])
 
     # Starts at edge
-    check_line_range(sq, Coord(5, 200), Coord(3, 199), 199, [], [5])
+    check_line_range(sq, Coord(5, 200), Coord(3, 199), 199, [], [4, 5])
 
     # Ends at edge
     check_line_range(sq, Coord(2, 150), Coord(0, 147), 147, [],
                      [0, 1, 1, 2])
 
     # Starts and ends at edge
-    check_line_range(sq, Coord(2, 200), Coord(0, 197), 197, [], [0, 1, 2])
+    check_line_range(sq, Coord(2, 200), Coord(0, 197), 197, [], [0, 1, 1, 2])
+
+    # Fully in negative test
+    check_line_range(sq, Coord(-1, -2), Coord(-5, -5), -5, [],
+                     [-4, -3, -2, -1])
 
 
 def test_line_to_range_up_left(read_config: None, sq: SquareTiling):
@@ -403,11 +208,14 @@ def test_line_to_range_up_left(read_config: None, sq: SquareTiling):
                      [99, 98, 98, 98], [])
 
     # Ends at edge
-    check_line_range(sq, Coord(7, 199), Coord(5, 200), 199, [5], [])
+    check_line_range(sq, Coord(7, 199), Coord(5, 200), 199, [5, 5], [])
 
     # Starts and ends at edge
-    check_line_range(sq, Coord(100, 197), Coord(98, 200), 197, [99, 98, 98],
-                     [])
+    check_line_range(sq, Coord(100, 197), Coord(98, 200), 197,
+                     [99, 98, 98, 98], [])
+
+    # Starts and ends at edge
+    check_line_range(sq, Coord(-5, -7), Coord(-9, -5), -7, [-7, -9, -9], [])
 
 
 def test_line_to_range_up_right(read_config: None, sq: SquareTiling):
@@ -415,35 +223,66 @@ def test_line_to_range_up_right(read_config: None, sq: SquareTiling):
     check_line_range(sq, Coord(.5, .5), Coord(2.5, 1.5), 0, [0, 1], [])
 
     # Starts at edge
-    check_line_range(sq, Coord(3, 199), Coord(5, 200), 199, [3], [])
+    check_line_range(sq, Coord(3, 199), Coord(5, 200), 199, [3, 4], [])
 
     # Ends at edge
-    check_line_range(sq, Coord(0, 147), Coord(2, 150), 147,
-                     [0, 0, 1, 1], [])
-    # Probably should be [0, 0, 1, 2]? This is a little counterintuitive but I
-    # won't sweat it yet. The no-projection-clip method would probably fix it.
+    check_line_range(sq, Coord(0, 147), Coord(2, 150), 147, [0, 0, 1, 1], [])
 
     # Starts and ends at edge
-    check_line_range(sq, Coord(0, 197), Coord(2, 200), 197, [0, 0, 1], [])
+    check_line_range(sq, Coord(0, 197), Coord(2, 200), 197, [0, 0, 1, 1], [])
 
 
 def test_line_to_range_up(read_config: None, sq: SquareTiling):
     check_line_range(sq, Coord(4, .5), Coord(4, 1.5), 0, [4, 4], [4, 4])
-    check_line_range(sq, Coord(100, 0), Coord(100, 3.5), 0, [99, 99, 99, 99],
-                     [99, 99, 99, 99])
+    check_line_range(sq, Coord(100, 0), Coord(100, 3.5), 0,
+                     [100, 100, 100, 100], [100, 100, 100, 100])
 
 
 def test_line_to_range_down(read_config: None, sq: SquareTiling):
     check_line_range(sq, Coord(4, 1.5), Coord(4, .5), 0, [4, 4], [4, 4])
     check_line_range(sq, Coord(100, 200), Coord(100, 197.5), 197,
-                     [99, 99, 99], [99, 99, 99])
+                     [100, 100, 100, 100], [100, 100, 100, 100])
 
 
 def test_line_to_range_left(read_config: None, sq: SquareTiling):
     check_line_range(sq, Coord(2.5, 1), Coord(3.5, 1), 1, [2], [3])
-    check_line_range(sq, Coord(100, 200), Coord(98.5, 200), 199, [98], [99])
+    check_line_range(sq, Coord(100, 200), Coord(98.5, 200), 200, [98], [100])
 
 
 def test_line_to_range_right(read_config: None, sq: SquareTiling):
     check_line_range(sq, Coord(3.5, 1.5), Coord(2.5, 1.5), 1, [2], [3])
-    check_line_range(sq, Coord(0, 200), Coord(2.5, 200), 199, [0], [2])
+    check_line_range(sq, Coord(0, 200), Coord(2.5, 200), 200, [0], [2])
+
+
+def compare_clip(sq: SquareTiling, y_min: int, x_mins: List[int],
+                 x_maxes: List[int], y_min_true: int, x_mins_true: List[int],
+                 x_maxes_true: List[int]):
+    y_min, x_mins, x_maxes = sq._clip_tile_range(y_min, x_mins, x_maxes)
+    assert y_min == y_min_true
+    assert x_mins == x_mins_true
+    assert x_maxes == x_maxes_true
+
+
+def test_clip_range(read_config: None, sq: SquareTiling):
+
+    # No clip
+    compare_clip(sq, 98, [5, 5, 5, 5], [5, 5, 5, 5], 98, [5, 5, 5, 5],
+                 [5, 5, 5, 5])
+
+    # Clip top
+    compare_clip(sq, 198, [5, 5, 5, 5], [5, 5, 5, 5], 198, [5, 5], [5, 5])
+
+    # Clip bottom
+    compare_clip(sq, -2, [5, 5, 5, 5], [5, 5, 5, 5], 0, [5, 5], [5, 5])
+
+    # Clip left
+    compare_clip(sq, 98, [-5, 5, -5, 5], [5, 5, 5, 5], 98, [0, 5, 0, 5],
+                 [5, 5, 5, 5])
+
+    # Clip right
+    compare_clip(sq, 98, [5, 5, 5, 5], [5, 222, 5, 222], 98, [5, 5, 5, 5],
+                 [5, 99, 5, 99])
+
+    # All clip
+    compare_clip(sq, -3, [-100 for _ in range(207)], [234 for _ in range(207)],
+                 0, [0 for _ in range(200)], [99 for _ in range(200)])
