@@ -152,7 +152,8 @@ class Tiling(Configurable):
         self.check_for_collisions()
 
         # 2. Update tiling for the new timestep
-        self.tiles.pop(0)
+        if len(self.tiles) > 0:
+            self.tiles.pop(0)
 
         # 3. Update the traffic signal cycle
         self.update_cycle()
@@ -456,6 +457,7 @@ class Tiling(Configurable):
                 edge_buffer_tiles = self.io_tile_buffer(
                     intersection_lane, test_t, clone, reservation,
                     prepend=False, mark=mark)
+                # TODO: Figure out how many timesteps_forward.
                 if edge_buffer_tiles is None:
                     # Not only is this reservation not possible, all clones
                     # behind it also have invalid reservations, so we can
@@ -732,7 +734,8 @@ class Tiling(Configurable):
         # SHARED.t+1. t > SHARED.t so we need to extend the tile stack to t. If
         # the tilings created so far doesn't cover this future timestep yet,
         # keep creating new layers until we reach this timestep.
-        assert t > SHARED.t
+        if t <= SHARED.t:
+            raise ValueError("t must be a future timestep.")
         timesteps_from_now = t - SHARED.t
         while len(self.tiles) < timesteps_from_now:
             self._add_new_layer()
@@ -752,7 +755,8 @@ class Tiling(Configurable):
     @abstractmethod
     def io_tile_buffer(self, lane: IntersectionLane, t: int,
                        clone: Vehicle, reservation: Reservation,
-                       prepend: bool, force: bool = False, mark: bool = False
+                       prepend: bool, timesteps_forward: Optional[int] = None,
+                       force: bool = False, mark: bool = False
                        ) -> Optional[Dict[int, Dict[Tile, float]]]:
         """Should return edge buffer tiles and percentages used if it works.
 
@@ -784,14 +788,22 @@ class Tiling(Configurable):
             prepend: bool
                 If true, return edge tiles before timestep. If false, return
                 edge tiles after timestep.
+            timesteps_forward: Optional[int]
+                If postpending, tells the tiling how many timesteps forward
+                into the future it needs to reserve.
             force: bool = False
                 If force, don't bother checking if a tile is compatible with
                 this vehicle's reservation before returning.
             mark: bool = False
                 Whether to mark the tiles used with this potential reservation.
         """
+        if t <= SHARED.t:
+            raise ValueError("t must be a future timestep.")
         if force and mark:
             raise ValueError("Can't force and mark tiles at the same time.")
+        if (not prepend) and (timesteps_forward is None):
+            raise ValueError('Postpend IO buffer needs a timesteps_forward'
+                             ' arg.')
 
     def clear_marked_tiles(self, reservation: Reservation) -> None:
         """Clear tiles marked with this reservation before discarding."""

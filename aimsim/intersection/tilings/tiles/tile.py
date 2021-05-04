@@ -9,7 +9,6 @@ maximizing intersection throughput.
 from typing import Optional, Dict
 from abc import ABC, abstractmethod
 
-from aimsim.vehicles import Vehicle
 from aimsim.intersection.reservation import Reservation
 
 

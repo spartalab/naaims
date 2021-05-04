@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING, Optional, Set, Dict, Tuple, Type, List
-from math import ceil, floor
+from math import ceil, floor, isclose
 
 import aimsim.shared as SHARED
 from aimsim.util import Coord
@@ -82,8 +82,8 @@ class SquareTiling(Tiling):
         # the intersection so vehicles don't crash as they enter or exit.
         self.buffer_tile_loc: Dict[Coord, Tuple[int, int]] = {}
         for start, end in lanes_by_endpoints:
-            self.buffer_tile_loc[start] = self._coord_to_tile_xy(start)
-            self.buffer_tile_loc[end] = self._coord_to_tile_xy(end)
+            self.buffer_tile_loc[start] = self._io_coord_to_tile_xy(start)
+            self.buffer_tile_loc[end] = self._io_coord_to_tile_xy(end)
 
     def check_for_collisions(self) -> None:
         """Check for collisions in the intersection."""
@@ -149,16 +149,20 @@ class SquareTiling(Tiling):
             Coord((c.x - self.origin.x)/self.tile_width,
                   (c.y - self.origin.y)/self.tile_width)
             for c in clone.get_outline()))
+        # TODO: (stochastic) Modify here or in vehicle.get_outline() to
+        #       accommodate larger reservations dependent on vehicle shape.
 
         # After the outlining process is complete, loop through the min and max
         # y-Tiles via the x-bound lists. For each y-value, add every tile
         # between the min and max x-Tiles to the return set.
         tiles_covered: Dict[Tile, float] = {}
+        # Recall that the first tile layer represents the next timestep.
+        t_idx = t - (SHARED.t+1)
         for j in range(len(x_mins)):
             y = y_min + j
-            for i in range(x_mins[j], x_maxes[j]+1):
+            for i in range((x_maxes[j]+1)-x_mins[j]):
                 x = x_mins[j]+i
-                tile = self.tiles[t][self.__tile_loc_to_id((x, y))]
+                tile = self.tiles[t_idx][self._tile_loc_to_id((x, y))]
                 p = 1  # TODO: (stochastic) probabilistic reservation
                 if tile.will_reservation_work(reservation, p):
                     tiles_covered[tile] = 1
@@ -172,6 +176,9 @@ class SquareTiling(Tiling):
     def _outline_to_tile_range(self, outline: Tuple[Coord, ...]) \
             -> Tuple[int, List[int], List[int]]:
 
+        if len(outline) < 3:
+            raise ValueError('Must be a 2D outline (>= 3 vertices).')
+
         # Start by finding the y-range the outline covers.
         y_min: int = floor(outline[0].y)
         y_max: int = y_min
@@ -182,8 +189,8 @@ class SquareTiling(Tiling):
             if oy > y_max:
                 y_max = oy
         # Initialize lists for the x-range associated with each y-value.
-        x_mins: List[int] = [-1]*(y_max-y_min+1)
-        x_maxes: List[int] = x_mins.copy()
+        x_mins: List[int] = [self.x_tile_count]*(y_max-y_min+1)
+        x_maxes: List[int] = [-1]*(y_max-y_min+1)
         # Loop through the outline clockwise to fill out these lists.
         for i in range(len(outline)):
             start = outline[i]
@@ -196,10 +203,12 @@ class SquareTiling(Tiling):
             # segment pointed up or down, as that indicates if the segment
             # alters mins or maxes.
             for j, x_min in enumerate(x_mins_seg):
-                x_mins[j + y_min_seg - y_min] = x_min
+                idx = j + y_min_seg - y_min
+                x_mins[idx] = min(x_min, x_mins[idx])
             for j, x_max in enumerate(x_maxes_seg):
-                x_maxes[j + y_min_seg - y_min] = x_max
-            # TODO: (shapes) This must be changed for non-convex outlines.
+                idx = j + y_min_seg - y_min
+                x_maxes[idx] = max(x_max, x_maxes[idx])
+            # Note: this doesn't work for non-convex outlines.
 
         # Go through the stitched range to clip tiles to between x_min, x_max,
         # y_min, and y_max.
@@ -216,8 +225,8 @@ class SquareTiling(Tiling):
 
         Returns y_min, x_mins, x_maxes.
         """
-        dx = end.x - start.x
-        dy = end.y - start.y
+        dx = 0 if isclose(end.x, start.x) else end.x - start.x
+        dy = 0 if isclose(end.y, start.y) else end.y - start.y
 
         x_mins: List[int] = []
         x_maxes: List[int] = []
@@ -258,13 +267,13 @@ class SquareTiling(Tiling):
             if dy < 0:  # down right or left, maxes
                 y_max = floor(start.y)
                 y_min = floor(end.y)
-                x_maxes: List[int] = [-1]*(y_max-y_min+1)
+                x_maxes: List[int] = [floor(start.x)]*(y_max-y_min+1)
                 step_y = -1
                 x_of_next_y_tile = x_of_y(floor(start.y))
             else:  # up right or left, mins
                 y_min = floor(start.y)
                 y_max = floor(end.y)
-                x_mins: List[int] = [-1]*(y_max-y_min+1)
+                x_mins: List[int] = [floor(start.x)]*(y_max-y_min+1)
                 step_y = 1
                 x_of_next_y_tile = x_of_y(ceil(start.y))
             x_to_next_y_tile: float = abs(start.x - x_of_next_y_tile)
@@ -275,7 +284,7 @@ class SquareTiling(Tiling):
             step_x: int = -1 if dx < 0 else 1
             x_delta_x: float = 1
             x_delta_y: float = abs(1/m)
-            if (x_to_next_y_tile == 0) and (dy > 0):
+            if isclose(x_to_next_y_tile, 0, abs_tol=1e-10) and (dy > 0):
                 # Recall that tiles are inclusive of their bottom right border.
                 # When we start on the border between y-tiles, x_to_next_y_tile
                 # will start at 0, and in this preamble we add the tile the
@@ -308,18 +317,43 @@ class SquareTiling(Tiling):
             # last x_min or x_max logged insufficiently lenient.
             marked: bool = True
             while True:  # break condition in loop
-                if (x_to_next_x_tile < x_to_next_y_tile) or (
-                    (x_to_next_x_tile == x_to_next_y_tile) and (dy < 0)
-                ):
-                    if (x_to_next_x_tile > x_dist_max) or (
-                        (x_to_next_x_tile == x_dist_max) and (dy > 0)
+                # We have to be careful of cumulative floating point errors.
+                close_call = isclose(x_to_next_x_tile, x_to_next_y_tile)
+                # if close to equal and going down, prefer x update
+                # if close to equal and going up, prefer y update
+                if close_call and (dy < 0):
+                    # If close and going down, prefer x update
+                    if (x_to_next_x_tile - x_dist_max > 1e-9) or (
+                        isclose(x_to_next_x_tile, x_dist_max) and (dy > 0)
+                    ):
+                        break
+                    x += step_x
+                    x_to_next_x_tile += x_delta_x
+                elif close_call and (dy > 0):
+                    # If close and going up, prefer y update
+                    if (x_to_next_y_tile - x_dist_max > 1e-9) or (
+                        isclose(x_to_next_y_tile, x_dist_max) and (dy < 0)
+                    ):
+                        break
+                    y += step_y
+                    x_to_next_y_tile += x_delta_y
+                    marked = False
+                elif x_to_next_x_tile < x_to_next_y_tile:
+                    # If next x is closer, prefer x update; note that this
+                    # section is identical to two blocks up, I just couldn't
+                    # be bothered to modularize two lines and a break check.
+                    if (x_to_next_x_tile - x_dist_max > 1e-9) or (
+                        isclose(x_to_next_x_tile, x_dist_max) and (dy > 0)
                     ):
                         break
                     x += step_x
                     x_to_next_x_tile += x_delta_x
                 else:
-                    if (x_to_next_y_tile > x_dist_max) or (
-                        (x_to_next_y_tile == x_dist_max) and (dy < 0)
+                    # If next y is closer, prefer y update; note that this
+                    # section is identical to two blocks up, I just couldn't
+                    # be bothered to modularize two lines and a break check.
+                    if (x_to_next_y_tile - x_dist_max > 1e-9) or (
+                        isclose(x_to_next_y_tile, x_dist_max) and (dy < 0)
                     ):
                         break
                     y += step_y
@@ -360,20 +394,48 @@ class SquareTiling(Tiling):
         else:
             y_below_range = 0
 
-        # Clip x_mins and x_maxes
-        x_mins = x_mins[y_below_range:(len(x_mins)-y_above_range)]
-        x_maxes = x_maxes[y_below_range:(len(x_maxes)-y_above_range)]
+        # Fix y_min
+        if y_min >= self.y_tile_count:
+            y_min = max(0, self.y_tile_count-1)
 
+        # Clip x_mins and x_maxes according to y-values
+        x_mins = x_mins[y_below_range:max(0, len(x_mins)-y_above_range)]
+        x_maxes = x_maxes[y_below_range:max(0, len(x_maxes)-y_above_range)]
+
+        # Clip x_mins and x_maxes according to x-values, deleting rows if they
+        # are fully outside the range.
+        first_valid_row: Optional[int] = None
+        last_valid_row: int = 0
         for i in range(len(x_mins)):
-            x_mins[i] = 0 if x_mins[i] < 0 else x_mins[i]
+            if x_maxes[i] < 0 or x_mins[i] >= self.x_tile_count:
+                if first_valid_row is None:
+                    continue
+                else:
+                    break
+            else:
+                if first_valid_row is None:
+                    first_valid_row = i
+                last_valid_row = i
+            x_mins[i] = 0 if x_mins[i] <= 0 else x_mins[i]
+            x_mins[i] = self.x_tile_count-1 if \
+                x_mins[i] >= self.x_tile_count else x_mins[i]
+            x_maxes[i] = 0 if x_maxes[i] <= 0 else x_maxes[i]
             x_maxes[i] = self.x_tile_count-1 if \
-                x_maxes[i] > self.x_tile_count else x_maxes[i]
+                x_maxes[i] >= self.x_tile_count else x_maxes[i]
+
+        if first_valid_row is not None:
+            y_min += first_valid_row
+            x_mins = x_mins[first_valid_row:last_valid_row+1]
+            x_maxes = x_maxes[first_valid_row:last_valid_row+1]
+        else:
+            x_mins = x_maxes = []
 
         return y_min, x_mins, x_maxes
 
     def io_tile_buffer(self, lane: IntersectionLane, t: int,
                        clone: Vehicle, reservation: Reservation,
-                       prepend: bool, force: bool = False, mark: bool = False
+                       prepend: bool, timesteps_forward: Optional[int] = None,
+                       force: bool = False, mark: bool = False
                        ) -> Optional[Dict[int, Dict[Tile, float]]]:
         """Should return edge buffer tiles and percentages used if it works.
 
@@ -405,48 +467,54 @@ class SquareTiling(Tiling):
             prepend: bool
                 If true, return edge tiles before timestep. If false, return
                 edge tiles after timestep.
+            timesteps_forward: Optional[int]
+                If postpending, tells the tiling how many timesteps forward
+                into the future it needs to reserve.
             force: bool = False
                 If force, don't bother checking if a tile is compatible with
                 this vehicle's reservation before returning.
             mark: bool = False
                 Whether to mark the tiles used with this potential reservation.
         """
-        super().io_tile_buffer(lane, t, clone, reservation, prepend, force,
-                               mark)
+        super().io_tile_buffer(lane, t, clone, reservation, prepend,
+                               timesteps_forward, force, mark)
 
-        if t <= SHARED.t:
-            raise ValueError("t must be a future timestep.")
+        # Recall that the first tile layer represents the next timestep.
+        t0 = SHARED.t + 1
         if prepend:
-            if t == SHARED.t + 1:
+            if t == t0:
                 return {}
             # Find the tile one timestep before the current one to account for
             # rounding errors; otherwise soonest_exit ought to guarantee that
             # there will be no conflicts as vehicles enter the intersection.
-            while len(self.tiles) < t - SHARED.t:
+            t_prepend = t-1
+            while len(self.tiles) < t_prepend - SHARED.t:
                 self._add_new_layer()
-            tile = self.tiles[t-1 - SHARED.t][self.__tile_loc_to_id(
+            tile = self.tiles[t_prepend - t0][self._tile_loc_to_id(
                 self.buffer_tile_loc[lane.trajectory.start_coord])]
             if tile.will_reservation_work(reservation):
-                return {t-1: {tile: 1}}  # TODO: (stochastic) reservations.
+                # TODO: (stochastic) reservations.
+                return {t_prepend: {tile: 1}}
             else:
                 return None
         else:
-            tile_id = self.__tile_loc_to_id(
-                self.buffer_tile_loc[lane.trajectory.end_coord])
-            timesteps_forward = 5  # TODO: How far forward?
-            while len(self.tiles) < t - SHARED.t + timesteps_forward:
+            assert timesteps_forward is not None
+            tile_id = self._tile_loc_to_id(
+                self.buffer_tile_loc[lane.trajectory.start_coord])
+            while len(self.tiles) < t + timesteps_forward - SHARED.t:
                 self._add_new_layer()
             to_return: Dict[int, Dict[Tile, float]] = {}
             for i in range(1, timesteps_forward+1):
-                t_index = t - SHARED.t + i
-                tile = self.tiles[t_index][tile_id]
+                t_res = t + i
+                tile_t_index = t_res - t0
+                tile = self.tiles[tile_t_index][tile_id]
                 if not tile.will_reservation_work(reservation):
                     return None
                 # TODO: (stochastic) reservations.
-                to_return[t_index] = {tile: 1}
+                to_return[t_res] = {tile: 1}
             return to_return
 
-    def __tile_loc_to_id(self, tile_loc: Tuple[int, int]) -> int:
+    def _tile_loc_to_id(self, tile_loc: Tuple[int, int]) -> int:
         """Convert a tile's (x,y) location to its 1D integer ID.
 
         The input parameter is a 2-tuple of integer x and y values. x denotes
@@ -488,14 +556,19 @@ class SquareTiling(Tiling):
         the new layer represents the first timestep after the current stack's
         coverage.
         """
-        new_timestep = SHARED.t + 1 + len(self.tiles) + 1
+        new_timestep = SHARED.t + 1 + len(self.tiles)
         self.tiles.append(tuple([
-            self.tile_type(self.__tile_loc_to_id((x, y)), new_timestep)
+            self.tile_type(self._tile_loc_to_id((x, y)), new_timestep)
             for y in range(self.y_tile_count)
             for x in range(self.x_tile_count)]))
 
-    def _coord_to_tile_xy(self, coord: Coord) -> Tuple[int, int]:
-        """Convert a raw Coord to tile space's (x,y) tile."""
+    def _io_coord_to_tile_xy(self, coord: Coord) -> Tuple[int, int]:
+        """Convert a raw Coord to tile space's (x,y) tile.
+
+        Assumes that the provided Coord is in the tile space. This is the only
+        case where a coord on the top or right borders is mapped to a tile;
+        otherwise the math doesn't work out.
+        """
         x: int = floor(coord.x - self.origin.x)
         y: int = floor(coord.y - self.origin.y)
         if x == self.x_tile_count:
