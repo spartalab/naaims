@@ -18,8 +18,8 @@ min_acceleration
 max_vehicle_length
 length_buffer_factor
     Amount of clearance to maintain before and after each vehicle (separately),
-    as a function of the vehicle's length. The default option makes a vehicle
-    10% longer in front and 10% longer behind than it actually is.
+    as a function of the vehicle's length. The default option, 0.1, makes a
+    vehicle 10% longer in front and 10% longer behind than it actually is.
 entrance_length
     Worst case distance required for a simulated vehicle to go from the speed
     limit to a dead halt at its maximum braking speed.

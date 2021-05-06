@@ -1,10 +1,10 @@
 from __future__ import annotations
 from copy import copy
 from typing import TYPE_CHECKING, Tuple, Optional, Dict, TypeVar
-from math import pi
+from math import ceil, sqrt
 
 import aimsim.shared as SHARED
-from aimsim.lane import Lane
+from aimsim.lane import Lane, ScheduledExit
 from aimsim.util import VehicleSection
 from aimsim.trajectories import BezierTrajectory
 
@@ -150,6 +150,42 @@ class IntersectionLane(Lane):
         """
         super().add_vehicle(vehicle)
         self.lateral_deviation[vehicle] = 0
+
+    # Support functions for reservation logic
+
+    def rear_exit(self, front_exit: ScheduledExit) -> ScheduledExit:
+        """Given a vehicle's front exit, return its rear exit.
+
+        As with all in-intersection behavior, assumes that the vehicle will
+        accelerate to the speed limit and then stay there while any part of it
+        is in the intersection. No braking or constant sub-limit speed allowed!
+        """
+        # Recall that a vehicle's effective length is its actual length plus
+        # the fixed buffer lengths before and after it.
+        if front_exit.section is not VehicleSection.FRONT:
+            raise ValueError('Not a front exit.')
+        x = front_exit.vehicle.length * \
+            (1 + 2*SHARED.SETTINGS.length_buffer_factor)
+        if self.trajectory.length < x:
+            raise RuntimeError("Vehicle (plus buffer) longer than lane.")
+        a = SHARED.SETTINGS.min_acceleration
+        v0 = front_exit.velocity
+        v_full_accel = sqrt(v0**2 + 2*a*x)
+        v_max = self.speed_limit
+        t: int = front_exit.t
+        v: float
+        if v_full_accel <= v_max:
+            # Accelerating its entire length still won't reach the speed limit.
+            t += ceil(self.t_to_v(v0, a, v_full_accel))
+            v = v_full_accel
+        else:
+            # It hits the speed limit while transitioning.
+            t_to_v_max = self.t_to_v(v0, a, v_max)
+            x_to_v_max = self.x_over_constant_a(v0, a, t_to_v_max)
+            t_at_v_max = (x - x_to_v_max)/v_max
+            t += ceil(t_to_v_max + t_at_v_max)
+            v = v_max
+        return ScheduledExit(front_exit.vehicle, VehicleSection.REAR, t, v)
 
     # Misc functions
 

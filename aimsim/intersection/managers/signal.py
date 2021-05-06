@@ -75,4 +75,4 @@ class SignalsManager(IntersectionManager):
                             vehicle=this_exit.vehicle,
                             section=VehicleSection.REAR,
                             t=this_exit.t+estimated_time_to_finish,
-                            v=this_exit.v))
+                            velocity=this_exit.velocity))

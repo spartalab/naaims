@@ -411,8 +411,8 @@ class RoadLane(Lane):
 
         # 1. Evaluate the free flow case with no preceding exit to find the
         #    ScheduledExit that gets to the intersection as fast as possible.
-        t_to_v_max: float = self._v_to_t(v0, a, v_max)
-        x_to_v_max: float = self._x_over_constant_a(v0, a, t_to_v_max)
+        t_to_v_max: float = self.t_to_v(v0, a, v_max)
+        x_to_v_max: float = self.x_over_constant_a(v0, a, t_to_v_max)
         t_fastest_exit, v_fastest_exit = self._free_flow_exit(
             v0, a, v_max, t_to_v_max, x_to_v_max, x_to_intersection)
         t_fastest_in_timesteps = ceil((t0 + t_fastest_exit) *
@@ -422,7 +422,8 @@ class RoadLane(Lane):
                                             v_fastest_exit)
 
         if (last_rear_exit is None) or ((last_rear_exit.t <= exit.t) and
-                                        (last_rear_exit.v >= exit.v)):
+                                        (last_rear_exit.velocity >=
+                                         exit.velocity)):
             # Case 1: There's nothing to collide with.
             # Case 2: They exit after each other and the preceding vehicle
             #         exited as fast or faster than this one.
@@ -431,10 +432,10 @@ class RoadLane(Lane):
 
         # Find the time when the preceding vehicle reaches the speed limit and
         # how much distance it's covered by then.
-        v0_p: float = last_rear_exit.v
+        v0_p: float = last_rear_exit.velocity
         t_p_exit: float = last_rear_exit.t * SHARED.SETTINGS.TIMESTEP_LENGTH
-        t_p_to_v_max: float = self._v_to_t(v0_p, a, v_max)
-        x_crit: float = self._x_over_constant_a(v0_p, a, t_p_to_v_max)
+        t_p_to_v_max: float = self.t_to_v(v0_p, a, v_max)
+        x_crit: float = self.x_over_constant_a(v0_p, a, t_p_to_v_max)
         t_crit: float = t_p_exit + t_p_to_v_max - t0
         # The collision window is between t_p_exit + [0, t_p_to_v_max]. If the
         # study vehicle overtakes the preceding vehicle in this time window,
@@ -509,16 +510,6 @@ class RoadLane(Lane):
         return (1-progress)*self.trajectory.length
 
     @staticmethod
-    def _v_to_t(v0: float, a: float, vf: float) -> float:
-        """Given v0, acceleration, and vf, find the time to reach vf."""
-        return (vf - v0)/a
-
-    @staticmethod
-    def _x_over_constant_a(v0: float, a: float, t: float) -> float:
-        """Given speed, acceleration, and time, find the distance covered."""
-        return v0*t + (a/2)*t**2
-
-    @staticmethod
     def _free_flow_exit(v0: float, a: float, v_max: float, t_to_v_max: float,
                         x_to_v_max: float, x_to_intersection: float
                         ) -> Tuple[float, float]:
@@ -541,16 +532,16 @@ class RoadLane(Lane):
         t_i_guess = t_crit - t_exit_guess
         if v_guess + a*t_i_guess > v_max:
             # Vehicle reaches the speed limit before t_crit.
-            t_i_guess_to_v_max = RoadLane._v_to_t(v_guess, a, v_max)
-            x_i_guess_to_v_max = RoadLane._x_over_constant_a(
+            t_i_guess_to_v_max = RoadLane.t_to_v(v_guess, a, v_max)
+            x_i_guess_to_v_max = RoadLane.x_over_constant_a(
                 v_guess, a, t_i_guess_to_v_max)
             t_i_guess_at_v_max = t_i_guess - t_i_guess_to_v_max
-            x_i_guess_at_v_max = RoadLane._x_over_constant_a(
+            x_i_guess_at_v_max = RoadLane.x_over_constant_a(
                 v_max, 0, t_i_guess_at_v_max)
             return x_i_guess_to_v_max + x_i_guess_at_v_max
         else:
             # Vehicle does not reach the speed limit before t_crit.
-            return RoadLane._x_over_constant_a(v_guess, a, t_i_guess)
+            return RoadLane.x_over_constant_a(v_guess, a, t_i_guess)
 
     @staticmethod
     def _enough_separation(t_exit: float, v_exit: float, a: float,
@@ -645,8 +636,8 @@ class RoadLane(Lane):
         Returns a few support variables that will facilitate binary search if
         this exit ends up being valid.
         """
-        t_brake_from_v_max: float = RoadLane._v_to_t(v_max, b, 0)
-        x_brake_from_v_max: float = RoadLane._x_over_constant_a(
+        t_brake_from_v_max: float = RoadLane.t_to_v(v_max, b, 0)
+        x_brake_from_v_max: float = RoadLane.x_over_constant_a(
             v_max, b, t_brake_from_v_max)
 
         t_slowest_exit: float
@@ -763,7 +754,7 @@ class RoadLane(Lane):
             reaches_v_max_before_intersection = False
         else:
             # This braking time may hit the speed limit. Check here.
-            x_brake_guess_from_v_max = RoadLane._x_over_constant_a(
+            x_brake_guess_from_v_max = RoadLane.x_over_constant_a(
                 v_max, b, t_brake_guess)
 
             if x_to_v_max + x_brake_guess_from_v_max > x_to_intersection:
@@ -785,7 +776,7 @@ class RoadLane(Lane):
                             t_to_v_max: float) -> Tuple[float, float]:
         """Find the time and velocity of exit given t_brake_guess."""
         if reaches_v_max_before_intersection:
-            x_brake_guess_from_v_max = RoadLane._x_over_constant_a(
+            x_brake_guess_from_v_max = RoadLane.x_over_constant_a(
                 v_max, b, t_brake_guess)
             x_guess_at_v_max = RoadLane._x_at_v_max(
                 x_to_intersection, x_to_v_max, x_brake_guess_from_v_max)

@@ -243,6 +243,20 @@ def test_consecutive_vehicles(mocker: MockerFixture, read_config: None):
     assert new_speeds[vehB] == SpeedUpdate(SHARED.SETTINGS.speed_limit, 0)
 
 
+def test_t_to_v():
+    assert RoadLane.t_to_v(1, 2, 10) == 4.5
+    assert RoadLane.t_to_v(10, -2, 1) == 4.5
+    assert RoadLane.t_to_v(5.5, .5, 6.6) == approx(1.1/.5)
+    assert RoadLane.t_to_v(6.6, -.5, 5.5) == approx(1.1/.5)
+
+
+def test_x_constant_a():
+    assert RoadLane.x_over_constant_a(10, 1, 2) == 22
+    assert RoadLane.x_over_constant_a(10, -1, 2) == 18
+    assert RoadLane.x_over_constant_a(10, 1, 1.1) == approx(11+1.21/2)
+    assert RoadLane.x_over_constant_a(10, -1, 1.1) == approx(11-1.21/2)
+
+
 def test_effective_speed_limit(rl: RoadLane, vehicle: AutomatedVehicle):
     assert rl.effective_speed_limit(0, vehicle) == rl.speed_limit
     assert rl.effective_speed_limit(0.5, vehicle) == rl.speed_limit

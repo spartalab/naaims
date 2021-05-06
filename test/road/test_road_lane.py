@@ -198,20 +198,6 @@ def test_x_to_intersection(rl: RoadLane):
     assert rl._x_to_intersection(1) == 0
 
 
-def test_v_to_t():
-    assert RoadLane._v_to_t(1, 2, 10) == 4.5
-    assert RoadLane._v_to_t(10, -2, 1) == 4.5
-    assert RoadLane._v_to_t(5.5, .5, 6.6) == approx(1.1/.5)
-    assert RoadLane._v_to_t(6.6, -.5, 5.5) == approx(1.1/.5)
-
-
-def test_x_constant_a():
-    assert RoadLane._x_over_constant_a(10, 1, 2) == 22
-    assert RoadLane._x_over_constant_a(10, -1, 2) == 18
-    assert RoadLane._x_over_constant_a(10, 1, 1.1) == approx(11+1.21/2)
-    assert RoadLane._x_over_constant_a(10, -1, 1.1) == approx(11-1.21/2)
-
-
 def test_ff_exit():
     assert RoadLane._free_flow_exit(0, 1, 10, 10, 50, 50) == (10, 10)
     assert RoadLane._free_flow_exit(0, 1, 10, 10, 50, 10) == approx(
@@ -295,8 +281,8 @@ def brake_before_v_max_helper(v0: float, a: float, b: float, x: float):
     assert t > 0
     t_b = RoadLane._t_brake_given_t_slowest(t, v0, a, b)
     t_a = t - t_b
-    x_a = RoadLane._x_over_constant_a(v0, a, t_a)
-    x_b = RoadLane._x_over_constant_a(v0+a*t_a, b, t_b)
+    x_a = RoadLane.x_over_constant_a(v0, a, t_a)
+    x_b = RoadLane.x_over_constant_a(v0+a*t_a, b, t_b)
     assert x_a + x_b == approx(x)
 
 
@@ -532,7 +518,7 @@ def test_soonest_exit(rl: RoadLane, vehicle: AutomatedVehicle,
     t_ff_exit = 5.45
     v_ff_exit = vehicle.velocity + SHARED.SETTINGS.min_acceleration*t_ff_exit
     assert timestep_to_seconds(se.t) == approx(t_ff_exit, abs=order)
-    assert se.v == approx(v_ff_exit, abs=order)
+    assert se.velocity == approx(v_ff_exit, abs=order)
 
     # Basically free flow case:
     # Same as before but there's another exit in front of them but this vehicle
@@ -541,7 +527,7 @@ def test_soonest_exit(rl: RoadLane, vehicle: AutomatedVehicle,
                                           rl.speed_limit))
     assert se is not None
     assert timestep_to_seconds(se.t) == approx(t_ff_exit, abs=order)
-    assert se.v == approx(v_ff_exit, abs=order)
+    assert se.velocity == approx(v_ff_exit, abs=order)
 
     # Multi-vehicle free flow case:
     # Same as before but the preceding vehicle is now in the road lane.
@@ -553,7 +539,7 @@ def test_soonest_exit(rl: RoadLane, vehicle: AutomatedVehicle,
                                           rl.speed_limit))
     assert se is not None
     assert timestep_to_seconds(se.t) == approx(t_ff_exit, abs=order)
-    assert se.v == approx(v_ff_exit, abs=order)
+    assert se.velocity == approx(v_ff_exit, abs=order)
 
     # Closer basically free flow case:
     # This vehicle exits after but a little bit faster than the last exit, but
@@ -564,7 +550,7 @@ def test_soonest_exit(rl: RoadLane, vehicle: AutomatedVehicle,
                                           rl.speed_limit-1e-6))
     assert se is not None
     assert timestep_to_seconds(se.t) == approx(50/rl.speed_limit, abs=order)
-    assert se.v == approx(rl.speed_limit, abs=order)
+    assert se.velocity == approx(rl.speed_limit, abs=order)
 
     # Slowest exit collision case:
     # This exit is too close to the last one that not even a full brake can
@@ -584,7 +570,7 @@ def test_soonest_exit(rl: RoadLane, vehicle: AutomatedVehicle,
                                           0))
     assert se is not None
     assert timestep_to_seconds(se.t) == approx(2, abs=order)
-    assert se.v == approx(0, abs=order)
+    assert se.velocity == approx(0, abs=order)
 
     # Search required, reaches v_max before and in intersection exit:
     # True soonest exit: accelerate for 1s, v_max for 1s, brake for 1s, exit,
@@ -604,8 +590,8 @@ def test_soonest_exit(rl: RoadLane, vehicle: AutomatedVehicle,
         rl.speed_limit - SHARED.SETTINGS.min_acceleration*t_p_crit))
     assert se is not None
     assert timestep_to_seconds(se.t) == approx(3, abs=order)
-    assert se.v == approx(rl.speed_limit + SHARED.SETTINGS.min_braking,
-                          abs=order)
+    assert se.velocity == approx(rl.speed_limit + SHARED.SETTINGS.min_braking,
+                                 abs=order)
 
     # Search required, does not reach v_max exit:
     # True soonest exit: start at 1m/s, accelerate for 3s, brake for 2s, in the
@@ -623,8 +609,8 @@ def test_soonest_exit(rl: RoadLane, vehicle: AutomatedVehicle,
         rl.speed_limit - SHARED.SETTINGS.min_acceleration*t_p_crit))
     assert se is not None
     assert timestep_to_seconds(se.t) == approx(5, abs=order)
-    assert se.v == approx(1 + 3*SHARED.SETTINGS.min_acceleration +
-                          2*SHARED.SETTINGS.min_braking, abs=order)
+    assert se.velocity == approx(1 + 3*SHARED.SETTINGS.min_acceleration +
+                                 2*SHARED.SETTINGS.min_braking, abs=order)
 
 
 def test_register_latest_exit(rl: RoadLane, vehicle: AutomatedVehicle):

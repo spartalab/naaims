@@ -70,13 +70,13 @@ class ScheduledExit(NamedTuple):
             The vehicle section this exit is in reference to.
         t: int
             The timestep of the exit.
-        v: float
+        velocity: float
             The speed at which the vehicle exits.
     """
     vehicle: Vehicle
     section: VehicleSection
     t: int
-    v: float
+    velocity: float
 
 
 class Lane(ABC):
@@ -219,6 +219,16 @@ class Lane(ABC):
         return self.accel_update_following(
             vehicle, p, available_stopping_distance=available_stopping_distance
         )
+
+    @staticmethod
+    def t_to_v(v0: float, a: float, vf: float) -> float:
+        """Given v0, acceleration, and vf, find the time to reach vf."""
+        return (vf - v0)/a
+
+    @staticmethod
+    def x_over_constant_a(v0: float, a: float, t: float) -> float:
+        """Given speed, acceleration, and time, find the distance covered."""
+        return v0*t + (a/2)*t**2
 
     def available_stopping_distance(self, pre_p: float, p: float,
                                     vehicle_stopping_distance: float) -> float:

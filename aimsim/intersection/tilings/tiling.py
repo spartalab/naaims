@@ -504,7 +504,7 @@ class Tiling(Configurable):
             if transfer.section is VehicleSection.REAR:
                 last_exit = ScheduledExit(vehicle=clone_to_original[clone],
                                           section=VehicleSection.REAR,
-                                          t=test_t, v=clone.velocity)
+                                          t=test_t, velocity=clone.velocity)
                 test_reservations[clone].its_exit = last_exit
 
     def _all_pos_to_tile(self, intersection_lane: IntersectionLane,
@@ -823,7 +823,8 @@ class Tiling(Configurable):
         vehicle: Vehicle = reservation.vehicle
         vehicle.has_reservation = True
         self.queued_reservations[vehicle] = reservation
-        self.issue_permission(vehicle, lane, reservation.its_exit)
+        self.issue_permission(vehicle, lane,
+                              reservation.lane.rear_exit(reservation.its_exit))
 
     @abstractmethod
     def find_best_batch(self, requests: Dict[RoadLane, List[Reservation]]
