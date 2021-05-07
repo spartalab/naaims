@@ -153,8 +153,12 @@ class IntersectionLane(Lane):
 
     # Support functions for reservation logic
 
-    def rear_exit(self, front_exit: ScheduledExit) -> ScheduledExit:
+    def rear_exit(self, front_exit: ScheduledExit, entire_lane: bool = False
+                  ) -> ScheduledExit:
         """Given a vehicle's front exit, return its rear exit.
+
+        If entire_lane is True, return the exit from the entire intersection
+        lane. If False, return its exit just from the road lane.
 
         As with all in-intersection behavior, assumes that the vehicle will
         accelerate to the speed limit and then stay there while any part of it
@@ -168,6 +172,10 @@ class IntersectionLane(Lane):
             (1 + 2*SHARED.SETTINGS.length_buffer_factor)
         if self.trajectory.length < x:
             raise RuntimeError("Vehicle (plus buffer) longer than lane.")
+        if entire_lane:
+            # From front entrance to rear exit is two car lengths plus the
+            # length of the entire intersection lane.
+            x += x + self.trajectory.length
         a = SHARED.SETTINGS.min_acceleration
         v0 = front_exit.velocity
         v_full_accel = sqrt(v0**2 + 2*a*x)

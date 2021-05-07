@@ -59,7 +59,7 @@ def test_lateral_deviation(il: IntersectionLane, vehicle: AutomatedVehicle):
     assert il.lateral_deviation_for(vehicle, 5) == 0
 
 
-def test_rear_exit(il: IntersectionLane, vehicle: AutomatedVehicle):
+def test_rear_exit_road(il: IntersectionLane, vehicle: AutomatedVehicle):
     v_max, a = 15, 3
 
     # Stays below speed limit
@@ -91,6 +91,35 @@ def test_rear_exit(il: IntersectionLane, vehicle: AutomatedVehicle):
     assert stopped_exit.section is VehicleSection.REAR
     assert stopped_exit.velocity == v_max
     assert stopped_exit.t == ceil(vehicle.length*1.2/v0) + t0
+
+
+def test_rear_exit_intersection(il: IntersectionLane,
+                                vehicle: AutomatedVehicle):
+    v_max, a = 15, 3
+
+    # TODO: Stays below speed limit
+
+    # Reaches speed limit during transition
+    t0, v0 = 4, 14.9
+    stopped_exit = il.rear_exit(ScheduledExit(vehicle, VehicleSection.FRONT,
+                                              t0, v0), True)
+    assert stopped_exit.vehicle is vehicle
+    assert stopped_exit.section is VehicleSection.REAR
+    assert stopped_exit.velocity == v_max
+    t_accel = (15-v0)/a
+    t_v_max = (vehicle.length*1.2*2 + il.trajectory.length -
+               (v0*t_accel + .5*a*t_accel**2))/v_max
+    assert stopped_exit.t == ceil(t_accel + t_v_max) + t0
+
+    # At speed limit before transition
+    t0, v0 = 0, v_max
+    stopped_exit = il.rear_exit(ScheduledExit(vehicle, VehicleSection.FRONT,
+                                              t0, v0), True)
+    assert stopped_exit.vehicle is vehicle
+    assert stopped_exit.section is VehicleSection.REAR
+    assert stopped_exit.velocity == v_max
+    assert stopped_exit.t == ceil((vehicle.length*1.2*2 + il.trajectory.length)
+                                  / v0) + t0
 
 
 def test_clone(il: IntersectionLane, vehicle: AutomatedVehicle,
