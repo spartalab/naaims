@@ -309,72 +309,17 @@ class Tiling(Configurable):
         last_exit: Optional[ScheduledExit] = None
 
         # Mock the simulation loop until all vehicles in the test sequence
-        # have spawned, progressed, and exited the intersection lane. Refer to
-        # simulator.step() for more details on the simulation loop.
-        # Note that clones are only spawned into the test environment at the
-        # timestep when they first enter the intersection, and are removed as
-        # soon as they exit the intersection.
+        # have spawned, progressed, and exited the intersection lane.
         while (len(intersection_lane.vehicles) > 0) or (counter < end_at):
-
-            # 1.  Update speeds for all vehicles.
-            self._mock_update_speeds(intersection_lane)
-
-            # 2a. Use the updated speeds to progress the position of the clone
-            #     on the downstream lane.
-            self._mock_outgoing_step_vehicles(outgoing_road_lane)
-
-            # 2b. Progress positions for clones in the intersection lane and
-            # 3a. transfer exiting vehicle sections onto the downstream lane.
-            # 4a. If a clone has fully exited, check the edge buffer tiles of
-            #     their reservation, and if they work separately delete the
-            #     clone from the downstream road lane as we no longer need to
-            #     check its position in the intersection.
-            test_complete = self._mock_intersection_step_vehicles(
-                intersection_lane, outgoing_road_lane, test_reservations,
-                valid_reservations, test_t, mark)
+            test_complete, counter, test_t, last_exit, new_exit = \
+                self._mock_step(counter, end_at, test_t, new_exit,
+                                incoming_road_lane, intersection_lane,
+                                outgoing_road_lane, clone_to_original,
+                                test_reservations, valid_reservations,
+                                last_exit, originals,
+                                incoming_road_lane_original, mark)
             if test_complete:
-                return valid_reservations
-
-            # 2c. Progress the position of the clone on the incoming road and
-            # 3b. transfer section(s) transitioning from road to intersection.
-            self._mock_incoming_step_vehicles(
-                incoming_road_lane, intersection_lane, clone_to_original,
-                test_reservations, test_t)
-
-            # 4b. Check and log the tiles used by all clones still in the
-            #     intersection after the speed and position update. If a
-            #     clone's used tiles are incompatible with a confirmed
-            #     reservation, reject its request and all following.
-            counter = self._all_pos_to_tile(intersection_lane,
-                                            incoming_road_lane,
-                                            clone_to_original,
-                                            test_reservations,
-                                            valid_reservations, counter,
-                                            end_at, test_t, mark)
-            if counter < 0:
-                return valid_reservations
-
-            # 4d. Spawn the next clone if it's time, it's possible, and there
-            #     are still clones to spawn.
-            if (len(incoming_road_lane.vehicles) == 0) and (counter < end_at):
-                # Find and cache when and how the next clone enters.
-                if new_exit is None:
-                    new_exit = incoming_road_lane_original.soonest_exit(
-                        counter, last_exit)
-
-                assert new_exit is not None
-                if new_exit.t >= test_t:
-                    # The next vehicle's time has come.
-                    test_complete, counter, new_exit = self._spawn_next_clone(
-                        intersection_lane, incoming_road_lane, originals,
-                        clone_to_original, test_reservations,
-                        valid_reservations, new_exit, counter, end_at, test_t,
-                        mark)
-                    if test_complete:
-                        return valid_reservations
-
-            # 5. Update the test environment time step.
-            test_t += 1
+                break
 
         return valid_reservations
 
@@ -386,7 +331,12 @@ class Tiling(Configurable):
                    clone_to_original: Dict[Vehicle, Vehicle],
                    test_reservations: Dict[Vehicle, Reservation],
                    valid_reservations: List[Reservation],
-                   last_exit: Optional[ScheduledExit]) -> int:
+                   last_exit: Optional[ScheduledExit],
+                   originals: List[Vehicle],
+                   incoming_road_lane_original: RoadLane,
+                   mark: bool = False) -> Tuple[bool, int, int,
+                                                Optional[ScheduledExit],
+                                                Optional[ScheduledExit]]:
         """Mock the simulation loop.
 
         Refer to simulator.step() for more details on the simulation loop. Note
@@ -394,13 +344,82 @@ class Tiling(Configurable):
         when they first enter the intersection, and are removed as soon as they
         exit the intersection.
 
-        Parameters
-            ...
-
-        counter is updated in this function and returned, but all other input
-        variables are modified in place.
+        Returns:
+            test_complete: bool
+                Whether or not the check_request test is complete.
+            counter: int
+            test_t: int
+            last_exit: Optional[ScheduledExit]
+                The latest scheduled exit from the incoming road lane onto the
+                intersection lane, if there is one.
+            new_exit: Optional[ScheduledExit]
+                The exit of the next vehicle to enter the intersection, if
+                there is one on deck.
+        All other sim step variables are modified in place.
         """
-        return counter
+
+        # 1.  Update speeds for all vehicles.
+        self._mock_update_speeds(intersection_lane)
+
+        # 2a. Use the updated speeds to progress the position of the clone on
+        #     the downstream lane.
+        self._mock_outgoing_step_vehicles(outgoing_road_lane)
+
+        # 2b. Progress positions for clones in the intersection lane and
+        # 3a. transfer exiting vehicle sections onto the downstream lane.
+        # 4a. If a clone has fully exited, check the edge buffer tiles of their
+        #     reservation, and if they work separately delete the clone from
+        #     the downstream road lane as we no longer need to check its
+        #     position in the intersection.
+        test_complete = self._mock_intersection_step_vehicles(
+            intersection_lane, outgoing_road_lane, test_reservations,
+            valid_reservations, test_t, mark)
+        if test_complete:
+            return True, -1, -1, None, None
+
+        # 2c. Progress the position of the clone on the incoming road and
+        # 3b. transfer section(s) transitioning from road to intersection. If a
+        #     vehicle finishes transitioning, update last_exit with its exit.
+        last_exit = self._mock_incoming_step_vehicles(
+            incoming_road_lane, intersection_lane, clone_to_original,
+            test_reservations, last_exit, test_t)
+
+        # 4b. Check and log the tiles used by all clones still in the
+        #     intersection after the speed and position update. If a clone's
+        #     used tiles are incompatible with a confirmed reservation, reject
+        #     its request and all following.
+        counter = self._all_pos_to_tile(intersection_lane,
+                                        incoming_road_lane,
+                                        clone_to_original,
+                                        test_reservations,
+                                        valid_reservations, counter,
+                                        end_at, test_t, mark)
+        if counter < 0:
+            return True, -1, -1, None, None
+
+        # 4d. Spawn the next clone if it's time, it's possible, and there are
+        #     still clones to spawn.
+        if (len(incoming_road_lane.vehicles) == 0) and (counter < end_at):
+            # Find and cache when and how the next clone enters.
+            if new_exit is None:
+                new_exit = incoming_road_lane_original.soonest_exit(
+                    counter, last_exit)
+
+            assert new_exit is not None
+            if new_exit.t >= test_t:
+                # The next vehicle's time has come.
+                test_complete, counter, new_exit = self._spawn_next_clone(
+                    intersection_lane, incoming_road_lane, originals,
+                    clone_to_original, test_reservations,
+                    valid_reservations, new_exit, counter, end_at, test_t,
+                    mark)
+                if test_complete:
+                    return True, -1, -1, None, None
+
+        # 5. Update the test environment time step.
+        test_t += 1
+
+        return False, counter, test_t, last_exit, new_exit
 
     @staticmethod
     def _mock_update_speeds(intersection_lane: IntersectionLane) -> None:
@@ -492,7 +511,8 @@ class Tiling(Configurable):
                                      clone_to_original: Dict[Vehicle, Vehicle],
                                      test_reservations: Dict[Vehicle,
                                                              Reservation],
-                                     test_t: int) -> None:
+                                     last_exit: Optional[ScheduledExit],
+                                     test_t: int) -> Optional[ScheduledExit]:
         """Progress the incoming road lane clone's position in place.
 
         Also transfers clone sections onto the intersection lane if necessary.
@@ -506,6 +526,7 @@ class Tiling(Configurable):
                                           section=VehicleSection.REAR,
                                           t=test_t, velocity=clone.velocity)
                 test_reservations[clone].its_exit = last_exit
+        return last_exit
 
     def _all_pos_to_tile(self, intersection_lane: IntersectionLane,
                          incoming_road_lane: RoadLane,
@@ -823,8 +844,7 @@ class Tiling(Configurable):
         vehicle: Vehicle = reservation.vehicle
         vehicle.has_reservation = True
         self.queued_reservations[vehicle] = reservation
-        self.issue_permission(vehicle, lane,
-                              reservation.lane.rear_exit(reservation.its_exit))
+        self.issue_permission(vehicle, lane, reservation.its_exit)
 
     @abstractmethod
     def find_best_batch(self, requests: Dict[RoadLane, List[Reservation]]
