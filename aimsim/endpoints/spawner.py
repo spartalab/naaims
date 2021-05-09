@@ -27,7 +27,8 @@ class VehicleSpawner(Configurable, Upstream):
                  vpm: float,  # vehicles per minute
                  factory_types: List[Type[VehicleFactory]],
                  factory_specs: List[Dict[str, Any]],
-                 factory_selection_probabilities: List[float]
+                 factory_selection_probabilities: List[float],
+                 fixed_interval_spawns: List[int] = []
                  ) -> None:
         """Create a new vehicle spawner.
 
@@ -43,6 +44,8 @@ class VehicleSpawner(Configurable, Upstream):
                 The specs of the vehicle factories to create.
             factory_selection_probabilities: List[float]
                 The probability of using a specific VehicleFactory.
+            fixed_interval_spawns: List[int]
+                Override random behavior and spawn a vehicle at this timestep.
         """
 
         if len(factory_types) != len(factory_specs) != \
@@ -56,7 +59,7 @@ class VehicleSpawner(Configurable, Upstream):
 
         # Given vehicles per minute and a Poisson process, calculate the
         # probability of spawning a vehicle in each timestep.
-        # veh/min * min/sec * s
+        # veh/min *  1min/60s * s/timestep
         self.spawn_probability = (vpm/60) * SHARED.SETTINGS.TIMESTEP_LENGTH
         # Specifically, this is the probability of spawning at least one
         # vehicle in each timestep, but we assume that the probability of
@@ -70,6 +73,8 @@ class VehicleSpawner(Configurable, Upstream):
         self.factories: List[VehicleFactory] = []
         for i in range(len(factory_types)):
             self.factories.append(factory_types[i].from_spec(factory_specs[i]))
+
+        self.fixed_interval_spawns = fixed_interval_spawns
 
         # Prepare a queued spawn to fill later.
         self.queue: List[Tuple[Vehicle, List[RoadLane]]] = []
@@ -142,12 +147,23 @@ class VehicleSpawner(Configurable, Upstream):
         elif type(self.downstream) is not Road:
             raise MissingConnectionError("Downstream object is not a Road.")
 
-        # Roll to spawn a new vehicle. If the roll is successful, pick a
-        # generator to use based on the distribution of generators and use it
-        # to spawn a vehicle.
-        spawn = choices(self.factories, self.factory_selection_probabilities
-                        )[0].create_vehicle() if (
-                            random() < self.spawn_probability) else None
+        # Roll to spawn a new vehicle (or spawn one anyway if the fixed
+        # interval spawn says to). If the roll is successful, pick a generator
+        # to use based on the distribution of generators and use it to spawn a
+        # new vehicle.
+        spawn: Optional[Vehicle]
+        if (len(self.fixed_interval_spawns) > 0) and \
+                (self.fixed_interval_spawns[0] == SHARED.t):
+            spawn = choices(self.factories,
+                            self.factory_selection_probabilities
+                            )[0].create_vehicle()
+            self.fixed_interval_spawns.pop(0)
+        elif random() < self.spawn_probability:
+            spawn = choices(self.factories,
+                            self.factory_selection_probabilities
+                            )[0].create_vehicle()
+        else:
+            spawn = None
 
         # Find every downstream lane that this vehicle can enter and still
         # reach its destination. Add both to the queue.

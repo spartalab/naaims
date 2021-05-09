@@ -24,12 +24,12 @@ def test_init_2_lane(read_config: None):
     road_in = Road(trajectory1, .2*trajectory1.length,
                    SHARED.SETTINGS.speed_limit,
                    upstream_is_spawner=True, downstream_is_remover=True,
-                   num_lanes=2, lane_offset_angle=pi/2,
+                   num_lanes=2, lane_offset_angle=0,
                    len_approach_region=.7*trajectory1.length)
     road_out = Road(trajectory2, .2*trajectory2.length,
                     SHARED.SETTINGS.speed_limit,
                     upstream_is_spawner=True, downstream_is_remover=True,
-                    num_lanes=2, lane_offset_angle=pi/2,
+                    num_lanes=2, lane_offset_angle=0,
                     len_approach_region=.7*trajectory1.length)
 
     intersection = Intersection([road_in], [road_out],
@@ -60,14 +60,14 @@ def test_init_2_lane(read_config: None):
     assert len(intersection.lanes) == 2
     lane0traj = intersection.lanes[0].trajectory
     lane1traj = intersection.lanes[1].trajectory
-    assert lane0traj.start_coord == road_in.lanes[1].trajectory.end_coord
-    assert lane0traj.end_coord == road_out.lanes[1].trajectory.start_coord
+    assert lane0traj.start_coord == road_in.lanes[0].trajectory.end_coord
+    assert lane0traj.end_coord == road_out.lanes[0].trajectory.start_coord
     assert lane0traj.control_coord == (
         lane0traj.start_coord.x +
         (lane0traj.end_coord.x - lane0traj.start_coord.x)/2,
         lane0traj.start_coord.y)
-    assert lane1traj.start_coord == road_in.lanes[0].trajectory.end_coord
-    assert lane1traj.end_coord == road_out.lanes[0].trajectory.start_coord
+    assert lane1traj.start_coord == road_in.lanes[1].trajectory.end_coord
+    assert lane1traj.end_coord == road_out.lanes[1].trajectory.start_coord
     assert lane1traj.control_coord == (
         lane1traj.start_coord.x +
         (lane1traj.end_coord.x - lane1traj.start_coord.x)/2,
@@ -90,12 +90,12 @@ def test_init_3_lane(read_config: None):
     road_in = Road(trajectory1, .2*trajectory1.length,
                    SHARED.SETTINGS.speed_limit,
                    upstream_is_spawner=True, downstream_is_remover=True,
-                   num_lanes=3, lane_offset_angle=pi/2,
+                   num_lanes=3, lane_offset_angle=0,
                    len_approach_region=.7*trajectory1.length)
     road_out = Road(trajectory2, .2*trajectory2.length,
                     SHARED.SETTINGS.speed_limit,
                     upstream_is_spawner=True, downstream_is_remover=True,
-                    num_lanes=3, lane_offset_angle=pi/2,
+                    num_lanes=3, lane_offset_angle=0,
                     len_approach_region=.7*trajectory1.length)
 
     intersection = Intersection([road_in], [road_out],
@@ -115,17 +115,17 @@ def test_init_3_lane(read_config: None):
     # Test that the IO lanes got connected correctly
     assert len(intersection.lanes) == 3
     assert intersection.lanes[0].trajectory.start_coord == \
-        road_in.lanes[0].trajectory.end_coord
-    assert intersection.lanes[0].trajectory.end_coord == \
-        road_out.lanes[0].trajectory.start_coord
-    assert intersection.lanes[1].trajectory.start_coord == \
-        road_in.lanes[1].trajectory.end_coord
-    assert intersection.lanes[1].trajectory.end_coord == \
-        road_out.lanes[1].trajectory.start_coord
-    assert intersection.lanes[2].trajectory.start_coord == \
         road_in.lanes[2].trajectory.end_coord
-    assert intersection.lanes[2].trajectory.end_coord == \
+    assert intersection.lanes[0].trajectory.end_coord == \
         road_out.lanes[2].trajectory.start_coord
+    assert intersection.lanes[1].trajectory.start_coord == \
+        road_in.lanes[0].trajectory.end_coord
+    assert intersection.lanes[1].trajectory.end_coord == \
+        road_out.lanes[0].trajectory.start_coord
+    assert intersection.lanes[2].trajectory.start_coord == \
+        road_in.lanes[1].trajectory.end_coord
+    assert intersection.lanes[2].trajectory.end_coord == \
+        road_out.lanes[1].trajectory.start_coord
 
 
 def test_init_right_turn(read_config: None):
@@ -138,12 +138,12 @@ def test_init_right_turn(read_config: None):
     road_in = Road(trajectory1, .2*trajectory1.length,
                    SHARED.SETTINGS.speed_limit,
                    upstream_is_spawner=True, downstream_is_remover=True,
-                   num_lanes=2, lane_offset_angle=pi/2,
+                   num_lanes=2, lane_offset_angle=0,
                    len_approach_region=.7*trajectory1.length)
     road_out = Road(trajectory2, .2*trajectory2.length,
                     SHARED.SETTINGS.speed_limit,
                     upstream_is_spawner=True, downstream_is_remover=True,
-                    num_lanes=2, lane_offset_angle=pi/2,
+                    num_lanes=2, lane_offset_angle=0,
                     len_approach_region=.7*trajectory1.length)
 
     intersection = Intersection([road_in], [road_out],
@@ -182,12 +182,12 @@ def test_init_left_turn(read_config: None):
     road_in = Road(trajectory1, .2*trajectory1.length,
                    SHARED.SETTINGS.speed_limit,
                    upstream_is_spawner=True, downstream_is_remover=True,
-                   num_lanes=2, lane_offset_angle=pi/2,
+                   num_lanes=2, lane_offset_angle=0,
                    len_approach_region=.7*trajectory1.length)
     road_out = Road(trajectory2, .2*trajectory2.length,
                     SHARED.SETTINGS.speed_limit,
                     upstream_is_spawner=True, downstream_is_remover=True,
-                    num_lanes=2, lane_offset_angle=pi/2,
+                    num_lanes=2, lane_offset_angle=0,
                     len_approach_region=.7*trajectory1.length)
 
     intersection = Intersection([road_in], [road_out],
@@ -228,12 +228,12 @@ def test_speed_and_step(read_config: None, vehicle: AutomatedVehicle,
     road_in = Road(trajectory1, .2*trajectory1.length,
                    SHARED.SETTINGS.speed_limit,
                    upstream_is_spawner=True, downstream_is_remover=True,
-                   num_lanes=2, lane_offset_angle=pi/2,
+                   num_lanes=2, lane_offset_angle=0,
                    len_approach_region=.7*trajectory1.length)
     road_out = Road(trajectory2, .2*trajectory2.length,
                     SHARED.SETTINGS.speed_limit,
                     upstream_is_spawner=True, downstream_is_remover=True,
-                    num_lanes=2, lane_offset_angle=pi/2,
+                    num_lanes=2, lane_offset_angle=0,
                     len_approach_region=.7*trajectory1.length)
 
     intersection = Intersection([road_in], [road_out],

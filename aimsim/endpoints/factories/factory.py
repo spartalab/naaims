@@ -71,7 +71,7 @@ class VehicleFactory(Configurable):
             else:
                 self.destination_probabilities = [
                     1/num_destinations]*num_destinations
-        self.destinations = num_destinations
+        self.num_destinations = num_destinations
 
     @staticmethod
     @abstractmethod
@@ -95,7 +95,7 @@ class VehicleFactory(Configurable):
         SHARED.vin_counter += 1
         return vin
 
-    def _pick_vehicle_type(self) -> int:
+    def pick_destination(self) -> int:
         """Randomly choose a destination."""
-        return choices(list(range(self.destinations)),
+        return choices(list(range(self.num_destinations)),
                        weights=self.destination_probabilities)[0]

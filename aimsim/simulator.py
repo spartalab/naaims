@@ -4,13 +4,17 @@ of the AIM simulator, including visualizations if enabled.
 """
 
 from __future__ import annotations
-from typing import List, Tuple, Dict, Optional, Set, Any
-from matplotlib import pyplot as plt
+from typing import Generator, List, Tuple, Dict, Optional, Set, Any, Union
+from math import sin, cos
+
+from matplotlib.pyplot import subplots
+from matplotlib.patches import Rectangle, Polygon
+from matplotlib.animation import FuncAnimation
 
 import aimsim.shared as SHARED
 from aimsim.util import Coord, SpeedUpdate
 from aimsim.pathfinder import Pathfinder
-from aimsim.archetypes import Configurable, Facility, Upstream, Downstream
+from aimsim.archetypes import Facility, Upstream, Downstream
 from aimsim.intersection import Intersection
 from aimsim.road import Road
 from aimsim.endpoints import VehicleSpawner, VehicleRemover
@@ -40,7 +44,7 @@ class Simulator:
                  lane_destination_pairs: Optional[Dict[Tuple[Coord, int],
                                                        List[Coord]]] = None,
                  config_filename: str = './config.ini',
-                 display: bool = False) -> None:
+                 visualize: bool = False) -> None:
         """Create all roads, intersections, and suppport structures.
 
         Parameters
@@ -58,7 +62,7 @@ class Simulator:
                 the need for shortest path calculations.
             config_filename: str = './config.ini'
                 The location of the config file.
-            display: bool = False
+            visualize: bool = False
                 Whether to visualize the progress of the simulation.
         """
 
@@ -239,62 +243,115 @@ class Simulator:
 
         # 5. If the visualize flag is enabled, draw the basemap image of
         #    roads and intersections for use later.
-        if display:
-            # 6a. loop through all roads and visualize their length, width,
+        self.visualize = visualize
+        if self.visualize:
+            # Some configurable values
+            figsize = (10, 10)
+            background_color = '#2d5138'  # '#bf5700'  # 'black'
+            lane_dash_color = '#d6d2c4'  # '.8'  # '.8'
+            road_sep_color = '#ffd600'  # 'y'
+            road_color = '#333f48'  # '.5'
+            self.vehicle_color = '.9'  # '#ffffff'  # 'g'
+
+            self.fig, self.ax = subplots(figsize=figsize)
+            # TODO: Variable figsize.
+            self.fig.subplots_adjust(left=0, bottom=0, right=1, top=1,
+                                     wspace=None, hspace=None)
+            self.fig.patch.set_facecolor(background_color)
+            self.ax.margins(x=0, y=0)
+            # self.fig.patch.set_edgecolor(None)
+            self.fig.patch.set_alpha(1)
+            self.ax.axis('off')
+            # self.ax.get_xaxis().set_visible(False)
+            # self.ax.get_yaxis().set_visible(False)
+            # self.ax.set_edgecolor(None)
+            self.ax.patch.set_alpha(0)
+            self.ax.set_aspect(1)
+
+            min_x = max_x = self.roads[0].trajectory.start_coord.x
+            min_y = max_y = self.roads[0].trajectory.start_coord.x
+
+            # 6a. Loop through all roads and visualize their length, width,
             #     and lane markings, etc. using their trajectory.
-            for road in self.roads:
-                raise NotImplementedError("TODO")
-                # road.display()
+            for road in self.roads.values():
+                # TODO: Account for road width and angle
+                spacing = Coord(road.lane_width*sin(road.lane_offset_angle),
+                                road.lane_width*cos(road.lane_offset_angle))
 
-            # loop through all intersections and visualize their area
-            for intersection in self.intersections:
-                raise NotImplementedError("TODO")
-                # intersection.display()
+                # Plot lane markings
+                for lane in road.lanes[:-1]:
+                    coords: List[Coord] = [lane.trajectory.start_coord,
+                                           lane.trajectory.end_coord]
+                    self.ax.plot([c.x+spacing.x for c in coords],
+                                 [c.y+spacing.y for c in coords],
+                                 '--', c=lane_dash_color)
 
-            # Save the result of the road+intersection vis into a property
-            # self.vis_basemap = whatever
+                # Plot road edge markings
+                lane_first = road.lanes[0]
+                coords = [lane_first.trajectory.start_coord,
+                          lane_first.trajectory.end_coord]
+                top_xs = [c.x-spacing.x for c in coords]
+                top_ys = [c.y-spacing.y for c in coords]
+                self.ax.plot(top_xs, top_ys, c=road_sep_color)
+                lane_last = road.lanes[-1]
+                coords = [lane_last.trajectory.start_coord,
+                          lane_last.trajectory.end_coord]
+                bot_xs = [c.x+spacing.x for c in coords]
+                bot_ys = [c.y+spacing.y for c in coords]
+                self.ax.plot(bot_xs, bot_ys, c=road_sep_color)
 
-            # TODO: (visualize) Old code, revise. If revise, revamp to draw
-            #       lanes better and to include vehicles.
-            # lanes = list(self.intersection.incomingLanes.keys())
-            # for ls in self.intersection.outgoingLanes.values():
-            #     for l in ls:
-            #         lanes.append(l)
-            # print(lanes)
-            # plt.figure(figsize=(15, 16))
-            # ax = plt.gca()
-            # plt.xlim(-plot_lim, plot_lim)
-            # plt.ylim(-plot_lim, plot_lim)
-            # for i, r in enumerate(lanes):
-            #     if r not in self.intersection.intersection_lanes:
-            #         plt.arrow(r.trajectory.p0[0],
-            #                   r.trajectory.p0[1],
-            #                   r.trajectory.p2[0] - r.trajectory.p0[0],
-            #                   r.trajectory.p2[1] - r.trajectory.p0[1],
-            #                   head_width=1,
-            #                   overhang=.5)
+                # Fill in road
+                self.ax.add_patch(Polygon([[top_xs[0], top_ys[0]],
+                                           [top_xs[1], top_ys[1]],
+                                           [bot_xs[1], bot_ys[1]],
+                                           [bot_xs[0], bot_ys[0]]],
+                                          facecolor=road_color))
 
-            # for i, r in enumerate(self.intersection.outgoingLanes.keys()):
-            #     if r not in self.intersection.intersection_lanes:
-            #         plt.arrow(r.trajectory.p0[0],
-            #                   r.trajectory.p0[1],
-            #                   r.trajectory.p2[0] - r.trajectory.p0[0],
-            #                   r.trajectory.p2[1] - r.trajectory.p0[1],
-            #                   head_width=1,
-            #                   overhang=1,
-            #                   color='r')
+                # Update all-plot bounds
+                coords = [road.trajectory.start_coord,
+                          road.trajectory.end_coord]
+                xs = [c.x for c in coords]
+                ys = [c.y for c in coords]
+                for x in xs:
+                    if min_x > x:
+                        min_x = x
+                    if max_x < x:
+                        max_x = x
+                for y in ys:
+                    if min_y > y:
+                        min_y = y
+                    if max_y < y:
+                        max_y = y
 
-            # for traj in self.intersection.intersection_lanes:
-            #     traj.trajectory.get_curve().plot(256, ax=ax)
+            # 6b. Loop through all intersections and visualize their area.
+            for intersection in self.intersections.values():
+                int_min_x = int_max_x = \
+                    intersection.lanes[0].trajectory.start_coord.x
+                int_min_y = int_max_y = \
+                    intersection.lanes[0].trajectory.start_coord.y
+                coords = []
+                for i_lane in intersection.lanes:
+                    coords.append(i_lane.trajectory.start_coord)
+                    coords.append(i_lane.trajectory.end_coord)
+                xs = [c.x for c in coords]
+                ys = [c.y for c in coords]
+                for x in xs:
+                    if int_min_x > x:
+                        int_min_x = x
+                    if int_max_x < x:
+                        int_max_x = x
+                for y in ys:
+                    if int_min_y > y:
+                        int_min_y = y
+                    if int_max_y < y:
+                        int_max_y = y
+                self.ax.add_patch(Rectangle((int_min_x, int_min_y),
+                                            int_max_x-int_min_x,
+                                            int_max_y-int_min_y,
+                                            facecolor='.5'))
 
-            # # self.intersection.find_conflicts()
-            # # print(len(self.intersection.conflicts))
-            # x = [cp.point[0] for cp in self.intersection.conflicts]
-            # y = [cp.point[1] for cp in self.intersection.conflicts]
-            # ax.scatter(x, y)
-            # if figname:
-            #     plt.savefig(figname)
-            # plt.show()
+            # 6c. Ready a list for all vehicles being plotted.
+            self.vehicle_patches: List[Polygon] = []
 
     def step(self) -> None:
         """Execute one simulation step."""
@@ -379,13 +436,40 @@ class Simulator:
             log_image.append((self.vehicle_entry_times[vehicle], None, None))
         return log_image
 
-    def display(self) -> None:
-        """Display the current position of all vehicles on the grid."""
+    def animate(self, frame_ratio: int = 1, max_timestep: int = 10*60
+                ) -> FuncAnimation:
+        """Animate the simulation run.
 
-        # TODO: consider having this return an image instead
+        Parameters:
+            frame_ratio: int = 1
+                How often to save frames per sim timestep, in timesteps per
+                frame. Defaults saves one frame per timestep.
+        """
 
-        # since vehicles are the only things that change position on each step
-        # loop through all vehicles and draw their position on the base image
-        # at self.vis_basemap
-        # for vehicle in self.Vehicles.values():
-        raise NotImplementedError("TODO")
+        t0 = SHARED.t
+
+        def draw(vehicles: Set[Vehicle]) -> List[Polygon]:
+            changed = self.vehicle_patches.copy()
+            for patch in self.vehicle_patches:
+                patch.remove()
+            self.vehicle_patches = []
+            for vehicle in vehicles:
+                vehicle_patch = Polygon(vehicle.get_outline(),
+                                        facecolor=self.vehicle_color, alpha=1,
+                                        edgecolor=None, zorder=5)
+                self.ax.add_patch(vehicle_patch)
+                self.vehicle_patches.append(vehicle_patch)
+                changed.append(vehicle_patch)
+            return changed
+
+        def get_next_frame() -> Generator[Set[Vehicle], None, None]:
+            while (SHARED.t - t0) < max_timestep:
+                self.step()
+                if len(self.vehicles_in_scope) > 0:
+                    assert len(self.vehicles_in_scope) > 0
+                if (SHARED.t - t0) % frame_ratio == 0:
+                    yield self.vehicles_in_scope
+
+        return FuncAnimation(self.fig, draw, frames=get_next_frame,
+                             interval=frame_ratio *
+                             SHARED.SETTINGS.TIMESTEP_LENGTH * 1000, save_count=max_timestep*frame_ratio, blit=True)

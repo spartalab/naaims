@@ -21,7 +21,7 @@ Roads are divided into up to 3 sections:
 
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING, Type, Iterable, Dict, Any, Tuple, List
-from math import sin, cos
+from math import pi, sin, cos
 
 from aimsim.vehicles import Vehicle
 from aimsim.trajectories import Trajectory, BezierTrajectory
@@ -84,7 +84,11 @@ class Road(Configurable, Facility, Upstream, Downstream):
             lane_width: float
                 The width of each lane (assumed equal for every lane) in meters
             lane_offset_angle: float
-                Angle by which to offset each lane in radians
+                Angle by which to offset each lane in radians. Measured
+                relative to the lane_width, i.e., perpendicular to the
+                direction of the road. If your road vector, points to the
+                right, 0 lane_offset_angle points up. pi/2 lane_off_set angle
+                will see your lanes offset from bottom left to top right.
             len_approach_region: float
                 How long the approach region is in meters
 
@@ -99,8 +103,8 @@ class Road(Configurable, Facility, Upstream, Downstream):
             raise ValueError(
                 'Need lane_offset if there\'s more than one lane.')
         if ((lane_offset_angle is not None) and
-                (lane_offset_angle < 0 or lane_offset_angle >= 360)):
-            raise ValueError('lane_offset_angle must be between [0,360) deg')
+                (lane_offset_angle <= -pi/2 or lane_offset_angle >= pi/2)):
+            raise ValueError('lane_offset_angle must be between +/- pi/2.')
         if (
             (manager_type is DummyManager) and (trajectory.length < max(
                 len_entrance_region, len_approach_region
@@ -124,8 +128,8 @@ class Road(Configurable, Facility, Upstream, Downstream):
         self.speed_limit = speed_limit
 
         # Calculate lane offsets
-        spacing = Coord(lane_width*cos(lane_offset_angle),
-                        lane_width*sin(lane_offset_angle))
+        spacing = Coord(lane_width*sin(lane_offset_angle),
+                        lane_width*cos(lane_offset_angle))
         offset_count = (num_lanes-1)/2
         starting_offset: Coord = Coord(-offset_count*spacing.x,
                                        -offset_count*spacing.y)

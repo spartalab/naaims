@@ -33,20 +33,20 @@ def test_road_lane_offsets(mocker: MockerFixture, read_config: None):
                        upstream_is_spawner=True, downstream_is_remover=True,
                        num_lanes=2, lane_width=lane_width)
     assert road_2_lane.lanes[0].trajectory.start_coord == Coord(
-        straight_trajectory.start_coord.x - lane_width/2,
-        straight_trajectory.start_coord.y
+        straight_trajectory.start_coord.x,
+        straight_trajectory.start_coord.y - lane_width/2
     )
     assert road_2_lane.lanes[0].trajectory.end_coord == Coord(
-        straight_trajectory.end_coord.x - lane_width/2,
-        straight_trajectory.end_coord.y
+        straight_trajectory.end_coord.x,
+        straight_trajectory.end_coord.y - lane_width/2
     )
     assert road_2_lane.lanes[1].trajectory.start_coord == Coord(
-        straight_trajectory.start_coord.x + lane_width/2,
-        straight_trajectory.start_coord.y
+        straight_trajectory.start_coord.x,
+        straight_trajectory.start_coord.y + lane_width/2
     )
     assert road_2_lane.lanes[1].trajectory.end_coord == Coord(
-        straight_trajectory.end_coord.x + lane_width/2,
-        straight_trajectory.end_coord.y
+        straight_trajectory.end_coord.x,
+        straight_trajectory.end_coord.y + lane_width/2
     )
 
     # 3-lane road. Center lane should have same trajectory, with one lane to
@@ -56,24 +56,24 @@ def test_road_lane_offsets(mocker: MockerFixture, read_config: None):
                        upstream_is_spawner=True, downstream_is_remover=True,
                        num_lanes=3, lane_width=lane_width)
     assert road_3_lane.lanes[0].trajectory.start_coord == Coord(
-        straight_trajectory.start_coord.x - lane_width,
-        straight_trajectory.start_coord.y
+        straight_trajectory.start_coord.x,
+        straight_trajectory.start_coord.y - lane_width
     )
     assert road_3_lane.lanes[0].trajectory.end_coord == Coord(
-        straight_trajectory.end_coord.x - lane_width,
-        straight_trajectory.end_coord.y
+        straight_trajectory.end_coord.x,
+        straight_trajectory.end_coord.y - lane_width
     )
     assert road_3_lane.lanes[1].trajectory.start_coord == \
         straight_trajectory.start_coord
     assert road_3_lane.lanes[1].trajectory.end_coord == \
         straight_trajectory.end_coord
     assert road_3_lane.lanes[2].trajectory.start_coord == Coord(
-        straight_trajectory.start_coord.x + lane_width,
-        straight_trajectory.start_coord.y
+        straight_trajectory.start_coord.x,
+        straight_trajectory.start_coord.y + lane_width
     )
     assert road_3_lane.lanes[2].trajectory.end_coord == Coord(
-        straight_trajectory.end_coord.x + lane_width,
-        straight_trajectory.end_coord.y
+        straight_trajectory.end_coord.x,
+        straight_trajectory.end_coord.y + lane_width
     )
 
     # 2-lane road with ends at a 45 degree angle
@@ -85,20 +85,20 @@ def test_road_lane_offsets(mocker: MockerFixture, read_config: None):
                               downstream_is_remover=True,
                               num_lanes=2, lane_offset_angle=angle)
     assert road_2_lane_angled.lanes[0].trajectory.start_coord == approx(Coord(
-        straight_trajectory.start_coord.x - lane_width*sin(angle)/2,
-        straight_trajectory.start_coord.y - lane_width*cos(angle)/2
+        straight_trajectory.start_coord.x - lane_width*cos(angle)/2,
+        straight_trajectory.start_coord.y - lane_width*sin(angle)/2
     ))
     assert road_2_lane_angled.lanes[0].trajectory.end_coord == approx(Coord(
-        straight_trajectory.end_coord.x - lane_width*sin(angle)/2,
-        straight_trajectory.end_coord.y - lane_width*cos(angle)/2
+        straight_trajectory.end_coord.x - lane_width*cos(angle)/2,
+        straight_trajectory.end_coord.y - lane_width*sin(angle)/2
     ))
     assert road_2_lane_angled.lanes[1].trajectory.start_coord == approx(Coord(
-        straight_trajectory.start_coord.x + lane_width*sin(angle)/2,
-        straight_trajectory.start_coord.y + lane_width*cos(angle)/2
+        straight_trajectory.start_coord.x + lane_width*cos(angle)/2,
+        straight_trajectory.start_coord.y + lane_width*sin(angle)/2
     ))
     assert road_2_lane_angled.lanes[1].trajectory.end_coord == approx(Coord(
-        straight_trajectory.end_coord.x + lane_width*sin(angle)/2,
-        straight_trajectory.end_coord.y + lane_width*cos(angle)/2
+        straight_trajectory.end_coord.x + lane_width*cos(angle)/2,
+        straight_trajectory.end_coord.y + lane_width*sin(angle)/2
     ))
 
 
@@ -134,10 +134,10 @@ def test_step_and_speeds(read_config: None):
     road.step_vehicles()
     assert veh1.pos == approx(Coord(veh1.length*(
         .5+SHARED.SETTINGS.length_buffer_factor
-    ) - .5*road.lane_width, 0))
+    ), - .5*road.lane_width))
     assert veh2.pos == approx(Coord(veh2.length*(
         .5+SHARED.SETTINGS.length_buffer_factor
-    ) + .5*road.lane_width, 0))
+    ), .5*road.lane_width))
 
     # Get their speeds in the next timestep
     new_speeds = road.get_new_speeds()

@@ -1,5 +1,7 @@
 from typing import Any, Dict, List, Tuple
 
+from IPython.display import HTML
+
 from aimsim.simulator import Simulator
 from aimsim.vehicles import AutomatedVehicle
 from aimsim.endpoints.factories import GaussianVehicleFactory
@@ -11,9 +13,9 @@ def test_blank_simulator(clean_config: None):
     Simulator([], [], [], [], {})
 
 
-def test_one_lane_road_simulator(clean_config: None):
-    trajectory = BezierTrajectory(Coord(0, 0), Coord(100, 0),
-                                  [Coord(50, 0)])
+def make_one_lane_simulator(visualize: bool = False):
+    trajectory = BezierTrajectory(Coord(0, 0), Coord(10, 0),
+                                  [Coord(5, 0)])
     road_spec: Dict[str, Any] = dict(
         id=0,
         upstream_id=0,
@@ -63,7 +65,18 @@ def test_one_lane_road_simulator(clean_config: None):
     od_pair: Dict[Tuple[Coord, int], List[Coord]] = {
         (trajectory.end_coord, 0): [trajectory.end_coord]
     }
-    sim = Simulator([road_spec], [], [spawner_spec], [remover_spec], od_pair)
-    for _ in range(60*60):
+    return Simulator([road_spec], [], [spawner_spec], [remover_spec], od_pair,
+                     visualize=visualize)
+
+
+def test_one_lane_road_simulator(clean_config: None):
+    sim = make_one_lane_simulator(visualize=False)
+    for _ in range(10*60):
         sim.step()
-    print(sim.fetch_log())
+    print(len(sim.fetch_log()), len(sim.vehicles_in_scope))
+    print(len(sim.fetch_log()) + len(sim.vehicles_in_scope))
+
+
+def test_one_lane_visualization(clean_config: None):
+    sim = make_one_lane_simulator(visualize=True)
+    HTML(sim.animate(max_timestep=60).to_html5_video())

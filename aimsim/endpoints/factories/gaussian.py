@@ -120,7 +120,7 @@ class GaussianVehicleFactory(VehicleFactory):
     def create_vehicle(self) -> Vehicle:
         """Create a new vehicle with normally distributed parameters."""
 
-        dest = self._pick_vehicle_type()
+        dest = self.pick_destination()
         max_accel = gauss(self.max_accel_mn, self.max_accel_sd)
         max_braking = gauss(self.max_braking_mn, self.max_braking_sd)
         length = gauss(self.length_mn, self.length_sd)
