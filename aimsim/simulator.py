@@ -4,7 +4,7 @@ of the AIM simulator, including visualizations if enabled.
 """
 
 from __future__ import annotations
-from typing import Generator, List, Tuple, Dict, Optional, Set, Any, Union
+from typing import Generator, List, Tuple, Dict, Optional, Set, Any
 from math import sin, cos
 
 from matplotlib.pyplot import subplots
@@ -258,13 +258,9 @@ class Simulator:
             self.fig.subplots_adjust(left=0, bottom=0, right=1, top=1,
                                      wspace=None, hspace=None)
             self.fig.patch.set_facecolor(background_color)
-            self.ax.margins(x=0, y=0)
-            # self.fig.patch.set_edgecolor(None)
             self.fig.patch.set_alpha(1)
+            self.ax.margins(x=0, y=0)
             self.ax.axis('off')
-            # self.ax.get_xaxis().set_visible(False)
-            # self.ax.get_yaxis().set_visible(False)
-            # self.ax.set_edgecolor(None)
             self.ax.patch.set_alpha(0)
             self.ax.set_aspect(1)
 
@@ -275,8 +271,8 @@ class Simulator:
             #     and lane markings, etc. using their trajectory.
             for road in self.roads.values():
                 # TODO: Account for road width and angle
-                spacing = Coord(road.lane_width*sin(road.lane_offset_angle),
-                                road.lane_width*cos(road.lane_offset_angle))
+                spacing = Coord(road.lane_width*sin(road.lane_offset_angle)/2,
+                                road.lane_width*cos(road.lane_offset_angle)/2)
 
                 # Plot lane markings
                 for lane in road.lanes[:-1]:

@@ -231,6 +231,7 @@ class VehicleSpawner(Configurable, Upstream):
                     blocked_lanes.add(lane)
                     vehicles_transferred.append(vehicle_to_transfer)
                     queue_entries_to_delete.append(i)
+                    break
 
             if not vehicle_can_transfer:
                 blocked_lanes.update(eligible_lanes)
