@@ -5,12 +5,14 @@ processing and record-keeping.
 '''
 
 from __future__ import annotations
-from typing import List, Dict, Any
+from typing import List, Dict, Any, TYPE_CHECKING
 
 from aimsim.archetypes import Configurable, Downstream
 from aimsim.util import VehicleSection
-from aimsim.road import Road
-from aimsim.vehicles import Vehicle
+
+if TYPE_CHECKING:
+    from aimsim.vehicles import Vehicle
+    from aimsim.road import Road
 
 
 class VehicleRemover(Configurable, Downstream):

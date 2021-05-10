@@ -312,23 +312,29 @@ class Lane(ABC):
         calculating the stopping distance as the length of lane left ahead of
         this vehicle.
         """
-
-        available_stopping_distance = (1-p)*self.trajectory.length if \
-            available_stopping_distance is None \
-            else available_stopping_distance
-
         # Check the acceleration against the speed limit.
         a_maybe = self.accel_update_uncontested(vehicle, p)
         if a_maybe < 0:  # need to brake regardless of closeness
             return a_maybe
-        elif vehicle.stopping_distance(
-            vehicle.velocity + SHARED.SETTINGS.TIMESTEP_LENGTH *
+
+        # Default to the distance to the intersection if the available stopping
+        # distance is not provided.
+        available_stopping_distance = (1-p)*self.trajectory.length if \
+            available_stopping_distance is None \
+            else available_stopping_distance
+
+        acceleration_option_speed = vehicle.velocity + \
+            SHARED.SETTINGS.TIMESTEP_LENGTH * SHARED.SETTINGS.min_acceleration
+
+        if vehicle.stopping_distance(
+            acceleration_option_speed + SHARED.SETTINGS.TIMESTEP_LENGTH *
                 SHARED.SETTINGS.min_acceleration
         ) <= available_stopping_distance:
             # Accelerating will still keep this vehicle in the available
             # stopping distance. Make sure to check against the speed limit.
             return min(a_maybe, SHARED.SETTINGS.min_acceleration)
-        elif vehicle.stopping_distance() <= available_stopping_distance:
+        elif vehicle.stopping_distance(acceleration_option_speed
+                                       ) <= available_stopping_distance:
             # Maintaining speed will keep this vehicle in the available
             # stopping distance, but speeding up won't.
             return 0
@@ -478,7 +484,8 @@ class Lane(ABC):
 
         # Find the distance traveled in this timestep.
         distance_traveled: float = vehicle.velocity * \
-            SHARED.SETTINGS.TIMESTEP_LENGTH
+            SHARED.SETTINGS.TIMESTEP_LENGTH + \
+            vehicle.acceleration * SHARED.SETTINGS.TIMESTEP_LENGTH**2
 
         # Iterate through the 3 sections of the vehicle.
         for i, progress in enumerate(old_progress):

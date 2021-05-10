@@ -20,7 +20,7 @@ Roads are divided into up to 3 sections:
 
 
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING, Type, Iterable, Dict, Any, Tuple, List
+from typing import Optional, Type, Iterable, Dict, Any, Tuple, List
 from math import pi, sin, cos
 
 from aimsim.vehicles import Vehicle
@@ -31,9 +31,7 @@ from aimsim.util import (Coord, MissingConnectionError, VehicleTransfer,
 from aimsim.archetypes import Configurable, Facility, Upstream, Downstream
 from aimsim.road.managers import LaneChangeManager, DummyManager
 from aimsim.intersection import Intersection
-
-if TYPE_CHECKING:
-    from aimsim.endpoints import VehicleSpawner, VehicleRemover
+from aimsim.endpoints import VehicleSpawner, VehicleRemover
 
 
 class Road(Configurable, Facility, Upstream, Downstream):
@@ -128,8 +126,9 @@ class Road(Configurable, Facility, Upstream, Downstream):
         self.speed_limit = speed_limit
 
         # Calculate lane offsets
-        spacing = Coord(lane_width*sin(lane_offset_angle),
-                        lane_width*cos(lane_offset_angle))
+        offset_angle_corrected = lane_offset_angle + trajectory.get_heading(1)
+        spacing = Coord(lane_width*sin(offset_angle_corrected),
+                        lane_width*cos(offset_angle_corrected))
         offset_count = (num_lanes-1)/2
         starting_offset: Coord = Coord(-offset_count*spacing.x,
                                        -offset_count*spacing.y)

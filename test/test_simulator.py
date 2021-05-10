@@ -1,6 +1,7 @@
 from aimsim.simulator import Simulator
 from scenarios.road_only import OneLaneRoadSim, TwoLaneRoadSim, \
     ThreeLaneRoadSim
+from scenarios import SingleLaneXNoTurnsSim
 
 
 def test_blank_simulator(clean_config: None):
@@ -8,18 +9,24 @@ def test_blank_simulator(clean_config: None):
 
 
 def test_one_lane_road_simulator(clean_config: None):
-    sim = OneLaneRoadSim(visualize=False, length=10)
+    sim = OneLaneRoadSim(visualize=False, length=30)
     for _ in range(10*60):
         sim.step()
 
 
 def test_two_lane_road_simulator(clean_config: None):
-    sim = TwoLaneRoadSim(visualize=False, length=10)
+    sim = TwoLaneRoadSim(visualize=False, length=30)
     for _ in range(60*60):
         sim.step()
 
 
 def test_three_lane_road_simulator(clean_config: None):
-    sim = ThreeLaneRoadSim(visualize=False, length=10)
+    sim = ThreeLaneRoadSim(visualize=False, length=30)
     for _ in range(60*60):
+        sim.step()
+
+
+def test_single_lane_x_no_turns_simulator(clean_config: None):
+    sim = SingleLaneXNoTurnsSim(visualize=False, length=30)
+    for _ in range(120*60):
         sim.step()

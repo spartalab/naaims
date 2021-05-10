@@ -1,5 +1,4 @@
 from __future__ import annotations
-from aimsim.intersection.lane import IntersectionLane
 from copy import copy
 from math import ceil, sqrt, isclose
 from typing import Literal, TYPE_CHECKING, Tuple, Optional, List, Dict, Set, TypeVar

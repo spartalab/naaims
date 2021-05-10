@@ -1,10 +1,8 @@
 from __future__ import annotations
-from math import ceil, isclose, sqrt
 from typing import TYPE_CHECKING, Dict, Tuple, Type, Any, List
 
 import aimsim.shared as SHARED
-from aimsim.util import Coord, VehicleSection
-from aimsim.lane import ScheduledExit
+from aimsim.util import Coord
 from aimsim.vehicles import Vehicle
 from aimsim.intersection.tilings import Tiling
 from aimsim.intersection import IntersectionLane
@@ -44,12 +42,13 @@ class StopSignManager(IntersectionManager):
         # the minimum distance a vehicle can travel after coming to a complete
         # stop, i.e., doing the acceleration action in one timestep and then
         # doing enough braking actions in following timesteps to bring its
-        # velocity back to 0.
+        # velocity back to 0. Boost this by a factor of 2 to account for
+        # conservativeness in when the vehicle starts braking.
         a = SHARED.SETTINGS.min_acceleration
         b = SHARED.SETTINGS.min_braking
         t_a = SHARED.SETTINGS.TIMESTEP_LENGTH
         t_b = (-a/b if -a/b > 1 else 1)*t_a
-        self.tol_closeness = .5*a*t_a**2 + (a*t_a)*t_b + .5*b*t_b**2
+        self.tol_closeness = 2*(.5*a*t_a**2 + (a*t_a)*t_b + .5*b*t_b**2)
 
     def process_requests(self) -> None:
 

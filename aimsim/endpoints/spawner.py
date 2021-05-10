@@ -13,11 +13,10 @@ from aimsim.archetypes import Configurable, Upstream
 from aimsim.util import VehicleTransfer, MissingConnectionError, VehicleSection
 from aimsim.endpoints.factories import (VehicleFactory,
                                         GaussianVehicleFactory)
-from aimsim.road import Road
 
 if TYPE_CHECKING:
     from aimsim.vehicles import Vehicle
-    from aimsim.road import RoadLane
+    from aimsim.road import Road, RoadLane
 
 
 class VehicleSpawner(Configurable, Upstream):
@@ -144,8 +143,6 @@ class VehicleSpawner(Configurable, Upstream):
 
         if self.downstream is None:
             raise MissingConnectionError("No downstream object.")
-        elif type(self.downstream) is not Road:
-            raise MissingConnectionError("Downstream object is not a Road.")
 
         # Roll to spawn a new vehicle (or spawn one anyway if the fixed
         # interval spawn says to). If the roll is successful, pick a generator

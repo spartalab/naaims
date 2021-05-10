@@ -217,7 +217,7 @@ class Vehicle(ABC):
         """
         if speed is None:
             speed = self.velocity
-        return speed**2/(-2*self.__max_braking)
+        return speed**2/(-2*SHARED.SETTINGS.min_braking)
 
     def next_movements(self, enters_intersection_at: Coord,
                        at_least_one: bool = True) -> List[Coord]:

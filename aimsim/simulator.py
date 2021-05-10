@@ -118,12 +118,23 @@ class Simulator:
                     f"Spec has intersection {iid} but no road does.")
 
             # Put the upstream and downstream roads in this spec
-            spec['upstream_roads'] = {}
-            for rid in spec['upstream_road_ids']:
-                spec['upstream_roads'][rid] = self.roads[rid]
-            spec['downstream_roads'] = {}
-            for rid in spec['downstream_road_ids']:
-                spec['downstream_roads'][rid] = self.roads[rid]
+            spec['incoming_roads'] = []
+            for rid in spec['incoming_road_ids']:
+                # spec['incoming_roads'][rid] = self.roads[rid]
+                spec['incoming_roads'].append(self.roads[rid])
+            spec['outgoing_roads'] = []
+            for rid in spec['outgoing_road_ids']:
+                # spec['outgoing_roads'][rid] = self.roads[rid]
+                spec['outgoing_roads'].append(self.roads[rid])
+
+            # Convert the road IDs in the connectivity matrix into Roads
+            connectivity: List[Tuple[int, int, bool]] = spec['connectivity']
+            connectivity_converted: List[Tuple[Road, Road, bool]] = []
+            for road_in_id, road_out_id, fully_connected in connectivity:
+                connectivity_converted.append((self.roads[road_in_id],
+                                               self.roads[road_out_id],
+                                               fully_connected))
+            spec['connectivity'] = connectivity_converted
 
             # Create the intersection
             self.intersections[iid] = Intersection.from_spec(spec)
@@ -174,7 +185,7 @@ class Simulator:
             self.roads[rid].connect_upstream(self.spawners[sid])
 
             # On the road side, track that we've created this spawner
-            del spawner_rids[rid]
+            del spawner_rids[sid]
 
         # Check if every road's spawner (if it has one) has been created
         if len(spawner_rids) > 0:
@@ -209,7 +220,7 @@ class Simulator:
             self.roads[rid].connect_downstream(self.removers[vid])
 
             # On the road side, track that we've created this remover
-            del remover_rids[rid]
+            del remover_rids[vid]
 
         # Check if every road's remover (if it has one) has been created
         if len(remover_rids) > 0:
@@ -270,9 +281,10 @@ class Simulator:
             # 6a. Loop through all roads and visualize their length, width,
             #     and lane markings, etc. using their trajectory.
             for road in self.roads.values():
-                # TODO: Account for road width and angle
-                spacing = Coord(road.lane_width*sin(road.lane_offset_angle)/2,
-                                road.lane_width*cos(road.lane_offset_angle)/2)
+                offset_angle = road.lane_offset_angle + \
+                    road.trajectory.get_heading(1)
+                spacing = Coord(road.lane_width*sin(offset_angle)/2,
+                                road.lane_width*cos(offset_angle)/2)
 
                 # Plot lane markings
                 for lane in road.lanes[:-1]:
@@ -344,7 +356,7 @@ class Simulator:
                 self.ax.add_patch(Rectangle((int_min_x, int_min_y),
                                             int_max_x-int_min_x,
                                             int_max_y-int_min_y,
-                                            facecolor='.5'))
+                                            facecolor=road_color))
 
             # 6c. Ready a list for all vehicles being plotted.
             self.vehicle_patches: List[Polygon] = []
@@ -367,8 +379,8 @@ class Simulator:
             new_speeds.update(f.get_new_speeds())
         for vehicle in self.vehicles_in_scope:
             update = new_speeds[vehicle]
-            vehicle.velocity = update.velocity
             vehicle.acceleration = update.acceleration
+            vehicle.velocity = update.velocity
 
         # 2. Have upstream objects (vehicle spawners, roads, and intersections)
         #    update vehicle absolute (Coord) and relative positions (in-lane
