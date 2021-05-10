@@ -1,6 +1,6 @@
 from __future__ import annotations
-from math import ceil, sqrt
-from typing import TYPE_CHECKING, Iterable, Dict, Tuple, Type, Any, List
+from math import ceil, isclose, sqrt
+from typing import TYPE_CHECKING, Dict, Tuple, Type, Any, List
 
 import aimsim.shared as SHARED
 from aimsim.util import Coord, VehicleSection
@@ -16,7 +16,9 @@ if TYPE_CHECKING:
 
 class StopSignManager(IntersectionManager):
     """
-    A traffic signal priority policy, i.e., red and green lights.
+    The simplest priority policy. Only allow one vehicle in the intersection at
+    a time. Vehicles are chosen by how long they've been at a complete stop at
+    the intersection line; all others are illegible until they reach the line.
     """
 
     def __init__(self,
@@ -36,52 +38,49 @@ class StopSignManager(IntersectionManager):
                          tiling_type,
                          tiling_spec)
         self.queue: List[RoadLane] = []
-        self.queued_exits: Dict[RoadLane, ScheduledExit] = {}
-        self.anyone_permitted_in_intersection = False
+        self.intersection_is_empty = True
+
+        # Calculate the tolerance for proximity to an intersection, which is
+        # the minimum distance a vehicle can travel after coming to a complete
+        # stop, i.e., doing the acceleration action in one timestep and then
+        # doing enough braking actions in following timesteps to bring its
+        # velocity back to 0.
+        a = SHARED.SETTINGS.min_acceleration
+        b = SHARED.SETTINGS.min_braking
+        t_a = SHARED.SETTINGS.TIMESTEP_LENGTH
+        t_b = (-a/b if -a/b > 1 else 1)*t_a
+        self.tol_closeness = .5*a*t_a**2 + (a*t_a)*t_b + .5*b*t_b**2
 
     def process_requests(self) -> None:
 
         # Check each incoming lane not in queue for a new vehicle that's
         # stopped at the intersection line. Add these lanes to the queue.
         seen_lanes = set(self.queue)
-        for lane in self.incoming_road_lane_by_coord.values():
-            if lane not in seen_lanes:
-                v_index = lane.first_without_permission()
+        for road_lane in self.incoming_road_lane_by_coord.values():
+            if road_lane not in seen_lanes:
+                v_index = road_lane.first_without_permission()
                 if (v_index is not None) and (v_index[0] == 0):
-                    # The first vehicle in the lane, if it has a valid exit,
-                    # needs permission to enter the intersection.
-                    potential_exit = lane.soonest_exit(0)
-                    if (potential_exit is not None) and \
-                        (potential_exit.vehicle.velocity == 0) and \
-                            (potential_exit.t <= SHARED.t + 1):
-                        # The first vehicle in the lane is stopped and will
-                        # enter the intersection in the next timestep (i.e.,
-                        # it's stopped at the line).
-                        # TODO: (runtime) time check may be too stringent.
-                        self.queue.append(lane)
-                        self.queued_exits[lane] = potential_exit
+                    # The lane has at least one vehicle in it without
+                    # permission to enter the intersection, and that vehicle is
+                    # the most forward one in the lane.
+                    vehicle = road_lane.vehicles[0]
+                    p = road_lane.vehicle_progress[vehicle].front
+                    if (p is not None) and (vehicle.velocity == 0) and \
+                            ((1-p)*road_lane.trajectory.length
+                             < self.tol_closeness):
+                        # This first vehicle is stopped at the intersection
+                        # line (or close enough to within one timestep) and is
+                        # thus eligible to enter the intersection.
+                        self.queue.append(road_lane)
 
-        # If intersection is empty and queue is non-empty, pop the first
-        # incoming lane from the queue and release its first vehicle into the
-        # intersection
-        if self.anyone_permitted_in_intersection and (len(self.queue) > 0):
-            lane = self.queue.pop(0)
-            v_index = lane.first_without_permission()
-            assert v_index is not None
-            front_exit = self.queued_exits.pop(lane)
-            vehicle = front_exit.vehicle
-            length_traversal_time = ceil(sqrt(
-                2*vehicle.length*(1+2*SHARED.SETTINGS.length_buffer_factor) /
-                SHARED.SETTINGS.min_acceleration))
-            # TODO: Alter traversal time to account for speed limit.
-            rear_exit = ScheduledExit(vehicle, VehicleSection.REAR,
-                                      front_exit.t + length_traversal_time,
-                                      SHARED.SETTINGS.min_acceleration *
-                                      length_traversal_time)
-            self.tiling.issue_permission(vehicle, lane, rear_exit)
-            vehicle.permission_to_enter_intersection = True
-            self.anyone_permitted_in_intersection = True
+        # If the intersection is empty and there are lanes with stopped
+        # vehicles in the queue, pop the first incoming lane from the queue and
+        # release its first vehicle into the intersection.
+        if self.intersection_is_empty and (len(self.queue) > 0):
+            self.queue.pop(0).vehicles[0].permission_to_enter_intersection = \
+                True
+            self.intersection_is_empty = False
 
     def finish_exiting(self, vehicle: Vehicle) -> None:
         super().finish_exiting(vehicle)
-        self.anyone_permitted_in_intersection = False
+        self.intersection_is_empty = True

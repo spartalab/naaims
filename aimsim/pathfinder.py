@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Dict, Iterable, Tuple, List, Optional
+from warnings import warn
 
 if TYPE_CHECKING:
     from aimsim.util import Coord
@@ -40,8 +41,9 @@ class Pathfinder:
         # TODO: (low) Use the connectivity of each road to build a network that
         #       we can use with shortest path algorithms and infer destinations
 
-    def next_movements(self, coord: Coord, destination: int,
-                       at_least_one: bool = False) -> List[Coord]:
+    def next_movements(self, enters_intersection_at: Coord,
+                       destination: int, at_least_one: bool = False
+                       ) -> List[Coord]:
         """Return a set of valid Coords from which to exit.
 
         Given the Coord at which a vehicle is entering an intersection (the
@@ -62,12 +64,12 @@ class Pathfinder:
         """
 
         if at_least_one:
-            raise NotImplementedError("TODO: with inferred destinations")
+            warn("TODO: with inferred destinations")
 
         # Bypass full routing check if the requested source-destination pair
         # has already been provided.
         if self.provided is not None:
-            pair = (coord, destination)
+            pair = (enters_intersection_at, destination)
             if pair in self.provided:
                 return self.provided[pair]
 

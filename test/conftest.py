@@ -1,6 +1,10 @@
+from test.test_lane import straight_trajectory
+from aimsim.util import Coord
+from aimsim.trajectories import BezierTrajectory
+from aimsim.intersection.tilings.tiles import DeterministicTile
+from aimsim.intersection.tilings import SquareTiling
 from importlib import reload
-from typing import List, Tuple, Dict, Type
-from math import pi
+from typing import List, Tuple, Dict, Type, Any
 
 from pytest import fixture
 
@@ -10,13 +14,9 @@ from aimsim.road import Road
 from aimsim.road.lane import RoadLane
 from aimsim.intersection import Intersection
 from aimsim.intersection.lane import IntersectionLane
-from aimsim.intersection.managers import StopSignManager
-from aimsim.intersection.tilings import SquareTiling
-from aimsim.intersection.tilings.tiles import Tile, DeterministicTile
-from aimsim.trajectories import BezierTrajectory
-from aimsim.util import Coord
-
-from test.test_lane import straight_trajectory
+from aimsim.intersection.managers import IntersectionManager, \
+    StopSignManager, FCFSManager
+from aimsim.pathfinder import Pathfinder
 
 
 @fixture(scope="session")
@@ -29,7 +29,13 @@ def read_config():
 
 @fixture
 def clean_config():
+    """For this test only, reset as if the config was not read."""
     reload(SHARED)
+
+    yield
+
+    reload(SHARED)
+    SHARED.SETTINGS.read()
 
 
 @fixture
@@ -68,53 +74,93 @@ def il():
     return IntersectionLane(rl_start, rl_end, speed_limit)
 
 
-# @fixture
-# def intersection(read_config: None) -> Intersection:
+@fixture
+def intersection(read_config: None,
+                 manager: Type[IntersectionManager] = StopSignManager,
+                 lanes: int = 1, turns: bool = False) -> Intersection:
 
-#     trajectory1 = BezierTrajectory(Coord(-100, 0), Coord(0, 0),
-#                                    [Coord(-50, 0)])
-#     trajectory2 = BezierTrajectory(Coord(100, 0), Coord(200, 0),
-#                                    [Coord(150, 0)])
+    # Create IO roads
+    traj_i_lr = BezierTrajectory(Coord(-100, 12), Coord(0, 12),
+                                 [Coord(-50, 12)])
+    road_i_lr = Road(traj_i_lr, .09*traj_i_lr.length,
+                     SHARED.SETTINGS.speed_limit, upstream_is_spawner=True,
+                     downstream_is_remover=True, num_lanes=lanes,
+                     len_approach_region=.9*traj_i_lr.length)
+    traj_i_up = BezierTrajectory(Coord(12, -100), Coord(12, 0),
+                                 [Coord(12, -50)])
+    road_i_up = Road(traj_i_up, .09*traj_i_up.length,
+                     SHARED.SETTINGS.speed_limit, upstream_is_spawner=True,
+                     downstream_is_remover=True, num_lanes=lanes,
+                     len_approach_region=.9*traj_i_up.length)
+    traj_o_lr = BezierTrajectory(Coord(24, 12), Coord(124, 12),
+                                 [Coord(74, 12)])
+    road_o_lr = Road(traj_o_lr, .9*traj_o_lr.length,
+                     SHARED.SETTINGS.speed_limit, upstream_is_spawner=True,
+                     downstream_is_remover=True, num_lanes=lanes,
+                     len_approach_region=.09*traj_o_lr.length)
+    traj_o_up = BezierTrajectory(Coord(12, 24), Coord(12, 124),
+                                 [Coord(12, 74)])
+    road_o_up = Road(traj_o_up, .9*traj_o_up.length,
+                     SHARED.SETTINGS.speed_limit, upstream_is_spawner=True,
+                     downstream_is_remover=True, num_lanes=lanes,
+                     len_approach_region=.09*traj_o_up.length)
 
-#     # Create IO roads
-#     road_in = Road(trajectory1, .2*trajectory1.length,
-#                    SHARED.SETTINGS.speed_limit,
-#                    upstream_is_spawner=True, downstream_is_remover=True,
-#                    num_lanes=2, lane_offset_angle=pi/2,
-#                    len_approach_region=.7*trajectory1.length)
-#     road_out = Road(trajectory2, .2*trajectory2.length,
-#                     SHARED.SETTINGS.speed_limit,
-#                     upstream_is_spawner=True, downstream_is_remover=True,
-#                     num_lanes=2, lane_offset_angle=pi/2,
-#                     len_approach_region=.7*trajectory1.length)
+    connectivity: List[Tuple[Road, Road, bool]] = [
+        (road_i_lr, road_o_lr, True), (road_i_up, road_o_up, True)]
 
-#     intersection = Intersection([road_in], [road_out],
-#                                 [(road_in, road_out, True)],
-#                                 manager_type=StopSignManager,
-#                                 manager_spec={
-#                                     'tiling_type': SquareTiling,
-#                                     'tiling_spec': {
-#                                         'tile_type': DeterministicTile,
-#                                         'misc_spec': {
-#                                             'tile_width': 5
-#                                         }
-#                                     }
-#     },
-#         speed_limit=SHARED.SETTINGS.speed_limit)
+    if turns:
+        connectivity.extend([(road_i_lr, road_o_up, False),
+                             (road_i_up, road_o_lr, False)])
 
-#     return intersection
+    intersection = Intersection([road_i_lr, road_i_up], [road_o_lr, road_o_up],
+                                connectivity, manager_type=manager,
+                                manager_spec={
+                                    'tiling_type': SquareTiling,
+                                    'tiling_spec': {
+                                        'tile_type': DeterministicTile,
+                                        'misc_spec': {
+                                            'tile_width': 5
+                                        }
+                                    }
+    }, speed_limit=SHARED.SETTINGS.speed_limit)
+
+    # Prepare Pathfinder
+    od_pair: Dict[Tuple[Coord, int], List[Coord]] = {
+        (Coord(0, 12), 0): [Coord(24, 12)],
+        (Coord(12, 0), 0): [Coord(12, 24)],
+    }
+    SHARED.SETTINGS.pathfinder = Pathfinder([], [], od_pair)
+
+    yield intersection
+
+    # Reset shared pathfinder to default of nothing.
+    reload(SHARED)
+    SHARED.SETTINGS.read()
 
 
-# @fixture
-# def manager_setup(intersection: Intersection) -> \
-#     Tuple[Dict[Coord, RoadLane], Dict[Coord, RoadLane],
-#           Tuple[IntersectionLane, ...], Dict[Tuple[Coord, Coord],
-#                                              IntersectionLane],
-#           Type[Tile]]:
-#     return (
-#         intersection.incoming_road_lane_by_coord,
-#         intersection.outgoing_road_lane_by_coord,
-#         intersection.lanes,
-#         intersection.lanes_by_endpoints,
-#         intersection.manager.tiling.tile_type
-#     )
+@fixture
+def incoming_road_lane_by_coord(intersection: Intersection
+                                ) -> Dict[Coord, RoadLane]:
+    return intersection.incoming_road_lane_by_coord
+
+
+@fixture
+def outgoing_road_lane_by_coord(intersection: Intersection
+                                ) -> Dict[Coord, RoadLane]:
+    return intersection.outgoing_road_lane_by_coord
+
+
+@fixture
+def lanes(intersection: Intersection) -> Tuple[IntersectionLane, ...]:
+    return intersection.lanes
+
+
+@fixture
+def lanes_by_endpoints(intersection: Intersection) -> Dict[Tuple[Coord, Coord],
+                                                           IntersectionLane]:
+    return intersection.lanes_by_endpoints
+
+
+@fixture
+def square_tiling_spec() -> Dict[str, Any]:
+    return {'tile_type': DeterministicTile, 'misc_spec': {'tile_width': 5}}

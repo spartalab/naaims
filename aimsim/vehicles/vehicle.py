@@ -219,8 +219,8 @@ class Vehicle(ABC):
             speed = self.velocity
         return speed**2/(-2*self.__max_braking)
 
-    def next_movements(self, start_coord: Coord, at_least_one: bool = True
-                       ) -> List[Coord]:
+    def next_movements(self, enters_intersection_at: Coord,
+                       at_least_one: bool = True) -> List[Coord]:
         """Return the vehicle's exit Coords for the next intersection.
 
         If the at_least_one flag is enabled, always return at least one
@@ -228,7 +228,7 @@ class Vehicle(ABC):
         destination.
         """
         return SHARED.SETTINGS.pathfinder.next_movements(
-            start_coord, self.__destination, at_least_one)
+            enters_intersection_at, self.__destination, at_least_one)
 
     def get_outline(self, buffer: bool = False, static_buffer: float = 0
                     ) -> Tuple[Coord, Coord, Coord, Coord]:

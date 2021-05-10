@@ -7,14 +7,16 @@ steps_per_second
 speed_limit
     The default speed limit in meters per second (can be overridden by specific
     roads or intersections in their specifications).
-max_braking
+min_braking
     Maximum comfortable deceleration (braking) for all vehicles in m/s^2.
     Because this is based on human comfort, this should be also be lower than
     the maximum deceleration possible by every vehicle in the simulation, to
     the extent that we don't need to specify a separate deceleration for every
-    vehicle in the simulation.
+    vehicle in the simulation. Although this is called min_braking, this should
+    be the braking rate expressed in negative values, corresponding to negative
+    acceleration.
 min_acceleration
-    Like max_braking, for a vehicle's acceleration rate.
+    Like min_braking, for a vehicle's (positive) acceleration rate.
 max_vehicle_length
 length_buffer_factor
     Amount of clearance to maintain before and after each vehicle (separately),
@@ -49,7 +51,7 @@ class Settings:
         self.__pathfinder: Pathfinder
         self.__steps_per_second: int
         self.__speed_limit: int
-        self.__max_braking: float
+        self.__min_braking: float
         self.__min_acceleration: float
         self.__length_buffer_factor: float
         self.__max_stopping_distance: float
@@ -86,7 +88,7 @@ class Settings:
     def min_braking(self) -> float:
         if not self.config_file_already_read:
             raise self.not_read_error
-        return self.__max_braking
+        return self.__min_braking
 
     @property
     def min_acceleration(self) -> float:
@@ -130,7 +132,7 @@ class Settings:
             c = ConfigParser(defaults={
                 'steps_per_second': '60',
                 'speed_limit': '15',
-                'max_braking': '-2.6',  # -3.4
+                'min_braking': '-2.6',  # -3.4
                 'min_acceleration': '3',  # 3.4
                 'max_vehicle_length': '5.5',  # TODO: what to do with this
                 'length_buffer_factor': '0.1'
@@ -151,10 +153,10 @@ class Settings:
                 raise ValueError("speed_limit must be greater than 0.")
             self.__speed_limit = speed_limit
 
-            max_braking = float(SETTINGS['max_braking'])
-            if max_braking >= 0:
-                raise ValueError("max_braking must be negative.")
-            self.__max_braking = max_braking
+            min_braking = float(SETTINGS['min_braking'])
+            if min_braking >= 0:
+                raise ValueError("min_braking must be negative.")
+            self.__min_braking = min_braking
 
             min_acceleration = float(SETTINGS['min_acceleration'])
             if min_acceleration <= 0:
@@ -166,7 +168,7 @@ class Settings:
                 raise ValueError("length_buffer_factor must be at least 0.")
             self.__length_buffer_factor = length_buffer_factor
 
-            self.__max_stopping_distance = speed_limit**2/(2*-max_braking)
+            self.__max_stopping_distance = speed_limit**2/(2*-min_braking)
 
             max_vehicle_length = float(SETTINGS['max_vehicle_length'])
             if max_vehicle_length <= 0:

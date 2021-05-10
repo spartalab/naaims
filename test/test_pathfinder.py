@@ -4,7 +4,8 @@ from aimsim.pathfinder import Pathfinder
 from aimsim.util import Coord
 
 
-def test_hardcoded_pathfinder():
+def test_hardcoded_pathfinder_rome():
+    """All roads (well, road lanes) lead to one destination"""
 
     lane_1 = Coord(0, 0)
     destination_1 = 0
@@ -14,12 +15,29 @@ def test_hardcoded_pathfinder():
         (lane_1, destination_1): lane_destination_pair_1_target
     })
 
-    assert p.next_movements(coord=lane_1, destination=destination_1
+    assert p.next_movements(enters_intersection_at=lane_1,
+                            destination=destination_1
                             ) == lane_destination_pair_1_target
 
-    with raises(NotImplementedError):
-        p.next_movements(coord=lane_1, destination=1)
 
-    with raises(NotImplementedError):
-        p.next_movements(coord=lane_1, destination=destination_1,
-                         at_least_one=True)
+def test_hardcoded_pathfinder_options():
+
+    lane_il = Coord(0, 12)
+    lane_iu = Coord(12, 0)
+    lane_or = Coord(24, 12)
+    lane_ou = Coord(12, 24)
+    destination_u = 0
+    destination_r = 1
+
+    p = Pathfinder([], [], {
+        (lane_il, destination_u): [lane_ou],
+        (lane_iu, destination_u): [lane_ou],
+        (lane_il, destination_r): [lane_or],
+        (lane_iu, destination_r): [lane_or]
+    })
+
+    assert p.next_movements(enters_intersection_at=lane_il,
+                            destination=destination_u) == [lane_ou]
+
+    assert p.next_movements(enters_intersection_at=lane_il,
+                            destination=destination_r) == [lane_or]
