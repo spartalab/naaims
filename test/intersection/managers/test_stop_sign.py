@@ -23,13 +23,13 @@ def test_init(incoming_road_lane_by_coord: Dict[Coord, RoadLane],
                           lanes_by_endpoints, SquareTiling, square_tiling_spec)
     assert len(ssm.queue) == 0
     assert ssm.intersection_is_empty
-    assert ssm.tol_closeness < 1e-3
+    assert ssm.tol_closeness < 1e-2
 
 
 def test_process_requests(intersection: Intersection, vehicle: Vehicle,
                           vehicle2: Vehicle):
     ssm: StopSignManager = intersection.manager
-    assert type(ssm) is StopSignManager
+    assert isinstance(ssm, StopSignManager)
 
     road_lane_0 = list(intersection.incoming_road_lane_by_coord.values())[0]
     road_lane_1 = list(intersection.incoming_road_lane_by_coord.values())[1]
@@ -98,7 +98,7 @@ def test_process_requests(intersection: Intersection, vehicle: Vehicle,
 
 def test_finish_exiting(intersection: Intersection, vehicle: Vehicle):
     ssm: StopSignManager = intersection.manager
-    assert type(ssm) is StopSignManager
+    assert isinstance(ssm, StopSignManager)
 
     vehicle.permission_to_enter_intersection = True
     ssm.intersection_is_empty = False

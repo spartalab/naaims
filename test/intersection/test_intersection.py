@@ -73,10 +73,9 @@ def test_init_2_lane(read_config: None):
         (lane1traj.end_coord.x - lane1traj.start_coord.x)/2,
         lane1traj.start_coord.y)
 
-    assert type(intersection.manager) is StopSignManager
-    assert type(intersection.manager.tiling) is SquareTiling
-    assert type(intersection.manager.tiling.tile_type) is type(
-        DeterministicTile)
+    assert isinstance(intersection.manager, StopSignManager)
+    assert isinstance(intersection.manager.tiling, SquareTiling)
+    assert intersection.manager.tiling.tile_type is DeterministicTile
     assert intersection.manager.tiling.tile_width == 5
 
 

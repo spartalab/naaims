@@ -323,9 +323,11 @@ class Lane(ABC):
             available_stopping_distance is None \
             else available_stopping_distance
 
+        # In theory all of these cases should be one timestep of acceleration
+        # less, but we add one to have some padding to avoid just barely
+        # colliding with the object being followed.
         acceleration_option_speed = vehicle.velocity + \
             SHARED.SETTINGS.TIMESTEP_LENGTH * SHARED.SETTINGS.min_acceleration
-
         if vehicle.stopping_distance(
             acceleration_option_speed + SHARED.SETTINGS.TIMESTEP_LENGTH *
                 SHARED.SETTINGS.min_acceleration
@@ -485,7 +487,7 @@ class Lane(ABC):
         # Find the distance traveled in this timestep.
         distance_traveled: float = vehicle.velocity * \
             SHARED.SETTINGS.TIMESTEP_LENGTH + \
-            vehicle.acceleration * SHARED.SETTINGS.TIMESTEP_LENGTH**2
+            .5 * vehicle.acceleration * SHARED.SETTINGS.TIMESTEP_LENGTH**2
 
         # Iterate through the 3 sections of the vehicle.
         for i, progress in enumerate(old_progress):

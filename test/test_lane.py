@@ -70,7 +70,8 @@ def test_vehicle_entry_from_spawner(mocker: MockerFixture, read_config: None):
     # Test forward movement of vehicle
     helper_forward_movement(rl, vehicle_test)
     assert vehicle_test.pos.x == approx(
-        vehicle_test.length*.6 + SHARED.SETTINGS.min_acceleration * 1/60**2)
+        vehicle_test.length*.6 + 3/2 *
+        SHARED.SETTINGS.min_acceleration*SHARED.SETTINGS.TIMESTEP_LENGTH**2)
 
 
 def test_vehicle_entry_from_facility(mocker: MockerFixture, read_config: None):
@@ -233,11 +234,21 @@ def test_consecutive_vehicles(mocker: MockerFixture, read_config: None):
     assert new_speeds[vehB].velocity > SHARED.SETTINGS.speed_limit - 1
     assert new_speeds[vehB].acceleration == SHARED.SETTINGS.min_acceleration
 
-    # Exactly tight, maintain speed
+    # Exactly tight, but tolerance is too close, brake
     vehA.velocity = SHARED.SETTINGS.speed_limit
     vehB.velocity = SHARED.SETTINGS.speed_limit
     rl.vehicle_progress[vehA] = VehicleProgress(0.02, 0.015, 0.01)
     rl.vehicle_progress[vehB] = VehicleProgress(0.01, 0.005, 0)
+    new_speeds = rl.get_new_speeds()
+    assert new_speeds[vehA] == SpeedUpdate(SHARED.SETTINGS.speed_limit, 0)
+    assert new_speeds[vehB] == SpeedUpdate(
+        SHARED.SETTINGS.speed_limit + SHARED.SETTINGS.TIMESTEP_LENGTH*SHARED.SETTINGS.min_braking, SHARED.SETTINGS.min_braking)
+
+    # A little less than exactly tight, maintain speed
+    vehA.velocity = SHARED.SETTINGS.speed_limit
+    vehB.velocity = SHARED.SETTINGS.speed_limit
+    rl.vehicle_progress[vehA] = VehicleProgress(0.02, 0.015, 0.01)
+    rl.vehicle_progress[vehB] = VehicleProgress(0.005, 0, None)
     new_speeds = rl.get_new_speeds()
     assert new_speeds[vehA] == SpeedUpdate(SHARED.SETTINGS.speed_limit, 0)
     assert new_speeds[vehB] == SpeedUpdate(SHARED.SETTINGS.speed_limit, 0)
@@ -321,8 +332,8 @@ def test_accel_following(rl: RoadLane, vehicle: AutomatedVehicle):
     brake_threshold = 1-vehicle.stopping_distance()/rl.trajectory.length
     assert rl.accel_update_following(vehicle, brake_threshold
                                      ) == SHARED.SETTINGS.min_braking
-    # Have just enough room to not brake
-    assert rl.accel_update_following(vehicle, brake_threshold-1e-6) == 0
+    # Have enough room to not brake but not enough to not accel
+    assert rl.accel_update_following(vehicle, brake_threshold*.8) == 0
     # Same room, but you're told that you have less room to brake than is left
     # on the lane (mocking as if there's another car ahead)
     assert rl.accel_update_following(vehicle, brake_threshold-1e-6,
@@ -337,9 +348,9 @@ def test_accel_following(rl: RoadLane, vehicle: AutomatedVehicle):
     assert rl.accel_update_following(vehicle, brake_threshold_half
                                      ) == SHARED.SETTINGS.min_braking
     # Holding speed keeps vehicle in no-crash range, but accelerating doesn't
-    assert rl.accel_update_following(vehicle, brake_threshold_half-1e-6) == 0
+    assert rl.accel_update_following(vehicle, brake_threshold_half*.9995) == 0
     # Accelerating keeps vehicle in no-crash range
-    assert rl.accel_update_following(vehicle, brake_threshold_half-.1
+    assert rl.accel_update_following(vehicle, brake_threshold_half*.9
                                      ) == SHARED.SETTINGS.min_acceleration
 
     vehicle.velocity = rl.speed_limit+1

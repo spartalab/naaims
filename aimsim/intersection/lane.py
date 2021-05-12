@@ -46,7 +46,7 @@ class IntersectionLane(Lane):
         )
         super().__init__(trajectory, min(start_lane.width, end_lane.width),
                          speed_limit)
-        assert type(self.trajectory) is BezierTrajectory
+        assert isinstance(self.trajectory, BezierTrajectory)
         self.trajectory: BezierTrajectory
 
         # Calculate the shortest amount of time (in timesteps) that it takes

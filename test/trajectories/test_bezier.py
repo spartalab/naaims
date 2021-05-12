@@ -57,7 +57,7 @@ def test_connection_horizontal():
 def test_clone():
     b = straight_trajectory.clone_with_offset(Coord(1, 1))
 
-    assert type(b) == BezierTrajectory
+    assert isinstance(b, BezierTrajectory)
     assert b.start_coord == Coord(1, 1)
     assert b.reference_coords == [Coord(1.5, 1)]
     assert b.end_coord == Coord(2, 1)
