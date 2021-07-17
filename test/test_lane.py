@@ -242,7 +242,9 @@ def test_consecutive_vehicles(mocker: MockerFixture, read_config: None):
     new_speeds = rl.get_new_speeds()
     assert new_speeds[vehA] == SpeedUpdate(SHARED.SETTINGS.speed_limit, 0)
     assert new_speeds[vehB] == SpeedUpdate(
-        SHARED.SETTINGS.speed_limit + SHARED.SETTINGS.TIMESTEP_LENGTH*SHARED.SETTINGS.min_braking, SHARED.SETTINGS.min_braking)
+        SHARED.SETTINGS.speed_limit +
+        SHARED.SETTINGS.TIMESTEP_LENGTH*SHARED.SETTINGS.min_braking,
+        SHARED.SETTINGS.min_braking)
 
     # A little less than exactly tight, maintain speed
     vehA.velocity = SHARED.SETTINGS.speed_limit

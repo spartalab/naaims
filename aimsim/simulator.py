@@ -263,6 +263,8 @@ class Simulator:
             road_sep_color = '#ffd600'  # 'y'
             road_color = '#333f48'  # '.5'
             self.vehicle_color = '.9'  # '#ffffff'  # 'g'
+            self.reserved_color = '#FF00FF'
+            self.permitted_color = '#EFFD5F'
 
             self.fig, self.ax = subplots(figsize=figsize)
             # TODO: Variable figsize.
@@ -462,8 +464,15 @@ class Simulator:
                 patch.remove()
             self.vehicle_patches = []
             for vehicle in vehicles:
+                vehicle_color: str
+                if vehicle.has_reservation:
+                    vehicle_color = self.reserved_color
+                elif vehicle.permission_to_enter_intersection:
+                    vehicle_color = self.permitted_color
+                else:
+                    vehicle_color = self.vehicle_color
                 vehicle_patch = Polygon(vehicle.get_outline(),
-                                        facecolor=self.vehicle_color, alpha=1,
+                                        facecolor=vehicle_color, alpha=1,
                                         edgecolor=None, zorder=5)
                 self.ax.add_patch(vehicle_patch)
                 self.vehicle_patches.append(vehicle_patch)

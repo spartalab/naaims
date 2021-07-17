@@ -1,5 +1,5 @@
 from typing import List, Tuple
-from math import pi
+from math import pi, ceil
 
 from pytest import raises, fixture
 
@@ -131,20 +131,21 @@ def test_init_oblong_overtiled(read_config: None):
 
 
 def square_tiling_polygon(x_min: float, x_max: float, y_min: float,
-                          y_max: float, tile_width: float) -> SquareTiling:
+                          y_max: float, tile_width: float,
+                          speed_limit: int = 1) -> SquareTiling:
     top_left = Coord(x_min, y_max)
     top_mid = Coord((x_max - x_min)/2 + x_min, y_max)
     top_right = Coord(x_max, y_max)
     rl_top = RoadLane(BezierTrajectory(
-        top_left, top_right, [top_mid]), 0, 1, 0, 0)
+        top_left, top_right, [top_mid]), 0, speed_limit, 0, 0)
     bot_left = Coord(x_min, y_min)
     bot_mid = Coord((x_max - x_min)/2 + x_min, y_min)
     bot_right = Coord(x_max, y_min)
     rl_bot = RoadLane(BezierTrajectory(
-        bot_left, bot_right, [bot_mid]), 0, 1, 0, 0)
+        bot_left, bot_right, [bot_mid]), 0, speed_limit, 0, 0)
 
-    il_down = IntersectionLane(rl_top, rl_bot, 1)
-    il_up = IntersectionLane(rl_bot, rl_top, 1)
+    il_down = IntersectionLane(rl_top, rl_bot, speed_limit)
+    il_up = IntersectionLane(rl_bot, rl_top, speed_limit)
 
     return SquareTiling({top_right: rl_top,
                          bot_right: rl_bot},
@@ -532,7 +533,10 @@ def test_io_buffer(read_config: None, sq: SquareTiling,
     assert len(sq.tiles) == 0
     i_lane0 = sq.lanes[0]
     coord0 = i_lane0.trajectory.start_coord
-    i_lane_tiles_idx = sq._tile_loc_to_id(sq._io_coord_to_tile_xy(coord0))
+    i_lane_start_tiles_idx = sq._tile_loc_to_id(
+        sq._io_coord_to_tile_xy(coord0))
+    i_lane_end_tiles_idx = sq._tile_loc_to_id(
+        sq._io_coord_to_tile_xy(i_lane0.trajectory.end_coord))
     res = Reservation(vehicle, coord0, {}, i_lane0, ScheduledExit(
         vehicle, VehicleSection.FRONT, 0, 10))
 
@@ -550,31 +554,28 @@ def test_io_buffer(read_config: None, sq: SquareTiling,
     assert len(sq.tiles) == 1
     assert len(prepended) == 1
     assert 1 in prepended
-    assert prepended[1] == {sq.tiles[0][i_lane_tiles_idx]: 1}
+    assert prepended[1] == {sq.tiles[0][i_lane_start_tiles_idx]: 1}
 
     # Normal case rejected future prepend reservation
     competing_res = Reservation(vehicle2, coord0, {}, i_lane0, ScheduledExit(
         vehicle2, VehicleSection.FRONT, 0, 10))
-    sq.tiles[0][i_lane_tiles_idx].confirm_reservation(competing_res)
+    sq.tiles[0][i_lane_start_tiles_idx].confirm_reservation(competing_res)
     assert sq.io_tile_buffer(i_lane0, 2, vehicle, res, True) is None
 
-    # Postpend forget to provide timesteps_forward
-    with raises(ValueError):
-        sq.io_tile_buffer(i_lane0, 1, vehicle, res, False)
-
     # Normal case accepted future postpend reservation
-    postpended = sq.io_tile_buffer(i_lane0, 1, vehicle, res, False, 5)
+    postpended = sq.io_tile_buffer(i_lane0, 1, vehicle, res, False)
     assert postpended is not None
-    assert len(sq.tiles) == 6
-    assert len(postpended) == 5
+    steps_forward = ceil(.3 * SHARED.SETTINGS.steps_per_second)
+    assert len(sq.tiles) == steps_forward + 1
+    assert len(postpended) == steps_forward
     for i in range(5):
-        assert postpended[i+2] == {sq.tiles[i+1][i_lane_tiles_idx]: 1}
+        assert postpended[i+2] == {sq.tiles[i+1][i_lane_end_tiles_idx]: 1}
 
     # Normal case rejected future postpend reservation
     competing_res = Reservation(vehicle2, coord0, {}, i_lane0, ScheduledExit(
         vehicle2, VehicleSection.FRONT, 4, 10))
-    sq.tiles[4][i_lane_tiles_idx].confirm_reservation(competing_res)
-    assert sq.io_tile_buffer(i_lane0, 1, vehicle, res, False, 5) is None
+    sq.tiles[4][i_lane_end_tiles_idx].confirm_reservation(competing_res)
+    assert sq.io_tile_buffer(i_lane0, 1, vehicle, res, False) is None
 
 
 def test_tile_loc_to_id(read_config: None, sq: SquareTiling):

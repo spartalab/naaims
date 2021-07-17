@@ -43,6 +43,10 @@ class RoadLane(Lane):
         #       remove. Calling to the downstream intersection and checking if
         #       there's space for the next vehicle may be obviated by soonest
         #       exit and/or max acceleration assumption.
+        self.reservation_test_clone: bool = False
+        # Bypass downstream intersection checks, e.g., the need to slow down
+        # for vehicles currently in the intersection, when this is a clone of
+        # the road lane used for testing potential reservations.
 
         # Note that we start at the front of the lane and work back, so
         # proportions decrease as we go on.
@@ -157,9 +161,13 @@ class RoadLane(Lane):
 
     def downstream_stopping_distance(self) -> Optional[float]:
         """Check the downstream object's required stopping distance, if any."""
-        if self.downstream_intersection is None:
+        if (self.downstream_intersection is None) or \
+                (self.reservation_test_clone):
             # There's a remover downstream so there's no possibility of having
-            # to follow another vehicle.
+            # to follow another vehicle, or this is a clone of the lane used
+            # for testing reservations so the potential future state of the
+            # intersection is stored by the test and not reliant on the current
+            # state of the intersection.
             return None
         else:
             return self.downstream_intersection.\
@@ -849,8 +857,7 @@ class RoadLane(Lane):
         clone = copy(self)
         clone.vehicles = []
         clone.vehicle_progress = {}
-        clone.downstream_is_remover = True
-        clone.downstream_intersection = None
+        clone.reservation_test_clone = True
         clone.latest_scheduled_exit = None
         # TODO: (clarity) this implementation short circuits intended behavior
         #       by claiming that the cloned RoadLane doesn't end at an

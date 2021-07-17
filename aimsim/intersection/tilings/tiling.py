@@ -13,6 +13,7 @@ adjustable granularity (Dresner and Stone 2008).
 
 from __future__ import annotations
 from abc import abstractmethod
+from math import ceil
 from typing import (TYPE_CHECKING, Optional, List, Set, Dict, Tuple, Type,
                     TypeVar, Any)
 
@@ -296,9 +297,9 @@ class Tiling(Configurable):
         incoming_road_lane = incoming_road_lane_original.clone()
         outgoing_coord: Coord = new_exit.vehicle.next_movements(
             incoming_road_lane.trajectory.end_coord)[0]
-        intersection_lane: IntersectionLane = self.lanes_by_endpoints[
-            (incoming_road_lane.trajectory.end_coord, outgoing_coord)
-        ].clone()
+        intersection_lane_original: IntersectionLane = self.lanes_by_endpoints[
+            (incoming_road_lane.trajectory.end_coord, outgoing_coord)]
+        intersection_lane = intersection_lane_original.clone()
         outgoing_road_lane: RoadLane = self.outgoing_road_lane_by_coord[
             outgoing_coord].clone()
 
@@ -317,7 +318,9 @@ class Tiling(Configurable):
                                 outgoing_road_lane, clone_to_original,
                                 test_reservations, valid_reservations,
                                 last_exit, originals,
-                                incoming_road_lane_original, mark)
+                                incoming_road_lane_original,
+                                intersection_lane_original,
+                                mark)
             if test_complete:
                 break
 
@@ -334,6 +337,7 @@ class Tiling(Configurable):
                    last_exit: Optional[ScheduledExit],
                    originals: List[Vehicle],
                    incoming_road_lane_original: RoadLane,
+                   intersection_lane_original: IntersectionLane,
                    mark: bool = False) -> Tuple[bool, int, int,
                                                 Optional[ScheduledExit],
                                                 Optional[ScheduledExit]]:
@@ -406,13 +410,14 @@ class Tiling(Configurable):
                     counter, last_exit)
 
             assert new_exit is not None
-            if new_exit.t >= test_t:
+            if test_t >= new_exit.t:
                 # The next vehicle's time has come.
-                test_complete, counter, new_exit = self._spawn_next_clone(
+                test_complete, counter = self._spawn_next_clone(
                     intersection_lane, incoming_road_lane, originals,
                     clone_to_original, test_reservations,
                     valid_reservations, new_exit, counter, end_at, test_t,
-                    mark)
+                    intersection_lane_original, mark)
+                new_exit = None
                 if test_complete:
                     return True, -1, -1, None, None
 
@@ -476,7 +481,6 @@ class Tiling(Configurable):
                 edge_buffer_tiles = self.io_tile_buffer(
                     intersection_lane, test_t, clone, reservation,
                     prepend=False, mark=mark)
-                # TODO: Figure out how many timesteps_forward.
                 if edge_buffer_tiles is None:
                     # Not only is this reservation not possible, all clones
                     # behind it also have invalid reservations, so we can
@@ -502,7 +506,8 @@ class Tiling(Configurable):
                     del test_reservations[clone]
                     outgoing_road_lane.vehicles = []
                     del outgoing_road_lane.vehicle_progress[clone], clone
-            outgoing_road_lane.enter_vehicle_section(transfer)
+            else:
+                outgoing_road_lane.enter_vehicle_section(transfer)
         return False
 
     @staticmethod
@@ -619,27 +624,30 @@ class Tiling(Configurable):
                           valid_reservations: List[Reservation],
                           new_exit: ScheduledExit,
                           counter: int, end_at: int,
-                          test_t: int, mark: bool
-                          ) -> Tuple[bool, int, Optional[ScheduledExit]]:
+                          test_t: int,
+                          intersection_lane_original: IntersectionLane,
+                          mark: bool
+                          ) -> Tuple[bool, int]:
         """Spawn the next clone. Check and log its starting tiles.
 
         Returns
             whether the test is complete or not
             an updated counter
-            new_exit if the next clone couldn't spawn, or None if it did.
         """
         # Clone the vehicle and initialize its reservation.
         original: Vehicle = new_exit.vehicle
         clone = original.clone_for_request()
+        clone.velocity = new_exit.velocity
         reservation = Reservation(
             vehicle=original,
             res_pos=intersection_lane.trajectory.start_coord,
             tiles={},
-            lane=intersection_lane,
+            lane=intersection_lane_original,
+            its_exit=new_exit,
             dependent_on=tuple(originals[counter+1:]),
-            dependency=None,
-            its_exit=new_exit
+            dependency=None
         )
+        # TODO (sequence): Check dependent_on
 
         # At this time, the front of the vehicle should just be entering the
         # intersection lane, and the rest of the vehicle should still be
@@ -682,7 +690,7 @@ class Tiling(Configurable):
 
             # Register this vehicle's reservation as dependent on its preceding
             # clone's reservation, if there is one.
-            if len(intersection_lane.vehicles) > 0:
+            if len(intersection_lane.vehicles) > 1:
                 # The last reservation hasn't been confirmed as valid yet, so
                 # look in test_reservations.
                 test_reservations[intersection_lane.vehicles[-1]
@@ -702,20 +710,20 @@ class Tiling(Configurable):
             counter += 1
 
             # Once done, clear for the next clone to add.
-            return False, counter, None
+            return False, counter
         else:
             # Scrap this reservation and stop spawning new ones. We didn't
             # register this clone any structures, so there's less to do than in
             # other rejection cases.
 
-            if len(intersection_lane.vehicles) == 0:
+            if len(intersection_lane.vehicles) == 1:
                 # No reservation still being tested is workable, so scrap them
                 # all and just return the reservations already confirmed.
-                return True, end_at, None
+                return True, end_at
 
             # Stop spawning new clones.
             counter = end_at
-            return False, counter, None
+            return False, counter
 
     @abstractmethod
     def pos_to_tiles(self, lane: IntersectionLane, t: int,
@@ -776,8 +784,7 @@ class Tiling(Configurable):
     @abstractmethod
     def io_tile_buffer(self, lane: IntersectionLane, t: int,
                        clone: Vehicle, reservation: Reservation,
-                       prepend: bool, timesteps_forward: Optional[int] = None,
-                       force: bool = False, mark: bool = False
+                       prepend: bool, force: bool = False, mark: bool = False
                        ) -> Optional[Dict[int, Dict[Tile, float]]]:
         """Should return edge buffer tiles and percentages used if it works.
 
@@ -809,9 +816,6 @@ class Tiling(Configurable):
             prepend: bool
                 If true, return edge tiles before timestep. If false, return
                 edge tiles after timestep.
-            timesteps_forward: Optional[int]
-                If postpending, tells the tiling how many timesteps forward
-                into the future it needs to reserve.
             force: bool = False
                 If force, don't bother checking if a tile is compatible with
                 this vehicle's reservation before returning.
@@ -822,9 +826,16 @@ class Tiling(Configurable):
             raise ValueError("t must be a future timestep.")
         if force and mark:
             raise ValueError("Can't force and mark tiles at the same time.")
-        if (not prepend) and (timesteps_forward is None):
-            raise ValueError('Postpend IO buffer needs a timesteps_forward'
-                             ' arg.')
+
+    @staticmethod
+    def _exit_res_timesteps_forward(velocity: float) -> int:
+        """Return the timesteps forward the exiting tile buffer should go.
+
+        Based on Toader's modification to AIM4 by Au, Stone, and Dresner.
+        http://www.cs.utexas.edu/~aim/aim4sim/versions/AIM4-release-1.0.4-fixed-collisions-notes.pdf
+        """
+        return ceil((.3 + max(0, velocity - 15)*.2
+                     )*SHARED.SETTINGS.steps_per_second)
 
     def clear_marked_tiles(self, reservation: Reservation) -> None:
         """Clear tiles marked with this reservation before discarding."""

@@ -434,8 +434,7 @@ class SquareTiling(Tiling):
 
     def io_tile_buffer(self, lane: IntersectionLane, t: int,
                        clone: Vehicle, reservation: Reservation,
-                       prepend: bool, timesteps_forward: Optional[int] = None,
-                       force: bool = False, mark: bool = False
+                       prepend: bool, force: bool = False, mark: bool = False
                        ) -> Optional[Dict[int, Dict[Tile, float]]]:
         """Should return edge buffer tiles and percentages used if it works.
 
@@ -467,17 +466,14 @@ class SquareTiling(Tiling):
             prepend: bool
                 If true, return edge tiles before timestep. If false, return
                 edge tiles after timestep.
-            timesteps_forward: Optional[int]
-                If postpending, tells the tiling how many timesteps forward
-                into the future it needs to reserve.
             force: bool = False
                 If force, don't bother checking if a tile is compatible with
                 this vehicle's reservation before returning.
             mark: bool = False
                 Whether to mark the tiles used with this potential reservation.
         """
-        super().io_tile_buffer(lane, t, clone, reservation, prepend,
-                               timesteps_forward, force, mark)
+        super().io_tile_buffer(lane, t, clone, reservation, prepend, force,
+                               mark)
 
         # Recall that the first tile layer represents the next timestep.
         t0 = SHARED.t + 1
@@ -498,9 +494,10 @@ class SquareTiling(Tiling):
             else:
                 return None
         else:
-            assert timesteps_forward is not None
+            timesteps_forward = Tiling._exit_res_timesteps_forward(
+                clone.velocity)
             tile_id = self._tile_loc_to_id(
-                self.buffer_tile_loc[lane.trajectory.start_coord])
+                self.buffer_tile_loc[lane.trajectory.end_coord])
             while len(self.tiles) < t + timesteps_forward - SHARED.t:
                 self._add_new_layer()
             to_return: Dict[int, Dict[Tile, float]] = {}

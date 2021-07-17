@@ -119,3 +119,8 @@ class Tile(ABC):
     def __hash__(self) -> int:
         """Return this tile's unique hash based on its spacetime position."""
         return self.__hash
+
+    def _clear_all_reservations(self):
+        """Self-explanatory. Only for debugging and automated cleanup."""
+        self.__potentials: Dict[Reservation, float] = {}
+        self.__reserved_by: Dict[Optional[int], float] = {}  # by VIN
