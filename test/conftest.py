@@ -1,14 +1,13 @@
-from test.test_lane import straight_trajectory
-from aimsim.util import Coord
-from aimsim.trajectories import BezierTrajectory
-from aimsim.intersection.tilings.tiles import DeterministicTile
-from aimsim.intersection.tilings import SquareTiling
-from importlib import reload
 from typing import List, Tuple, Dict, Type, Any
+from importlib import reload
 
 from pytest import fixture
 
 import aimsim.shared as SHARED
+from aimsim.util import Coord
+from aimsim.trajectories import BezierTrajectory
+from aimsim.intersection.tilings.tiles import DeterministicTile
+from aimsim.intersection.tilings import SquareTiling
 from aimsim.vehicles import AutomatedVehicle
 from aimsim.road import Road
 from aimsim.road.lane import RoadLane
@@ -17,6 +16,7 @@ from aimsim.intersection.lane import IntersectionLane
 from aimsim.intersection.managers import IntersectionManager, \
     StopSignManager, FCFSManager
 from aimsim.pathfinder import Pathfinder
+from test.test_lane import straight_trajectory
 
 
 @fixture(scope="session")
@@ -74,9 +74,7 @@ def il():
     return IntersectionLane(rl_start, rl_end, speed_limit)
 
 
-@fixture
-def intersection(read_config: None,
-                 manager: Type[IntersectionManager] = StopSignManager,
+def intersection(manager: Type[IntersectionManager] = StopSignManager,
                  lanes: int = 1, turns: bool = False) -> Intersection:
 
     # Create IO roads
@@ -84,13 +82,13 @@ def intersection(read_config: None,
                                  [Coord(-50, 12)])
     road_i_lr = Road(traj_i_lr, .09*traj_i_lr.length,
                      SHARED.SETTINGS.speed_limit, upstream_is_spawner=True,
-                     downstream_is_remover=True, num_lanes=lanes,
+                     downstream_is_remover=False, num_lanes=lanes,
                      len_approach_region=.9*traj_i_lr.length)
     traj_i_up = BezierTrajectory(Coord(12, -100), Coord(12, 0),
                                  [Coord(12, -50)])
     road_i_up = Road(traj_i_up, .09*traj_i_up.length,
                      SHARED.SETTINGS.speed_limit, upstream_is_spawner=True,
-                     downstream_is_remover=True, num_lanes=lanes,
+                     downstream_is_remover=False, num_lanes=lanes,
                      len_approach_region=.9*traj_i_up.length)
     traj_o_lr = BezierTrajectory(Coord(24, 12), Coord(124, 12),
                                  [Coord(74, 12)])
@@ -131,11 +129,7 @@ def intersection(read_config: None,
     }
     SHARED.SETTINGS.pathfinder = Pathfinder([], [], od_pair)
 
-    yield intersection
-
-    # Reset shared pathfinder to default of nothing.
-    reload(SHARED)
-    SHARED.SETTINGS.read()
+    return intersection
 
 
 @fixture

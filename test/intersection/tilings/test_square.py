@@ -228,6 +228,12 @@ def test_line_to_range_up_left(read_config: None, sq: SquareTiling):
     check_line_range(sq, Coord(59, -2.446), Coord(51, 1), -3,
                      [57, 55, 53, 51, 51], [])
 
+    # Non-1:1 tile to coordinate system
+    start = Coord(x=-0.03999999997779238, y=2.099999999966693)
+    end = Coord(x=-0.04000000002220129, y=2.699999999966693)
+    sq5 = square_tiling_polygon(0, 0, 24, 24, 5)
+    check_line_range(sq5, start, end, 2, [-1], [-1])
+
 
 def test_line_to_range_up_right(read_config: None, sq: SquareTiling):
     # Fully in

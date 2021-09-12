@@ -143,8 +143,8 @@ class SquareTiling(Tiling):
         super().pos_to_tiles(lane, t, clone, reservation, force, mark)
 
         # Fetch the vehicle's outline, normalize them to the grid's internal
-        # coordinate system using self.origin, and find the x and y range
-        # covered by the outline (assuming that it's convex).
+        # coordinate system using self.origin and self.tile_width, and find the
+        # x and y range covered by the outline (assuming that it's convex).
         y_min, x_mins, x_maxes = self._outline_to_tile_range(tuple(
             Coord((c.x - self.origin.x)/self.tile_width,
                   (c.y - self.origin.y)/self.tile_width)
@@ -225,8 +225,8 @@ class SquareTiling(Tiling):
 
         Returns y_min, x_mins, x_maxes.
         """
-        dx = 0 if isclose(end.x, start.x) else end.x - start.x
-        dy = 0 if isclose(end.y, start.y) else end.y - start.y
+        dx = 0 if isclose(end.x, start.x, abs_tol=1e-10) else end.x - start.x
+        dy = 0 if isclose(end.y, start.y, abs_tol=1e-10) else end.y - start.y
 
         x_mins: List[int] = []
         x_maxes: List[int] = []
@@ -517,7 +517,8 @@ class SquareTiling(Tiling):
         The input parameter is a 2-tuple of integer x and y values. x denotes
         left to right and y denotes down to up.
         """
-        return tile_loc[1]*self.x_tile_count + tile_loc[0]
+        return floor(tile_loc[0]//self.tile_width +
+                     tile_loc[1]//self.tile_width * self.x_tile_count)
 
     def find_best_batch(self,
                         requests: Dict[RoadLane, List[Reservation]]

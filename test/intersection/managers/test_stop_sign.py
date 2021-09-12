@@ -1,7 +1,9 @@
 from typing import Dict, Tuple, Any
+from importlib import reload
 
 from pytest import fixture
 
+import aimsim.shared as SHARED
 from aimsim.intersection.managers import StopSignManager
 from aimsim.util import Coord
 from aimsim.intersection.tilings import SquareTiling
@@ -9,6 +11,16 @@ from aimsim.road import RoadLane
 from aimsim.lane import VehicleProgress
 from aimsim.intersection import Intersection, IntersectionLane
 from aimsim.vehicles import Vehicle
+from test.conftest import intersection as intersec
+
+
+@fixture
+def intersection(read_config: None, lanes: int = 1, turns: bool = False):
+    yield intersec(StopSignManager, lanes, False)
+
+    # Reset shared pathfinder to default of nothing.
+    reload(SHARED)
+    SHARED.SETTINGS.read()
 
 
 def test_init(incoming_road_lane_by_coord: Dict[Coord, RoadLane],
