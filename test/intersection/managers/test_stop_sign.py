@@ -40,13 +40,14 @@ def test_init(incoming_road_lane_by_coord: Dict[Coord, RoadLane],
 
 def test_process_requests(intersection: Intersection, vehicle: Vehicle,
                           vehicle2: Vehicle):
-    ssm: StopSignManager = intersection.manager
+    ssm: StopSignManager = intersection.manager  # type: ignore
     assert isinstance(ssm, StopSignManager)
 
     road_lane_0 = list(intersection.incoming_road_lane_by_coord.values())[0]
     road_lane_1 = list(intersection.incoming_road_lane_by_coord.values())[1]
 
     # Vehicle not at intersection yet, so nothing happens
+    assert not vehicle.permission_to_enter_intersection
     road_lane_0.vehicles.append(vehicle)
     road_lane_0.vehicle_progress[vehicle] = VehicleProgress(0, 0, 0)
     ssm.process_requests()
@@ -64,6 +65,8 @@ def test_process_requests(intersection: Intersection, vehicle: Vehicle,
     assert not ssm.intersection_is_empty
 
     # Another vehicle arrives but the intersection is still full, so queued
+    assert not vehicle2.permission_to_enter_intersection
+    vehicle2._Vehicle__destination = 1  # type: ignore
     road_lane_1.vehicles.append(vehicle2)
     road_lane_1.vehicle_progress[vehicle2] = VehicleProgress(1, 0, 0)
     ssm.process_requests()
@@ -109,7 +112,7 @@ def test_process_requests(intersection: Intersection, vehicle: Vehicle,
 
 
 def test_finish_exiting(intersection: Intersection, vehicle: Vehicle):
-    ssm: StopSignManager = intersection.manager
+    ssm: StopSignManager = intersection.manager  # type: ignore
     assert isinstance(ssm, StopSignManager)
 
     vehicle.permission_to_enter_intersection = True

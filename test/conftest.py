@@ -13,8 +13,7 @@ from aimsim.road import Road
 from aimsim.road.lane import RoadLane
 from aimsim.intersection import Intersection
 from aimsim.intersection.lane import IntersectionLane
-from aimsim.intersection.managers import IntersectionManager, \
-    StopSignManager, FCFSManager
+from aimsim.intersection.managers import IntersectionManager, StopSignManager
 from aimsim.pathfinder import Pathfinder
 from test.test_lane import straight_trajectory
 
@@ -125,7 +124,7 @@ def intersection(manager: Type[IntersectionManager] = StopSignManager,
     # Prepare Pathfinder
     od_pair: Dict[Tuple[Coord, int], List[Coord]] = {
         (Coord(0, 12), 0): [Coord(24, 12)],
-        (Coord(12, 0), 0): [Coord(12, 24)],
+        (Coord(12, 0), 1): [Coord(12, 24)],
     }
     SHARED.SETTINGS.pathfinder = Pathfinder([], [], od_pair)
 
