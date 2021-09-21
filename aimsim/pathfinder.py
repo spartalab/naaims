@@ -26,8 +26,7 @@ class Pathfinder:
             roads: Iterable[Road]
             intersections: Iterable[Intersection]
                 The roads and intersections in the road network.
-            lane_destination_pairs:
-                Optional[Dict[Tuple[Coord, int], List[Coord]]] = None
+            provided: Optional[Dict[Tuple[Coord, int], List[Coord]]] = None
                 If provided, overrides default behavior by providing hardcoded
                 paths through the intersection network, obviating the need for
                 shortest path calculations. See next_movements for further

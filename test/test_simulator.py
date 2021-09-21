@@ -1,4 +1,5 @@
 from aimsim.simulator import Simulator
+from aimsim.intersection.managers import FCFSManager
 from scenarios.road_only import OneLaneRoadSim, TwoLaneRoadSim, \
     ThreeLaneRoadSim
 from scenarios import SingleLaneXNoTurnsSim
@@ -30,3 +31,14 @@ def test_single_lane_x_no_turns_simulator(clean_config: None):
     sim = SingleLaneXNoTurnsSim(visualize=False, length=30)
     for _ in range(120*60):
         sim.step()
+
+
+def test_single_lane_x_no_turns_simulator_fcfs(clean_config: None):
+    sim = SingleLaneXNoTurnsSim(length=30, manager_type=FCFSManager)
+    for _ in range(120*60):
+        sim.step()
+
+
+def test_visualizer(clean_config: None):
+    sim = SingleLaneXNoTurnsSim(length=30, manager_type=FCFSManager)
+    anim = sim.animate(max_timestep=1*60)

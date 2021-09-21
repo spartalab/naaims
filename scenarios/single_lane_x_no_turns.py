@@ -1,18 +1,20 @@
-from aimsim.intersection.managers.stop_sign import StopSignManager
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Type
 
 from aimsim.simulator import Simulator
 from aimsim.vehicles import AutomatedVehicle
 from aimsim.endpoints.factories import GaussianVehicleFactory
 from aimsim.util import Coord
 from aimsim.trajectories import BezierTrajectory
+from aimsim.intersection.managers import IntersectionManager, StopSignManager
 from aimsim.intersection.tilings import SquareTiling
 from aimsim.intersection.tilings.tiles import DeterministicTile
 
 
 class SingleLaneXNoTurnsSim(Simulator):
 
-    def __init__(self, visualize: bool = True, length: float = 100):
+    def __init__(self, visualize: bool = True, length: float = 100,
+                 manager_type: Type[IntersectionManager] = StopSignManager):
+        """Create an instance of a double single lane crossing simulator."""
 
         # Create IO roads
         traj_i_lr = BezierTrajectory(Coord(-length, 12), Coord(0, 12),
@@ -60,8 +62,8 @@ class SingleLaneXNoTurnsSim(Simulator):
 
         factory_spec: Dict[str, Any] = dict(
             vehicle_type=AutomatedVehicle,
-            num_destinations=1,
-            destination_probabilities=[1],
+            num_destinations=2,
+            destination_probabilities=[1, 0],
             source_node_id=None,
             max_accel_mn=3,
             max_accel_sd=0,
@@ -79,6 +81,10 @@ class SingleLaneXNoTurnsSim(Simulator):
             vot_sd=0
         )
 
+        factory_spec_2nd = factory_spec.copy()
+        factory_spec_2nd['destination_probabilities'] = [0, 1]
+        factory_specs = [factory_spec, factory_spec_2nd]
+
         # Form spawner specs
         spawner_specs: List[Dict[str, Any]] = []
         for i in range(2):
@@ -88,7 +94,7 @@ class SingleLaneXNoTurnsSim(Simulator):
                 vpm=10,
                 factory_selection_probabilities=[1],
                 factory_types=[GaussianVehicleFactory],
-                factory_specs=[factory_spec]
+                factory_specs=[factory_specs[i]]
             ))
 
         # Form remover specs
@@ -105,7 +111,7 @@ class SingleLaneXNoTurnsSim(Simulator):
             incoming_road_ids=[0, 1],
             outgoing_road_ids=[2, 3],
             connectivity=[(0, 2, True), (1, 3, True)],
-            manager_type=StopSignManager,
+            manager_type=manager_type,
             manager_spec=dict(tiling_type=SquareTiling, tiling_spec=dict(
                 tile_type=DeterministicTile, misc_spec=dict(tile_width=100)
             )),
@@ -119,7 +125,7 @@ class SingleLaneXNoTurnsSim(Simulator):
         lane_ou = Coord(12, 24)
         od_pair: Dict[Tuple[Coord, int], List[Coord]] = {
             (lane_il, 0): [lane_or],
-            (lane_iu, 0): [lane_ou],
+            (lane_iu, 1): [lane_ou],
         }
 
         super().__init__(road_specs, [intersection_spec], spawner_specs,

@@ -247,16 +247,24 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
             transfer = self.entering_vehicle_buffer.pop(0)
             lane: IntersectionLane
             if transfer.vehicle.has_reservation:
-                # Tell the manager this reservation has started and get the
-                # lane it should be on.
-                lane = self.manager.start_reservation(transfer.vehicle)
+                if transfer.section == VehicleSection.FRONT:
+                    # Tell the manager this reservation has started and get the
+                    # lane it should be on.
+                    lane = self.manager.start_reservation(transfer.vehicle)
+                else:
+                    # Reservation already started, so just get the lane it
+                    # should be on.
+                    lane = self.manager.get_lane(transfer.vehicle)
             elif transfer.vehicle.permission_to_enter_intersection:
-                # Retrieve the vehicle's desired IntersectionLane by using its
-                # next movement.
+                # Retrieve the vehicle's desired IntersectionLane by using
+                # its next movement.
                 # TODO: (low) Consider checking that this lane is open for
-                #       unscheduled movements at this timestep. This shouldn't
-                #       be necessary since this should have been cleared when
-                #       the vehicle was given permission to enter.
+                #       unscheduled movements at this timestep. This
+                #       shouldn't be necessary since this should have been
+                #       cleared when the vehicle was given permission to
+                #       enter.
+                # TODO: (speed) cache value of front section for use by center
+                #       and rear.
                 lane = self.lanes_by_endpoints[(
                     transfer.pos,
                     transfer.vehicle.next_movements(transfer.pos)[0]

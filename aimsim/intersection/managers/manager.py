@@ -132,6 +132,10 @@ class IntersectionManager(Configurable):
         """Start a reservation in the tiling and return its lane."""
         return self.tiling.start_reservation(vehicle)
 
+    def get_lane(self, vehicle: Vehicle) -> IntersectionLane:
+        """Get the lane of an already active reservation."""
+        return self.tiling.active_reservations[vehicle].lane
+
     def finish_exiting(self, vehicle: Vehicle) -> None:
         """Clean up permissions and reservations for exiting vehicle."""
         vehicle.permission_to_enter_intersection = False

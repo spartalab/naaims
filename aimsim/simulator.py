@@ -363,6 +363,10 @@ class Simulator:
             # 6c. Ready a list for all vehicles being plotted.
             self.vehicle_patches: List[Polygon] = []
 
+            # 6d. Place time on vis.
+            self.time_text = self.ax.text(min_x, min_y, self.strf_t(),
+                                          fontsize=16)
+
     def step(self) -> None:
         """Execute one simulation step."""
 
@@ -477,6 +481,10 @@ class Simulator:
                 self.ax.add_patch(vehicle_patch)
                 self.vehicle_patches.append(vehicle_patch)
                 changed.append(vehicle_patch)
+
+            # Update time
+            self.time_text.set_text(self.strf_t())
+            changed.append(self.time_text)
             return changed
 
         def get_next_frame() -> Generator[Set[Vehicle], None, None]:
@@ -489,4 +497,12 @@ class Simulator:
 
         return FuncAnimation(self.fig, draw, frames=get_next_frame,
                              interval=frame_ratio *
-                             SHARED.SETTINGS.TIMESTEP_LENGTH * 1000, save_count=max_timestep*frame_ratio, blit=True)
+                             SHARED.SETTINGS.TIMESTEP_LENGTH * 1000,
+                             save_count=max_timestep*frame_ratio, blit=True)
+
+    def strf_t(self) -> str:
+        """Return the current timestep as a nicely formatted time string."""
+        time = SHARED.t * SHARED.SETTINGS.TIMESTEP_LENGTH
+        min = time//60
+        sec = time % 60
+        return f'{min:02.0f}:{sec:06.3f}'
