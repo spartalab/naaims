@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Dict, List
+from random import shuffle
 
 from aimsim.intersection.managers.manager import IntersectionManager
 
@@ -31,8 +32,10 @@ class FCFSManager(IntersectionManager):
         # that we accepted requests for last loop.
         while any(poll_lane.values()):
             stop_polling_lanes: List[RoadLane] = []
-            for lane, check in poll_lane.items():
-                if check:  # Check for a new reservation request
+            lanes = list(poll_lane.keys())
+            shuffle(lanes)
+            for lane in lanes:
+                if poll_lane[lane]:  # Check for a new reservation request
                     # Have the tiling check for if there's a request in this
                     # lane and, if so, if it works.
                     prs = self.tiling.check_request(lane)
