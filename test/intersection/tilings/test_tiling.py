@@ -16,6 +16,42 @@ from aimsim.pathfinder import Pathfinder
 import aimsim.shared as SHARED
 
 
+def square_tiling(x_min: float, x_max: float, y_min: float,
+                  y_max: float, tile_width: float,
+                  speed_limit: int = 1, timeout: bool = False) -> SquareTiling:
+    x_mid = (x_max-x_min)/2
+    y_mid = (y_max-y_min)/2
+
+    # Construct incoming road lane at top middle
+    in_coord = Coord(x_mid, y_max)
+    rl_in = RoadLane(BezierTrajectory(
+        Coord(x_mid, y_max-50), in_coord, [Coord(x_mid, y_max+25)]
+    ), 5, speed_limit, 5, 40)
+
+    # Construct outgoing road lane at middle right
+    out_coord = Coord(x_max, y_mid)
+    rl_out = RoadLane(BezierTrajectory(
+        out_coord, Coord(x_max+50, y_mid), [Coord(x_max+25, y_mid)]
+    ), 5, speed_limit, 40, 5)
+
+    # Construct intersection lane
+    il = IntersectionLane(rl_in, rl_out, speed_limit)
+
+    return SquareTiling({in_coord: rl_in}, {out_coord: rl_out}, (il,),
+                        {(in_coord, out_coord): il}, timeout=timeout,
+                        misc_spec={'tile_width': tile_width})
+
+
+@fixture
+def sq(speed_limit: int = 30):
+    return square_tiling(0, 100, 0, 200, 1, speed_limit)
+
+
+@fixture
+def sq_timeouts(speed_limit: int = 30):
+    return square_tiling(0, 100, 0, 200, 1, speed_limit, timeout=True)
+
+
 def test_timesteps_forward(read_config: None):
     assert Tiling._exit_res_timesteps_forward(0) == 18
     assert Tiling._exit_res_timesteps_forward(15) == 18
@@ -95,37 +131,6 @@ def test_new_timestep(read_config: None, sq: SquareTiling, vehicle: Vehicle,
     assert len(sq.tiles) == 2
     assert sq.tiles[0][2].will_reservation_work(res2) is False
     assert sq.tiles[1][2].will_reservation_work(res2) is True
-
-
-def square_tiling(x_min: float, x_max: float, y_min: float,
-                  y_max: float, tile_width: float,
-                  speed_limit: int = 1) -> SquareTiling:
-    x_mid = (x_max-x_min)/2
-    y_mid = (y_max-y_min)/2
-
-    # Construct incoming road lane at top middle
-    in_coord = Coord(x_mid, y_max)
-    rl_in = RoadLane(BezierTrajectory(
-        Coord(x_mid, y_max-50), in_coord, [Coord(x_mid, y_max+25)]
-    ), 5, speed_limit, 5, 40)
-
-    # Construct outgoing road lane at middle right
-    out_coord = Coord(x_max, y_mid)
-    rl_out = RoadLane(BezierTrajectory(
-        out_coord, Coord(x_max+50, y_mid), [Coord(x_max+25, y_mid)]
-    ), 5, speed_limit, 40, 5)
-
-    # Construct intersection lane
-    il = IntersectionLane(rl_in, rl_out, speed_limit)
-
-    return SquareTiling({in_coord: rl_in}, {out_coord: rl_out}, (il,),
-                        {(in_coord, out_coord): il},
-                        misc_spec={'tile_width': tile_width})
-
-
-@fixture
-def sq(speed_limit: int = 30):
-    return square_tiling(0, 100, 0, 200, 1, speed_limit)
 
 
 def test_mock_speed_update(read_config: None, sq: SquareTiling,
@@ -1303,3 +1308,141 @@ def test_check_req_ok(clean_request: Tuple[Tiling, RoadLane, List[Reservation],
     sq, irl_og, valid_reservations, _ = clean_request
     cycle_res = sq.check_request(irl_og)
     assert cycle_res == valid_reservations
+
+
+def request_timeout_option(timeout: bool, p_back: float = .9):
+    sq = square_tiling(0, 100, 0, 200, 1, 30, timeout=timeout)
+    vehicle: Vehicle = AutomatedVehicle(0, 0)
+    vehicle2: Vehicle = AutomatedVehicle(1, 0)
+
+    il_og = sq.lanes[0]
+    il = il_og.clone()
+    irl_og = sq.incoming_road_lane_by_coord[il.trajectory.start_coord]
+    irl = irl_og.clone()
+    orl = sq.outgoing_road_lane_by_coord[il.trajectory.end_coord]
+
+    # Place vehicle at the edge of the intersection
+    irl_og.vehicles = [vehicle]
+    dist_v2 = vehicle.length * (1+2*SHARED.SETTINGS.length_buffer_factor)
+    p_v2 = (dist_v2/2) / irl_og.trajectory.length
+    irl_og.vehicle_progress = {vehicle: VehicleProgress(p_back, p_back - p_v2,
+                                                        p_back - 2*p_v2)}
+    vehicle.velocity = 0
+    vehicle.acceleration = 0
+    vehicle.pos = irl_og.trajectory.get_position(1-p_v2)
+    vehicle.heading = irl_og.trajectory.get_heading(1-p_v2)
+
+    # Set up the Pathfinder
+    SHARED.SETTINGS.pathfinder = Pathfinder([], [], {
+        (il.trajectory.start_coord, 0): [il.trajectory.end_coord]})
+
+    # Initialize data
+    counter = 0
+    end_at = 1
+    new_exit: Optional[ScheduledExit] = irl_og.soonest_exit(counter)
+    assert new_exit is not None
+    test_t = new_exit.t
+    t_exit = new_exit.t  # For use in scheduling a competing reservation
+    last_exit: Optional[ScheduledExit] = None
+    test_reservations: Dict[Vehicle, Reservation] = {}
+    valid_reservations: List[Reservation] = []
+    originals: List[Vehicle] = []
+    clone_to_original: Dict[Vehicle, Vehicle] = {}
+
+    while (len(il.vehicles) > 0) or (counter < end_at):
+        test_complete, counter, test_t, last_exit, new_exit = \
+            sq._mock_step(counter, end_at, test_t, new_exit, irl, il, orl,
+                          clone_to_original, test_reservations,
+                          valid_reservations, last_exit, originals, irl_og,
+                          il_og, False)
+        if test_complete:
+            break
+
+    # Confirm a competing reservation at the moment of vehicle entry
+    one_tile_used = list(valid_reservations[0].tiles[t_exit])[-1]
+    veh2res = Reservation(vehicle2, il.trajectory.start_coord,
+                          {t_exit: {one_tile_used: 1}},
+                          il, ScheduledExit(
+                              vehicle2, VehicleSection.REAR, 1,
+                              SHARED.SETTINGS.min_acceleration))
+    one_tile_used.confirm_reservation(veh2res)
+
+    return sq, irl_og, valid_reservations, veh2res
+
+
+@fixture(scope='function')
+def request_with_timeout(read_config_clean: None):
+    return request_timeout_option(True)
+
+
+@fixture(scope='function')
+def request_with_timeout_short(read_config_clean: None):
+    return request_timeout_option(True, p_back=.99)
+
+
+@fixture(scope='function')
+def request_without_timeout(read_config_clean: None):
+    return request_timeout_option(False)
+
+
+@fixture(scope='function')
+def request_without_timeout_short(read_config_clean: None):
+    return request_timeout_option(False, p_back=.99)
+
+
+def timeout_test_pattern(request_packet: Tuple[
+        Tiling, RoadLane, List[Reservation], Reservation], p_back: float = .9, timeout: bool = True):
+    sq, irl_og, valid_reservations, _ = request_packet
+    vehicle = valid_reservations[0].vehicle
+
+    # Calculate traversal time
+    t_traverse = ceil((2*((1-p_back) * irl_og.trajectory.length) /
+                       SHARED.SETTINGS.min_acceleration) ** .5
+                      * SHARED.SETTINGS.steps_per_second)
+    t_timeout = round(min(.5 * SHARED.SETTINGS.steps_per_second, t_traverse/2))
+
+    # Ensure the vehicle's reservation request fails and its timeout is logged
+    # if timeout is on.
+    cycle_res = sq.check_request(irl_og)
+    assert cycle_res == []
+    if timeout:
+        assert sq.timeout_until is not None
+        assert sq.timeout_until[vehicle] == approx(t_timeout)
+    else:
+        assert sq.timeout_until is None
+
+    # Advance time and vehicle
+    SHARED.t += 1
+    sq.handle_new_timestep()
+
+    # Check that the vehicle's reservation request still fails if timeout is
+    # on, and passes if not.
+    cycle_res = sq.check_request(irl_og)
+    if timeout:
+        assert cycle_res == []
+        assert sq.timeout_until is not None
+        assert sq.timeout_until[vehicle] == approx(t_timeout)
+    else:
+        assert len(cycle_res) > 0
+        assert sq.timeout_until is None
+
+
+def test_timeout_long(request_with_timeout: Tuple[
+        Tiling, RoadLane, List[Reservation], Reservation]):
+    timeout_test_pattern(request_with_timeout)
+
+
+def test_timeout_counterfactural(request_without_timeout: Tuple[
+        Tiling, RoadLane, List[Reservation], Reservation]):
+    timeout_test_pattern(request_without_timeout, timeout=False)
+
+
+def test_timeout_short(request_with_timeout_short: Tuple[
+        Tiling, RoadLane, List[Reservation], Reservation]):
+    timeout_test_pattern(request_with_timeout_short, p_back=.99)
+
+
+def test_timeout_short_counterfactual(request_without_timeout_short: Tuple[
+        Tiling, RoadLane, List[Reservation], Reservation]):
+    timeout_test_pattern(request_without_timeout_short,
+                         p_back=.99, timeout=False)

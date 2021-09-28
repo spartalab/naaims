@@ -27,6 +27,18 @@ def read_config():
 
 
 @fixture
+def read_config_clean():
+    """For this test only, reset and reread the config."""
+    reload(SHARED)
+    SHARED.SETTINGS.read()
+
+    yield
+
+    reload(SHARED)
+    SHARED.SETTINGS.read()
+
+
+@fixture
 def clean_config():
     """For this test only, reset as if the config was not read."""
     reload(SHARED)

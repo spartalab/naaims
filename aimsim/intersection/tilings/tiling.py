@@ -46,6 +46,7 @@ class Tiling(Configurable):
                  cycle: Optional[List[
                      Tuple[Set[IntersectionLane], int]
                  ]] = None,
+                 timeout: bool = False,
                  misc_spec: Dict[str, Any] = {}
                  ) -> None:
         """Should instantiate a new Tiling.
@@ -88,6 +89,10 @@ class Tiling(Configurable):
                                 Set[Coord]] = self.greenlit_movements(
                 self.cycle[0][0])
             self.time_left_in_cycle: int = self.cycle[0][1]
+
+        # Initialize a dict to track request checking timeouts
+        self.timeout_until: Optional[Dict[Vehicle, int]] = {} if timeout else \
+            None
 
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
@@ -283,6 +288,20 @@ class Tiling(Configurable):
             end_at = indices[1]
             originals = incoming_road_lane_original.vehicles[counter:end_at]
 
+        # Enforce a cooldown on the frequency with which vehicles can make new
+        # requests. See Dresner 2008 section 3.4.4 Timeouts.
+        leader: Vehicle = incoming_road_lane_original.vehicles[counter]
+        if (self.timeout_until is not None) and \
+                (leader in self.timeout_until):
+            t_timeout_expired = self.timeout_until[leader]
+            if t_timeout_expired <= SHARED.t:
+                # Timeout complete. Remove vehicle from the timeout list.
+                del self.timeout_until[leader]
+            else:
+                # Timeout still active. Skip checking the request of this
+                # vehicle.
+                return []
+
         # Fetch the projected entrance of the first vehicle in the request
         # sequence and set its time as the start of the reservation test.
         new_exit: Optional[ScheduledExit] = \
@@ -291,6 +310,7 @@ class Tiling(Configurable):
             raise RuntimeError("Soonest exit should have returned a "
                                "ScheduledExit but didn't.")
         test_t = new_exit.t
+        leader_arrival = new_exit.t  # for timeout calculation
 
         # Fetch and clone the request's incoming lane, IntersectionLane, and
         # outgoing lane.
@@ -323,6 +343,15 @@ class Tiling(Configurable):
                                 mark)
             if test_complete:
                 break
+
+        if (self.timeout_until is not None) and len(valid_reservations) == 0:
+            # Enforce a timeout until the vehicle can make its next request.
+            # This timeout will be the smaller of half a second (in timesteps)
+            # or half the difference between the current time and the vehicle's
+            # arrival time.
+            self.timeout_until[leader] = SHARED.t + \
+                round(min(.5*SHARED.SETTINGS.steps_per_second,
+                          (leader_arrival - SHARED.t)/2))
 
         return valid_reservations
 

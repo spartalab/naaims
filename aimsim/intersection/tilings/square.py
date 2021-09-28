@@ -26,6 +26,7 @@ class SquareTiling(Tiling):
                  cycle: Optional[List[
                      Tuple[Set[IntersectionLane], int]
                  ]] = None,
+                 timeout: bool = False,
                  misc_spec: Dict[str, Any] = {}
                  ) -> None:
         """Creates a new square (pixelated) tiling.
@@ -41,7 +42,8 @@ class SquareTiling(Tiling):
             lanes=lanes,
             lanes_by_endpoints=lanes_by_endpoints,
             tile_type=tile_type,
-            cycle=cycle
+            cycle=cycle,
+            timeout=timeout
         )
 
         tile_width = misc_spec.get('tile_width')  # in meters

@@ -22,13 +22,14 @@ class ArcTiling(Tiling):
     def __init__(self,
                  incoming_road_lane_by_coord: Dict[Coord, RoadLane],
                  outgoing_road_lane_by_coord: Dict[Coord, RoadLane],
-                 lanes: List[IntersectionLane],
+                 lanes: Tuple[IntersectionLane, ...],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
                  tile_type: Type[Tile] = DeterministicTile,
                  cycle: Optional[List[
                      Tuple[Set[IntersectionLane], int]
                  ]] = None,
+                 timeout: bool = False,
                  misc_spec: Dict[str, Any] = {}
                  ) -> None:
         super().__init__(
@@ -37,7 +38,8 @@ class ArcTiling(Tiling):
             lanes=lanes,
             lanes_by_endpoints=lanes_by_endpoints,
             tile_type=tile_type,
-            cycle=cycle
+            cycle=cycle,
+            timeout=timeout
         )
         # TODO: (arc) Does ArcTiling need a buffer argument? Anything else?
         raise NotImplementedError("TODO")
