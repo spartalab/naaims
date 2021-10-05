@@ -5,8 +5,9 @@ it's connected to.
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Dict, Optional, List, Any, Type, Tuple, Set
+from typing import TYPE_CHECKING, Dict, List, Any, Type, Tuple, Set
 from random import random, choices, shuffle
+from math import floor
 
 import aimsim.shared as SHARED
 from aimsim.archetypes import Configurable, Upstream
@@ -27,7 +28,7 @@ class VehicleSpawner(Configurable, Upstream):
                  factory_types: List[Type[VehicleFactory]],
                  factory_specs: List[Dict[str, Any]],
                  factory_selection_probabilities: List[float],
-                 fixed_interval_spawns: List[int] = []
+                 predetermined_spawns: List[Tuple[float, Vehicle]] = []
                  ) -> None:
         """Create a new vehicle spawner.
 
@@ -35,24 +36,34 @@ class VehicleSpawner(Configurable, Upstream):
             downstream: Road
                 The road to spawn vehicles on to.
             vpm: float
-                Target number of vehicles to spawn per minute. Used in a
-                Poisson distribution.
+                Target number of vehicles to spawn per minute using a Poisson
+                distribution. Doesn't take into account predetermined spawns.
             factory_types: List[Type[VehicleFactory]]
-                The types of vehicle factories to create.
+                The types of VehicleFactory to create and use for Poisson
+                spawns.
             factory_specs: List[Dict[str, Any]]
-                The specs of the vehicle factories to create.
+                The specs of VehicleFactory to create and use for Poisson
+                spawns.
             factory_selection_probabilities: List[float]
                 The probability of using a specific VehicleFactory.
-            fixed_interval_spawns: List[int]
-                Override random behavior and spawn a vehicle at this timestep.
+            predetermind_spawns: List[Tuple[float, Vehicle]]
+                Specifies predetermined spawns that occur outside of the
+                Poisson process. The tuple details the spawn time in
+                seconds and the vehicle that will spawn.
         """
 
         if len(factory_types) != len(factory_specs) != \
                 len(factory_selection_probabilities):
             raise ValueError("The number of generator types, specs, and "
                              "probabilities must match.")
-        if sum(factory_selection_probabilities) != 1:
-            raise ValueError("The generator probabilities must sum to 1.")
+        p_factory = sum(factory_selection_probabilities)
+        if p_factory != 1:
+            if len(predetermined_spawns) == 0:
+                raise ValueError("If the generator probabilities sum to 0, "
+                                 "there must be predetermined spawns set.")
+            elif p_factory != 0:
+                raise ValueError("The generator probabilities must sum to 1, "
+                                 "or 0 if there are predetermined spawns set.")
 
         self.downstream = downstream
 
@@ -73,7 +84,12 @@ class VehicleSpawner(Configurable, Upstream):
         for i in range(len(factory_types)):
             self.factories.append(factory_types[i].from_spec(factory_specs[i]))
 
-        self.fixed_interval_spawns = fixed_interval_spawns
+        # Adjust spawning logic if spawns are pre-determined. Make sure that
+        # it's ordered by timestep.
+        self.predetermined_spawns: List[Tuple[int, Vehicle]] = \
+            [(floor(s/SHARED.SETTINGS.TIMESTEP_LENGTH), v) for s, v in
+             predetermined_spawns]
+        self.predetermined_spawns.sort(key=lambda s: s[0])
 
         # Prepare a queued spawn to fill later.
         self.queue: List[Tuple[Vehicle, List[RoadLane]]] = []
@@ -128,43 +144,47 @@ class VehicleSpawner(Configurable, Upstream):
             factory_specs=spec['factory_specs']
         )
 
-    def step_vehicles(self) -> Tuple[Optional[Vehicle], List[Vehicle]]:
+    def step_vehicles(self) -> Tuple[List[Vehicle], List[Vehicle]]:
         """Decides whether to spawn and returns spawned and entering vehicles.
 
         Returns
-            Optional[Vehicle]   The vehicle spawned in this timestep, if there
-                                was one.
-            List[Vehicle]       The vehicle(s) that exit the spawner and enter
-                                the simulated scope. Usually the same as the
-                                spawned vehicle but may be different if road
-                                traffic prevents vehicles spawned in prior
-                                timesteps from entering at their time of spawn.
+            List[Vehicle]   The vehicle(s) spawned in this timestep.
+            List[Vehicle]   The vehicle(s) that exit the spawner and enter
+                            the simulated scope. Usually the same as the
+                            spawned vehicle but may be different if road
+                            traffic prevents vehicles spawned in prior
+                            timesteps from entering at their time of spawn.
         """
 
         if self.downstream is None:
             raise MissingConnectionError("No downstream object.")
 
-        # Roll to spawn a new vehicle (or spawn one anyway if the fixed
-        # interval spawn says to). If the roll is successful, pick a generator
-        # to use based on the distribution of generators and use it to spawn a
-        # new vehicle.
-        spawn: Optional[Vehicle]
-        if (len(self.fixed_interval_spawns) > 0) and \
-                (self.fixed_interval_spawns[0] == SHARED.t):
-            spawn = choices(self.factories,
-                            self.factory_selection_probabilities
-                            )[0].create_vehicle()
-            self.fixed_interval_spawns.pop(0)
-        elif random() < self.spawn_probability:
-            spawn = choices(self.factories,
-                            self.factory_selection_probabilities
-                            )[0].create_vehicle()
-        else:
-            spawn = None
+        # Initialize a list of vehicle spawns.
+        spawns_this_timestep: List[Vehicle] = []
 
-        # Find every downstream lane that this vehicle can enter and still
-        # reach its destination. Add both to the queue.
-        if spawn is not None:
+        # Check if there are predetermined vehicle spawns this timestep.
+        while len(self.predetermined_spawns) > 0:
+            # Check if it's time for the next spawn.
+            if self.predetermined_spawns[0][0] <= 0:
+                # If so, take it out of the list and spawn it.
+                spawns_this_timestep.append(
+                    self.predetermined_spawns.pop(0)[1])
+            else:
+                # If not, we're done with predetermined spawns this timestep.
+                break
+
+        # Roll to spawn a new vehicle.
+        if random() < self.spawn_probability:
+            # Pick a generator to use based on the distribution of generators
+            # and spawn a new vehicle with it.
+            spawns_this_timestep.append(
+                choices(self.factories, self.factory_selection_probabilities
+                        )[0].create_vehicle())
+
+        # Find every downstream lane that vehicle(s) spawned this timestep can
+        # enter and still reach its destination. Add both vehicle and lanes to
+        # the queue.
+        for spawn in spawns_this_timestep:
             spawnable_lanes: List[RoadLane] = []
             for lane in self.downstream.lanes:
                 if len(spawn.next_movements(lane.trajectory.end_coord,
@@ -237,9 +257,12 @@ class VehicleSpawner(Configurable, Upstream):
             if len(blocked_lanes) == len(self.downstream.lanes):
                 break
 
-        # Delete transferred vehicles from queue
+        # Delete transferred vehicles from queue starting from the end of the
+        # queue so indices don't get messed up
+        queue_entries_to_delete.reverse()
         for i in queue_entries_to_delete:
             del self.queue[i]
 
-        # Pass newly spawned vehicle back to the Simulator if there is one
-        return spawn, vehicles_transferred
+        # Pass newly spawned vehicles and newly transferred vehicles back to
+        # the Simulator if there are any
+        return spawns_this_timestep, vehicles_transferred

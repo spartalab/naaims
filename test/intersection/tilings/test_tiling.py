@@ -1391,7 +1391,8 @@ def request_without_timeout_short(read_config_clean: None):
 
 
 def timeout_test_pattern(request_packet: Tuple[
-        Tiling, RoadLane, List[Reservation], Reservation], p_back: float = .9, timeout: bool = True):
+    Tiling, RoadLane, List[Reservation], Reservation], p_back: float = .9,
+        timeout: bool = True):
     sq, irl_og, valid_reservations, _ = request_packet
     vehicle = valid_reservations[0].vehicle
 

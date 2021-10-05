@@ -1,10 +1,11 @@
 .idea/
 out/
-**/.ipynb_checkpoints/*
-**/__pycache__/*
-**/.vscode/*
+.ipynb_checkpoints
+__pycache__
+.vscode
+.mypy_cache
+.pytest_cache
 *.pyc
 *.DS_Store
 *.png
-**/.mypy_cache/*
 *.mp4

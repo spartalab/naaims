@@ -61,7 +61,7 @@ class Upstream(ABC):
     """
 
     @abstractmethod
-    def step_vehicles(self) -> Optional[Tuple[Optional[Vehicle],
+    def step_vehicles(self) -> Optional[Tuple[List[Vehicle],
                                               List[Vehicle]]]:
         """Should progress all vehicles over one timestep.
 

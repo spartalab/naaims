@@ -7,7 +7,6 @@ from pytest_mock import MockerFixture
 
 from aimsim.vehicles import AutomatedVehicle
 from aimsim.endpoints.factories import VehicleFactory, GaussianVehicleFactory
-import aimsim.shared as SHARED
 
 
 def test_gvf_creation(mocker: MockerFixture, read_config: None):
