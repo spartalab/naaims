@@ -1,1 +1,2 @@
 from scenarios.single_lane_x_no_turns import SingleLaneXNoTurnsSim
+from scenarios.zipper import ZipperMergeSim

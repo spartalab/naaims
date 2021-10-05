@@ -101,7 +101,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
             raise ValueError(
                 'Need lane_offset if there\'s more than one lane.')
         if ((lane_offset_angle is not None) and
-                (lane_offset_angle <= -pi/2 or lane_offset_angle >= pi/2)):
+                (lane_offset_angle < -pi/2 or lane_offset_angle > pi/2)):
             raise ValueError('lane_offset_angle must be between +/- pi/2.')
         if (
             (manager_type is DummyManager) and (trajectory.length < max(
