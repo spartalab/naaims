@@ -69,7 +69,9 @@ class Pathfinder:
         # has already been provided.
         if self.provided is not None:
             pair = (enters_intersection_at, destination)
-            if pair in self.provided:
+            if not at_least_one:
+                return self.provided.get(pair, [])
+            elif pair in self.provided:
                 return self.provided[pair]
 
         raise NotImplementedError("TODO: Inferred destinations")

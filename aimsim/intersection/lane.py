@@ -66,12 +66,14 @@ class IntersectionLane(Lane):
         if front is not None:
             # Front of the vehicle is in the lane.
             return True, front, VehicleSection.FRONT
-        else:
+        rear = self.vehicle_progress[vehicle].rear
+        if rear is not None:
             # Surely the rear of the vehicle must be in the lane.
-            rear = self.vehicle_progress[vehicle].rear
-            if rear is None:
-                raise RuntimeError("Vehicle exited lane already.")
             return True, rear, VehicleSection.REAR
+        center = self.vehicle_progress[vehicle].center
+        if center is None:
+            raise RuntimeError("Vehicle exited lane already.")
+        return True, center, VehicleSection.CENTER
 
     def effective_speed_limit(self, p: float, vehicle: Vehicle) -> float:
         """Return the effective speed limit at the given progression."""

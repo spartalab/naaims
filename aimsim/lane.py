@@ -197,12 +197,10 @@ class Lane(ABC):
                 # distance plus the length left in this lane.
                 available_stopping_distance = downstream_stopping_distance + \
                     (1-p)*self.trajectory.length
-            elif section is VehicleSection.REAR:
+            else:
                 # The stopping distance is just what we have downstream because
                 # it's straddling the seam.
                 available_stopping_distance = downstream_stopping_distance
-            else:
-                raise ValueError("Did not receive front or rear section p.")
         else:
             if section is not VehicleSection.FRONT:
                 raise ValueError("Not given vehicle's front progress even "

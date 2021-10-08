@@ -15,7 +15,7 @@ class ZipperMergeSim(Simulator):
 
     def __init__(self, visualize: bool = True, length: float = 100,
                  manager_type: Type[IntersectionManager] = StopSignManager):
-        """Create an instance of a double single lane crossing simulator."""
+        """Create an instance of a zipper merge simulator."""
 
         # Create IO roads
         traj_i_lr = BezierTrajectory(Coord(-length, 12), Coord(0, 12),

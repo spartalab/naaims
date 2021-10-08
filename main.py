@@ -1,18 +1,10 @@
-import sys
-
-import pandas as pd
-
-from aimsim.simulators import SingleIntersectionSimulator
+from scenarios import SingleIntersectionSim
 
 
 def main():
-    sim = SingleIntersectionSimulator(
-        pd.read_csv("intersection_layouts/symm4way_traj.csv",
-                    delimiter=','),
-        pd.read_csv("intersection_layouts/symm4way_lane.csv",
-                    delimiter=',')
-    )
-    sim.display()
+    sim = SingleIntersectionSim()
+    for t in range(2*60*60):
+        sim.step()
 
 
 if __name__ == "__main__":
