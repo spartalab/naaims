@@ -34,22 +34,22 @@ class SingleIntersectionSim(Simulator):
             raise ValueError('Only 1 to 3 lanes supported.')
 
         # Create IO roads
-        traj_i_l = BezierTrajectory(Coord(-length, 6), Coord(0, 6),
-                                    [Coord(-length/2, 6)])
-        traj_o_l = BezierTrajectory(Coord(0, 18), Coord(-length, 18),
-                                    [Coord(-length/2, 18)])
-        traj_i_d = BezierTrajectory(Coord(18, -length), Coord(18, 0),
-                                    [Coord(18, -length/2)])
-        traj_o_d = BezierTrajectory(Coord(6, 0), Coord(6, -length),
-                                    [Coord(6, -length/2)])
-        traj_i_r = BezierTrajectory(Coord(24+length, 18), Coord(24, 18),
-                                    [Coord(24+length/2, 18)])
-        traj_o_r = BezierTrajectory(Coord(24, 6), Coord(24+length, 6),
-                                    [Coord(24+length/2, 6)])
-        traj_i_u = BezierTrajectory(Coord(6, 24+length), Coord(6, 24),
-                                    [Coord(6, 24+length/2)])
-        traj_o_u = BezierTrajectory(Coord(18, 24), Coord(18, 24+length),
-                                    [Coord(18, 24+length/2)])
+        traj_i_l = BezierTrajectory(Coord(-length, 10), Coord(0, 10),
+                                    [Coord(-length/2, 10)])
+        traj_o_l = BezierTrajectory(Coord(0, 22), Coord(-length, 22),
+                                    [Coord(-length/2, 22)])
+        traj_i_d = BezierTrajectory(Coord(22, -length), Coord(22, 0),
+                                    [Coord(22, -length/2)])
+        traj_o_d = BezierTrajectory(Coord(10, 0), Coord(10, -length),
+                                    [Coord(10, -length/2)])
+        traj_i_r = BezierTrajectory(Coord(32+length, 22), Coord(32, 22),
+                                    [Coord(32+length/2, 22)])
+        traj_o_r = BezierTrajectory(Coord(32, 10), Coord(32+length, 10),
+                                    [Coord(32+length/2, 10)])
+        traj_i_u = BezierTrajectory(Coord(10, 32+length), Coord(10, 32),
+                                    [Coord(10, 32+length/2)])
+        traj_o_u = BezierTrajectory(Coord(22, 32), Coord(22, 32+length),
+                                    [Coord(22, 32+length/2)])
         traj_i = [traj_i_l, traj_i_d, traj_i_r, traj_i_u]
         traj_o = [traj_o_l, traj_o_d, traj_o_r, traj_o_u]
 
@@ -163,59 +163,59 @@ class SingleIntersectionSim(Simulator):
         od_pair: Dict[Tuple[Coord, int], List[Coord]] = {}
         if num_lanes == 3:
             # Through   left (0) to right (2)
-            od_pair[(Coord(0.0, 6.0), 2)] = [Coord(24.0, 6.0)]
-            od_pair[(Coord(0.0, 10.0), 2)] = [Coord(24.0, 10.0)]
-            od_pair[(Coord(0.0, 2.0), 2)] = [Coord(24.0, 2.0)]
+            od_pair[(Coord(0.0, 10.0), 2)] = [Coord(32.0, 10.0)]
+            od_pair[(Coord(0.0, 14.0), 2)] = [Coord(32.0, 14.0)]
+            od_pair[(Coord(0.0, 6.0), 2)] = [Coord(32.0, 6.0)]
 
             # Through   down (1) to up (3)
-            od_pair[(Coord(14.0, -2.4492935982947064e-16), 3)
-                    ] = [Coord(14.0, 24.0)]
-            od_pair[(Coord(18.0, 0.0), 3)] = [Coord(18.0, 24.0)]
-            od_pair[(Coord(22.0, 2.4492935982947064e-16), 3)
-                    ] = [Coord(22.0, 24.0)]
+            od_pair[(Coord(18.0, -2.4492935982947064e-16), 3)
+                    ] = [Coord(18.0, 32.0)]
+            od_pair[(Coord(22.0, 0.0), 3)] = [Coord(22.0, 32.0)]
+            od_pair[(Coord(26.0, 2.4492935982947064e-16), 3)
+                    ] = [Coord(26.0, 32.0)]
 
             # Through   right (2) to left (0)
-            od_pair[(Coord(24.0, 14.0), 0)] = [
-                Coord(4.898587196589413e-16, 14.0)]
-            od_pair[(Coord(24.0, 18.0), 0)] = [Coord(0.0, 18.0)]
-            od_pair[(Coord(24.0, 22.0), 0)] = [
-                Coord(-4.898587196589413e-16, 22.0)]
+            od_pair[(Coord(32.0, 18.0), 0)] = [
+                Coord(4.898587196589413e-16, 18.0)]
+            od_pair[(Coord(32.0, 22.0), 0)] = [Coord(0.0, 22.0)]
+            od_pair[(Coord(32.0, 26.0), 0)] = [
+                Coord(-4.898587196589413e-16, 26.0)]
 
             # Through   up (3) to down (1)
-            od_pair[(Coord(2.0, 24.0), 1)] = [
-                Coord(2.0, -7.347880794884119e-16)]
-            od_pair[(Coord(10.0, 24.0), 1)] = [
-                Coord(10.0, 7.347880794884119e-16)]
-            od_pair[(Coord(6.0, 24.0), 1)] = [Coord(6.0, 0.0)]
+            od_pair[(Coord(6.0, 32.0), 1)] = [
+                Coord(6.0, -7.347880794884119e-16)]
+            od_pair[(Coord(14.0, 32.0), 1)] = [
+                Coord(14.0, 7.347880794884119e-16)]
+            od_pair[(Coord(10.0, 32.0), 1)] = [Coord(10.0, 0.0)]
 
             # Right     left (0) to down (1)
-            od_pair[(Coord(0.0, 2.0), 1)] = [
-                Coord(2.0, -7.347880794884119e-16)]
+            od_pair[(Coord(0.0, 6.0), 1)] = [
+                Coord(6.0, -7.347880794884119e-16)]
 
             # Left      left (0) to up (3)
-            od_pair[(Coord(0.0, 10.0), 3)] = [Coord(14.0, 24.0)]
+            od_pair[(Coord(0.0, 14.0), 3)] = [Coord(18.0, 32.0)]
 
             # Left      down (1) to left (0)
-            od_pair[(Coord(14.0, -2.4492935982947064e-16), 0)
-                    ] = [Coord(14.0, 24.0)]
+            od_pair[(Coord(18.0, -2.4492935982947064e-16), 0)
+                    ] = [Coord(18.0, 32.0)]
 
             # Right     down (1) to right (2)
-            od_pair[(Coord(22.0, 2.4492935982947064e-16), 2)
-                    ] = [Coord(24.0, 2.0)]
+            od_pair[(Coord(26.0, 2.4492935982947064e-16), 2)
+                    ] = [Coord(32.0, 6.0)]
 
             # Right     right (2) to up (3)
-            od_pair[(Coord(24.0, 22.0), 3)] = [Coord(22.0, 24.0)]
+            od_pair[(Coord(32.0, 26.0), 3)] = [Coord(26.0, 32.0)]
 
             # Left      right (2) to down (1)
-            od_pair[(Coord(24.0, 14.0), 1)] = [
-                Coord(10.0, 7.347880794884119e-16)]
+            od_pair[(Coord(32.0, 18.0), 1)] = [
+                Coord(14.0, 7.347880794884119e-16)]
 
             # Right     up (3) to left (0)
-            od_pair[(Coord(2.0, 24.0), 0)] = [
-                Coord(-4.898587196589413e-16, 22.0)]
+            od_pair[(Coord(6.0, 32.0), 0)] = [
+                Coord(-4.898587196589413e-16, 26.0)]
 
             # Left      up (3) to right (2)
-            od_pair[(Coord(10.0, 24.0), 2)] = [Coord(24.0, 10.0)]
+            od_pair[(Coord(14.0, 32.0), 2)] = [Coord(32.0, 14.0)]
 
         else:
             raise NotImplementedError("TODO: Hardcode other lane pathfinders.")
