@@ -1,5 +1,5 @@
-from aimsim.simulator import Simulator
-from aimsim.intersection.managers import FCFSManager
+from naaims.simulator import Simulator
+from naaims.intersection.managers import FCFSManager
 from scenarios.road_only import OneLaneRoadSim, TwoLaneRoadSim, \
     ThreeLaneRoadSim
 from scenarios import SingleLaneXNoTurnsSim

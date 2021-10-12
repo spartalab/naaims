@@ -5,8 +5,8 @@ from random import seed
 from pytest import raises
 from pytest_mock import MockerFixture
 
-from aimsim.vehicles import AutomatedVehicle
-from aimsim.endpoints.factories import VehicleFactory, GaussianVehicleFactory
+from naaims.vehicles import AutomatedVehicle
+from naaims.endpoints.factories import VehicleFactory, GaussianVehicleFactory
 
 
 def test_gvf_creation(mocker: MockerFixture, read_config: None):

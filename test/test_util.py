@@ -1,4 +1,4 @@
-from aimsim.util import *
+from naaims.util import *
 
 
 def test_Coord():

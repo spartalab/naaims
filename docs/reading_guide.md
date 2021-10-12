@@ -1,6 +1,6 @@
-# aimsim Reading Guide
+# NAAIMS Reading Guide
 
-The aimsim core algorithm is divided into initialization and the step cycle. Initialization runs once on starting the simulation, and the step cycle continues to repeat until the simulation timeframe ends.
+The NAAIMS core algorithm is divided into initialization and the step cycle. Initialization runs once on starting the simulation, and the step cycle continues to repeat until the simulation timeframe ends.
 
 I recommend you start by reading the [premise and assumptions](##premise-and-assumptions), continuing linearly until you find an odd term, for which you can refer to the [glossary](##glossary) for a definition (hopefully). I'd really appreciate it if you make fixes as you read and submit them as pull requests when you're done!
 
@@ -39,19 +39,19 @@ To make stopping distance guarantees, vehicles are assumed to have a braking spe
 
 ## Directory structure
 
-This library is structured like a pip package, with all source files (other than `main.py`) contained in the eponymous `aimsim/` directory.
+This library is structured like a pip package, with all source files (other than `main.py`) contained in the eponymous `naaims/` directory.
 
 Scripts to run new simulation instances and config files will live in the main directory, at a locations to be determined. Documentation is, of course, in `docs/`.
 
-Inside `aimsim/`, modules are grouped into folders by the general class of object they're associated with, e.g. IntersectionManagers in `intersections/`. Some folders only contain a single module, since I anticipate their scope might grow enough to be split into multiple files as time goes on, so this will make backwards compatibility easier.
+Inside `naaims/`, modules are grouped into folders by the general class of object they're associated with, e.g. IntersectionManagers in `intersections/`. Some folders only contain a single module, since I anticipate their scope might grow enough to be split into multiple files as time goes on, so this will make backwards compatibility easier.
 
-Unit tests will go into `aimsim/tests`.
+Unit tests will go into `naaims/tests`.
 
 Most module names should be self explanatory and will be discussed in detail later in this reading guide, except for these: - `archtypes.py` contain interfaces that spawners, removers, intersections, and roads implement - `shared.py` is a module that holds instanced data that's shared across all classes (e.g., configs) - `util.py` contains miscellaneous utility functions
 
 ## Initialization
 
-Start by looking in `aimsim/simulators/simulator.py`, specifically at the init function for the base Simulator class. Initialization of a new aimsim instance is contained to this init and the methods it calls. As such, this function's signature is as general as possible, with the ability to create as many roads, intersections, spawners, and removers as specification dicts it's provided.
+Start by looking in `naaims/simulators/simulator.py`, specifically at the init function for the base Simulator class. Initialization of a new naaims instance is contained to this init and the methods it calls. As such, this function's signature is as general as possible, with the ability to create as many roads, intersections, spawners, and removers as specification dicts it's provided.
 
 The specification dicts are JSON-like packages that contain the input arguments necessary for the initialization of objects and their properties. For example, an intersection's spec dict will contain its connectivity matrix, the road objects it's connected to, and a spec dict that it will use to create its manager.
 
@@ -63,7 +63,7 @@ Spawners, intersections, and removers can only be connected to roads (e.g., an i
 
 ## Step cycle
 
-This cycle is defined in `Simulator.step()` in `aimsim/simulators/simulator.py`. I recommend reading it linearly, jumping in and out of function definitions as needed. It consists of the following sub-steps:
+This cycle is defined in `Simulator.step()` in `naaims/simulators/simulator.py`. I recommend reading it linearly, jumping in and out of function definitions as needed. It consists of the following sub-steps:
 
 1. [Update speeds](#update-speeds)
 2. [Step vehicles](#step-vehicles)
@@ -77,7 +77,7 @@ Each run through the step cycle is a single timestep. I except there to be at le
 
 First, lanes contained in facilities, i.e., roads and intersections, calculate the new speed and acceleration of all vehicles in its jurisdiction and return them to the Simulator for updating. (Because a vehicle's speed update is determinant on the speed of the vehicle preceding them, the update can't happen in place.)
 
-The abstract method `Facility.get_new_speeds()` is implemented by Road and Intersection classes. Both call `Lane.get_new_speeds()` which uses logic to determine first their new acceleration and then their new speed. The aimsim vehicle model assumes that vehicles have complete control over their acceleration each timestep, and uses that acceleration to calculate its new speed.
+The abstract method `Facility.get_new_speeds()` is implemented by Road and Intersection classes. Both call `Lane.get_new_speeds()` which uses logic to determine first their new acceleration and then their new speed. The NAAIMS vehicle model assumes that vehicles have complete control over their acceleration each timestep, and uses that acceleration to calculate its new speed.
 
 ### Step vehicles
 

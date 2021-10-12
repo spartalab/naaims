@@ -3,13 +3,13 @@ from math import pi
 from pytest import raises, approx
 from pytest_mock import MockerFixture
 
-import aimsim.shared as SHARED
-from aimsim.lane import Lane, VehicleProgress
-from aimsim.road import RoadLane
-from aimsim.intersection import IntersectionLane
-from aimsim.trajectories import BezierTrajectory
-from aimsim.util import Coord, SpeedUpdate, VehicleTransfer, VehicleSection
-from aimsim.vehicles import Vehicle, AutomatedVehicle
+import naaims.shared as SHARED
+from naaims.lane import Lane, VehicleProgress
+from naaims.road import RoadLane
+from naaims.intersection import IntersectionLane
+from naaims.trajectories import BezierTrajectory
+from naaims.util import Coord, SpeedUpdate, VehicleTransfer, VehicleSection
+from naaims.vehicles import Vehicle, AutomatedVehicle
 
 straight_trajectory = BezierTrajectory(
     Coord(0, 0), Coord(1000, 0), [Coord(500, 0)])

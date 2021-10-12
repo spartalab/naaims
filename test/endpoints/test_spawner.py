@@ -3,17 +3,17 @@ from typing import Dict, Any, Tuple, List
 from random import seed
 
 from pytest import raises, fixture
-from aimsim.endpoints.remover import VehicleRemover
+from naaims.endpoints.remover import VehicleRemover
 
-import aimsim.shared as SHARED
-from aimsim.vehicles import Vehicle, AutomatedVehicle
-from aimsim.endpoints import VehicleSpawner
-from aimsim.util import Coord
-from aimsim.lane import VehicleProgress
-from aimsim.road import Road
-from aimsim.trajectories import Trajectory, BezierTrajectory
-from aimsim.endpoints.factories import VehicleFactory, GaussianVehicleFactory
-from aimsim.pathfinder import Pathfinder
+import naaims.shared as SHARED
+from naaims.vehicles import Vehicle, AutomatedVehicle
+from naaims.endpoints import VehicleSpawner
+from naaims.util import Coord
+from naaims.lane import VehicleProgress
+from naaims.road import Road
+from naaims.trajectories import Trajectory, BezierTrajectory
+from naaims.endpoints.factories import VehicleFactory, GaussianVehicleFactory
+from naaims.pathfinder import Pathfinder
 
 
 @fixture

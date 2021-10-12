@@ -2,12 +2,12 @@ from math import ceil
 
 from pytest import approx
 
-from aimsim.intersection import IntersectionLane
-from aimsim.road import RoadLane
-from aimsim.util import Coord, VehicleSection
-from aimsim.trajectories import BezierTrajectory
-from aimsim.vehicles import AutomatedVehicle
-from aimsim.lane import ScheduledExit, VehicleProgress
+from naaims.intersection import IntersectionLane
+from naaims.road import RoadLane
+from naaims.util import Coord, VehicleSection
+from naaims.trajectories import BezierTrajectory
+from naaims.vehicles import AutomatedVehicle
+from naaims.lane import ScheduledExit, VehicleProgress
 
 
 def test_init(read_config: None):

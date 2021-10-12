@@ -2,9 +2,9 @@ from math import pi
 
 from pytest import raises, approx
 
-from aimsim.vehicles import AutomatedVehicle
-from aimsim.util import Coord
-import aimsim.shared as SHARED
+from naaims.vehicles import AutomatedVehicle
+from naaims.util import Coord
+import naaims.shared as SHARED
 
 SHARED.SETTINGS.read()
 

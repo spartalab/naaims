@@ -3,11 +3,11 @@ from math import ceil, log10
 from _pytest.python_api import approx
 from pytest import raises
 
-import aimsim.shared as SHARED
-from aimsim.road.lane import RoadLane, ScheduledExit
-from aimsim.vehicles import AutomatedVehicle
-from aimsim.lane import VehicleProgress
-from aimsim.util import VehicleSection
+import naaims.shared as SHARED
+from naaims.road.lane import RoadLane, ScheduledExit
+from naaims.vehicles import AutomatedVehicle
+from naaims.lane import VehicleProgress
+from naaims.util import VehicleSection
 
 from test.test_lane import straight_trajectory
 

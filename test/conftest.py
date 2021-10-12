@@ -3,18 +3,18 @@ from importlib import reload
 
 from pytest import fixture
 
-import aimsim.shared as SHARED
-from aimsim.util import Coord
-from aimsim.trajectories import BezierTrajectory
-from aimsim.intersection.tilings.tiles import DeterministicTile
-from aimsim.intersection.tilings import SquareTiling
-from aimsim.vehicles import AutomatedVehicle
-from aimsim.road import Road
-from aimsim.road.lane import RoadLane
-from aimsim.intersection import Intersection
-from aimsim.intersection.lane import IntersectionLane
-from aimsim.intersection.managers import IntersectionManager, StopSignManager
-from aimsim.pathfinder import Pathfinder
+import naaims.shared as SHARED
+from naaims.util import Coord
+from naaims.trajectories import BezierTrajectory
+from naaims.intersection.tilings.tiles import DeterministicTile
+from naaims.intersection.tilings import SquareTiling
+from naaims.vehicles import AutomatedVehicle
+from naaims.road import Road
+from naaims.road.lane import RoadLane
+from naaims.intersection import Intersection
+from naaims.intersection.lane import IntersectionLane
+from naaims.intersection.managers import IntersectionManager, StopSignManager
+from naaims.pathfinder import Pathfinder
 from test.test_lane import straight_trajectory
 
 

@@ -1,12 +1,12 @@
 from pytest import raises
 from pytest_mock import MockerFixture
 
-from aimsim.intersection.tilings.tiles import DeterministicTile
-from aimsim.intersection.reservation import Reservation
-from aimsim.vehicles import AutomatedVehicle
-from aimsim.util import Coord, VehicleSection
-from aimsim.intersection.lane import IntersectionLane
-from aimsim.lane import ScheduledExit
+from naaims.intersection.tilings.tiles import DeterministicTile
+from naaims.intersection.reservation import Reservation
+from naaims.vehicles import AutomatedVehicle
+from naaims.util import Coord, VehicleSection
+from naaims.intersection.lane import IntersectionLane
+from naaims.lane import ScheduledExit
 
 
 def test_tile(mocker: MockerFixture, read_config: None):

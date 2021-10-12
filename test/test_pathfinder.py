@@ -1,7 +1,7 @@
 from pytest import raises
 
-from aimsim.pathfinder import Pathfinder
-from aimsim.util import Coord
+from naaims.pathfinder import Pathfinder
+from naaims.util import Coord
 
 
 def test_hardcoded_pathfinder_rome():

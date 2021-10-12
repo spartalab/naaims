@@ -1,10 +1,10 @@
 from typing import Any, Dict, List, Tuple
 
-from aimsim.simulator import Simulator
-from aimsim.vehicles import AutomatedVehicle
-from aimsim.endpoints.factories import GaussianVehicleFactory
-from aimsim.util import Coord
-from aimsim.trajectories import BezierTrajectory
+from naaims.simulator import Simulator
+from naaims.vehicles import AutomatedVehicle
+from naaims.endpoints.factories import GaussianVehicleFactory
+from naaims.util import Coord
+from naaims.trajectories import BezierTrajectory
 
 
 class OneLaneRoadSim(Simulator):

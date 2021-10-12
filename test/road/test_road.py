@@ -5,10 +5,10 @@ from _pytest.python_api import raises
 from pytest import approx
 from pytest_mock import MockerFixture
 
-import aimsim.shared as SHARED
-from aimsim.road import Road
-from aimsim.util import Coord, SpeedUpdate, VehicleTransfer, VehicleSection
-from aimsim.vehicles import AutomatedVehicle
+import naaims.shared as SHARED
+from naaims.road import Road
+from naaims.util import Coord, SpeedUpdate, VehicleTransfer, VehicleSection
+from naaims.vehicles import AutomatedVehicle
 
 from test.test_lane import straight_trajectory
 

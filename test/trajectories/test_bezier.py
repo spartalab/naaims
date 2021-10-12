@@ -1,7 +1,7 @@
 from math import pi, isclose
 
-from aimsim.trajectories.bezier import BezierTrajectory
-from aimsim.util import Coord
+from naaims.trajectories.bezier import BezierTrajectory
+from naaims.util import Coord
 
 
 straight_trajectory = BezierTrajectory(Coord(0, 0), Coord(1, 0),

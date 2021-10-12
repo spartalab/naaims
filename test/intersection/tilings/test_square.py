@@ -3,15 +3,15 @@ from math import pi, ceil
 
 from pytest import raises, fixture
 
-import aimsim.shared as SHARED
-from aimsim.util import Coord, VehicleSection
-from aimsim.trajectories import BezierTrajectory
-from aimsim.road import RoadLane
-from aimsim.intersection import IntersectionLane
-from aimsim.intersection.tilings import SquareTiling
-from aimsim.vehicles import AutomatedVehicle
-from aimsim.intersection.reservation import Reservation
-from aimsim.lane import ScheduledExit
+import naaims.shared as SHARED
+from naaims.util import Coord, VehicleSection
+from naaims.trajectories import BezierTrajectory
+from naaims.road import RoadLane
+from naaims.intersection import IntersectionLane
+from naaims.intersection.tilings import SquareTiling
+from naaims.vehicles import AutomatedVehicle
+from naaims.intersection.reservation import Reservation
+from naaims.lane import ScheduledExit
 
 
 def test_failing_init(read_config: None):

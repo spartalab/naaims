@@ -3,17 +3,17 @@ from math import ceil, floor
 
 from pytest import raises, fixture, approx
 
-from aimsim.util import VehicleSection, Coord
-from aimsim.trajectories import BezierTrajectory
-from aimsim.lane import ScheduledExit, VehicleProgress
-from aimsim.intersection import IntersectionLane
-from aimsim.intersection.tilings import Tiling, SquareTiling
-from aimsim.intersection.reservation import Reservation
-from aimsim.road import RoadLane
-from aimsim.vehicles.vehicle import Vehicle
-from aimsim.vehicles.automated import AutomatedVehicle
-from aimsim.pathfinder import Pathfinder
-import aimsim.shared as SHARED
+from naaims.util import VehicleSection, Coord
+from naaims.trajectories import BezierTrajectory
+from naaims.lane import ScheduledExit, VehicleProgress
+from naaims.intersection import IntersectionLane
+from naaims.intersection.tilings import Tiling, SquareTiling
+from naaims.intersection.reservation import Reservation
+from naaims.road import RoadLane
+from naaims.vehicles.vehicle import Vehicle
+from naaims.vehicles.automated import AutomatedVehicle
+from naaims.pathfinder import Pathfinder
+import naaims.shared as SHARED
 
 
 def square_tiling(x_min: float, x_max: float, y_min: float,

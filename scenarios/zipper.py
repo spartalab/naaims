@@ -1,14 +1,14 @@
 from typing import Any, Dict, List, Tuple, Type
 from math import pi
 
-from aimsim.simulator import Simulator
-from aimsim.vehicles import AutomatedVehicle
-from aimsim.endpoints.factories import GaussianVehicleFactory
-from aimsim.util import Coord
-from aimsim.trajectories import BezierTrajectory
-from aimsim.intersection.managers import IntersectionManager, StopSignManager
-from aimsim.intersection.tilings import SquareTiling
-from aimsim.intersection.tilings.tiles import DeterministicTile
+from naaims.simulator import Simulator
+from naaims.vehicles import AutomatedVehicle
+from naaims.endpoints.factories import GaussianVehicleFactory
+from naaims.util import Coord
+from naaims.trajectories import BezierTrajectory
+from naaims.intersection.managers import IntersectionManager, StopSignManager
+from naaims.intersection.tilings import SquareTiling
+from naaims.intersection.tilings.tiles import DeterministicTile
 
 
 class ZipperMergeSim(Simulator):

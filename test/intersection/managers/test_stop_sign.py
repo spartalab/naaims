@@ -3,14 +3,14 @@ from importlib import reload
 
 from pytest import fixture
 
-import aimsim.shared as SHARED
-from aimsim.intersection.managers import StopSignManager
-from aimsim.util import Coord
-from aimsim.intersection.tilings import SquareTiling
-from aimsim.road import RoadLane
-from aimsim.lane import VehicleProgress
-from aimsim.intersection import Intersection, IntersectionLane
-from aimsim.vehicles import Vehicle
+import naaims.shared as SHARED
+from naaims.intersection.managers import StopSignManager
+from naaims.util import Coord
+from naaims.intersection.tilings import SquareTiling
+from naaims.road import RoadLane
+from naaims.lane import VehicleProgress
+from naaims.intersection import Intersection, IntersectionLane
+from naaims.vehicles import Vehicle
 from test.conftest import intersection as intersec
 
 

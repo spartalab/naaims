@@ -2,11 +2,11 @@ from importlib import reload
 
 from pytest import fixture
 
-import aimsim.shared as SHARED
-from aimsim.intersection.managers import FCFSManager
-from aimsim.lane import VehicleProgress
-from aimsim.intersection import Intersection
-from aimsim.vehicles import Vehicle
+import naaims.shared as SHARED
+from naaims.intersection.managers import FCFSManager
+from naaims.lane import VehicleProgress
+from naaims.intersection import Intersection
+from naaims.vehicles import Vehicle
 from test.conftest import intersection as intersec
 
 

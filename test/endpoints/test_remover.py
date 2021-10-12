@@ -3,10 +3,10 @@ from __future__ import annotations
 from pytest import raises
 from pytest_mock import MockerFixture
 
-from aimsim.vehicles import AutomatedVehicle
-from aimsim.endpoints import VehicleRemover
-from aimsim.util import VehicleTransfer, VehicleSection, Coord
-from aimsim.road import Road
+from naaims.vehicles import AutomatedVehicle
+from naaims.endpoints import VehicleRemover
+from naaims.util import VehicleTransfer, VehicleSection, Coord
+from naaims.road import Road
 
 
 def test_remover(mocker: MockerFixture, read_config: None):

@@ -2,16 +2,16 @@ from math import pi
 
 from pytest import approx
 
-from aimsim.intersection import Intersection
-from aimsim.road import Road
-from aimsim.util import Coord, VehicleSection, VehicleTransfer, SpeedUpdate
-from aimsim.trajectories import BezierTrajectory
-from aimsim.intersection.managers import StopSignManager
-from aimsim.intersection.tilings import SquareTiling
-from aimsim.intersection.tilings.tiles import DeterministicTile
-from aimsim.vehicles import AutomatedVehicle
+from naaims.intersection import Intersection
+from naaims.road import Road
+from naaims.util import Coord, VehicleSection, VehicleTransfer, SpeedUpdate
+from naaims.trajectories import BezierTrajectory
+from naaims.intersection.managers import StopSignManager
+from naaims.intersection.tilings import SquareTiling
+from naaims.intersection.tilings.tiles import DeterministicTile
+from naaims.vehicles import AutomatedVehicle
 
-import aimsim.shared as SHARED
+import naaims.shared as SHARED
 
 
 def test_init_2_lane(read_config: None):

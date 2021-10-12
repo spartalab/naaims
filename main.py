@@ -1,5 +1,5 @@
 from scenarios import SingleIntersectionSim
-from aimsim.intersection.managers import FCFSManager
+from naaims.intersection.managers import FCFSManager
 
 
 def main():
