@@ -248,9 +248,8 @@ class Simulator:
         #    well as global entry, exit, and routing success for performance
         #    evaluation. See fetch_log for more information.
         self.vehicles_in_scope: Set[Vehicle] = set()
-        self.vehicle_entry_times: Dict[Vehicle, int] = {}
-        self.entry_exit_log: List[Tuple[int, Optional[int],
-                                        Optional[bool]]] = []
+        self.vehicle_entry_times: Dict[int, Tuple[int, int]] = {}
+        self.vehicle_exit_log: Dict[int, Tuple[int, int]] = {}
 
         # 5. If the visualize flag is enabled, draw the basemap image of
         #    roads and intersections for use later.
@@ -398,9 +397,10 @@ class Simulator:
         for u in self.upstreams:
             incoming_packet = u.step_vehicles()
             if incoming_packet is not None:
-                spawned_vehicle, entering_vehicles = incoming_packet
-                if spawned_vehicle is not None:
-                    self.vehicle_entry_times[spawned_vehicle] = SHARED.t
+                spawned_vehicles, entering_vehicles = incoming_packet
+                for spawned_vehicle in spawned_vehicles:
+                    self.vehicle_entry_times[spawned_vehicle.vin] = (
+                        SHARED.t, spawned_vehicle.destination)
                 self.vehicles_in_scope.update(entering_vehicles)
 
         # 3. Have every downstream object (roads, intersections, and vehicle
@@ -414,13 +414,11 @@ class Simulator:
             if exiting_vehicles is not None:
                 for vehicle in exiting_vehicles:
                     # log the vehicle
-                    self.entry_exit_log.append(
-                        (self.vehicle_entry_times[vehicle], SHARED.t, True))
+                    self.vehicle_exit_log[vehicle.vin] = (SHARED.t, -1)
                     # TODO: (multiple) determine if a vehicle successfully
-                    #       reached its destination.
+                    #       reached its destination. Give removers ID property.
 
                     # remove it from our tracker
-                    del self.vehicle_entry_times[vehicle]
                     self.vehicles_in_scope.remove(vehicle)
 
         # 4. Have facility managers handle their special internal logic (e.g.,
@@ -432,22 +430,19 @@ class Simulator:
         SHARED.t += 1
         SHARED.SETTINGS.pathfinder.update(None)
 
-    def fetch_log(self) -> List[Tuple[int, Optional[int], Optional[bool]]]:
+    def fetch_log(self) -> List[Tuple[int, Optional[int], int, Optional[int]]]:
         """Returns log of times that vehicles spawned and exited the sim.
 
-        This is a list of (int, int, bool) tuples denoting
-            1. The vehicle's entry/spawning timestep
-            2. The vehicle's exit/removal timestep
-            3. Whether or not the vehicle successfully reached its intended
-               destination
-
-
-        # TODO: (logging) Collect more detailed information on vehicles in log.
+        This is a list of four int tuples denoting each spawned vehicle's
+            1. entry/spawning timestep
+            2. exit/removal timestep, if it's exited
+            3. intended destination index
+            4. actual destination index, if it's exited
         """
-        log_image: List[Tuple[int, Optional[int],
-                              Optional[bool]]] = self.entry_exit_log.copy()
-        for vehicle in self.vehicles_in_scope:
-            log_image.append((self.vehicle_entry_times[vehicle], None, None))
+        log_image: List[Tuple[int, Optional[int], int, Optional[int]]] = []
+        for vin, (t_enter, d_intended) in self.vehicle_entry_times.items():
+            t_exit, d_actual = self.vehicle_exit_log.get(vin, (None, None))
+            log_image.append((t_enter, t_exit, d_intended, d_actual))
         return log_image
 
     def animate(self, frame_ratio: int = 1, max_timestep: int = 10*60

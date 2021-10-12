@@ -79,13 +79,13 @@ class SquareTiling(Tiling):
         # be flipped to match normal coordinate schemas.
         self.origin = Coord(self.min_x, self.min_y)
 
-        # Find the (x,y) coordinates of the tile at every road lane connection
-        # to the intersection. We'll use them to buffer entries and exits into
-        # the intersection so vehicles don't crash as they enter or exit.
-        self.buffer_tile_loc: Dict[Coord, Tuple[int, int]] = {}
+        # Find the 1D index of the tile at every road lane connection to the
+        # intersection. We'll use them to buffer entries and exits into the
+        # intersection so vehicles don't crash as they enter or exit.
+        self.buffer_tile_loc: Dict[Coord, int] = {}
         for start, end in lanes_by_endpoints:
-            self.buffer_tile_loc[start] = self._io_coord_to_tile_xy(start)
-            self.buffer_tile_loc[end] = self._io_coord_to_tile_xy(end)
+            self.buffer_tile_loc[start] = self._io_coord_to_tile_id(start)
+            self.buffer_tile_loc[end] = self._io_coord_to_tile_id(end)
 
     def check_for_collisions(self) -> None:
         """Check for collisions in the intersection."""
@@ -227,8 +227,8 @@ class SquareTiling(Tiling):
 
         Returns y_min, x_mins, x_maxes.
         """
-        dx = 0 if isclose(end.x, start.x, abs_tol=1e-10) else end.x - start.x
-        dy = 0 if isclose(end.y, start.y, abs_tol=1e-10) else end.y - start.y
+        dx = 0 if isclose(end.x, start.x, abs_tol=1e-9) else end.x - start.x
+        dy = 0 if isclose(end.y, start.y, abs_tol=1e-9) else end.y - start.y
 
         x_mins: List[int] = []
         x_maxes: List[int] = []
@@ -488,8 +488,8 @@ class SquareTiling(Tiling):
             t_prepend = t-1
             while len(self.tiles) < t_prepend - SHARED.t:
                 self._add_new_layer()
-            tile = self.tiles[t_prepend - t0][self._tile_loc_to_id(
-                self.buffer_tile_loc[lane.trajectory.start_coord])]
+            tile = self.tiles[t_prepend - t0][
+                self.buffer_tile_loc[lane.trajectory.start_coord]]
             if tile.will_reservation_work(reservation):
                 # TODO: (stochastic) reservations.
                 return {t_prepend: {tile: 1}}
@@ -498,8 +498,7 @@ class SquareTiling(Tiling):
         else:
             timesteps_forward = Tiling._exit_res_timesteps_forward(
                 clone.velocity)
-            tile_id = self._tile_loc_to_id(
-                self.buffer_tile_loc[lane.trajectory.end_coord])
+            tile_id = self.buffer_tile_loc[lane.trajectory.end_coord]
             while len(self.tiles) < t + timesteps_forward - SHARED.t:
                 self._add_new_layer()
             to_return: Dict[int, Dict[Tile, float]] = {}
@@ -519,8 +518,7 @@ class SquareTiling(Tiling):
         The input parameter is a 2-tuple of integer x and y values. x denotes
         left to right and y denotes down to up.
         """
-        return floor(tile_loc[0]//self.tile_width +
-                     tile_loc[1]//self.tile_width * self.x_tile_count)
+        return floor(tile_loc[0] + tile_loc[1] * self.x_tile_count)
 
     def find_best_batch(self,
                         requests: Dict[RoadLane, List[Reservation]]
@@ -562,17 +560,17 @@ class SquareTiling(Tiling):
             for y in range(self.y_tile_count)
             for x in range(self.x_tile_count)]))
 
-    def _io_coord_to_tile_xy(self, coord: Coord) -> Tuple[int, int]:
-        """Convert a raw Coord to tile space's (x,y) tile.
+    def _io_coord_to_tile_id(self, coord: Coord) -> int:
+        """Convert a raw Coord to tile space's 1D index.
 
         Assumes that the provided Coord is in the tile space. This is the only
         case where a coord on the top or right borders is mapped to a tile;
         otherwise the math doesn't work out.
         """
-        x: int = floor(coord.x - self.origin.x)
-        y: int = floor(coord.y - self.origin.y)
+        x: int = (coord.x - self.origin.x)//self.tile_width
+        y: int = (coord.y - self.origin.y)//self.tile_width
         if x == self.x_tile_count:
             x -= 1
         if y == self.y_tile_count:
             y -= 1
-        return x, y
+        return self._tile_loc_to_id((x, y))

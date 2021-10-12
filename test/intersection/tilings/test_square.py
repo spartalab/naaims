@@ -539,10 +539,8 @@ def test_io_buffer(read_config: None, sq: SquareTiling,
     assert len(sq.tiles) == 0
     i_lane0 = sq.lanes[0]
     coord0 = i_lane0.trajectory.start_coord
-    i_lane_start_tiles_idx = sq._tile_loc_to_id(
-        sq._io_coord_to_tile_xy(coord0))
-    i_lane_end_tiles_idx = sq._tile_loc_to_id(
-        sq._io_coord_to_tile_xy(i_lane0.trajectory.end_coord))
+    i_lane_start_tiles_idx = sq.buffer_tile_loc[coord0]
+    i_lane_end_tiles_idx = sq.buffer_tile_loc[i_lane0.trajectory.end_coord]
     res = Reservation(vehicle, coord0, {}, i_lane0, ScheduledExit(
         vehicle, VehicleSection.FRONT, 0, 10))
 
@@ -620,9 +618,9 @@ def test_new_layer(read_config: None, sq: SquareTiling):
 
 
 def test_coord_to_tile(read_config: None, sq: SquareTiling):
-    assert sq._io_coord_to_tile_xy(Coord(1, 1)) == (1, 1)
-    assert sq._io_coord_to_tile_xy(Coord(100, 200)) == (99, 199)
-    assert sq._io_coord_to_tile_xy(Coord(0, 11.5)) == (0, 11)
-    assert sq._io_coord_to_tile_xy(Coord(100, 11.5)) == (99, 11)
-    assert sq._io_coord_to_tile_xy(Coord(67.7, 0)) == (67, 0)
-    assert sq._io_coord_to_tile_xy(Coord(67.7, 200)) == (67, 199)
+    assert sq._io_coord_to_tile_id(Coord(1, 1)) == 101
+    assert sq._io_coord_to_tile_id(Coord(100, 200)) == 19_999
+    assert sq._io_coord_to_tile_id(Coord(0, 11.5)) == 1_100
+    assert sq._io_coord_to_tile_id(Coord(100, 11.5)) == 1_199
+    assert sq._io_coord_to_tile_id(Coord(67.7, 0)) == 67
+    assert sq._io_coord_to_tile_id(Coord(67.7, 200)) == 19_967

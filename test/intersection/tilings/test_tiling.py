@@ -67,10 +67,8 @@ def test_res_acceptance(read_config: None, sq: SquareTiling, vehicle: Vehicle):
     r_lane = sq.incoming_road_lane_by_coord[i_coord]
     scheduled_exit = ScheduledExit(vehicle, VehicleSection.FRONT, 0, 1)
     reservation = Reservation(vehicle, i_coord, {
-        1: {sq.tiles[0][sq._tile_loc_to_id(sq._io_coord_to_tile_xy(i_coord))
-                        ]: 1},
-        9: {sq.tiles[8][sq._tile_loc_to_id(sq._io_coord_to_tile_xy(i_coord))
-                        ]: 1}
+        1: {sq.tiles[0][sq.buffer_tile_loc[i_coord]]: 1},
+        9: {sq.tiles[8][sq.buffer_tile_loc[i_coord]]: 1}
     }, sq.lanes[0], scheduled_exit)
 
     # Check that the tiling and road lane are clean
@@ -865,7 +863,7 @@ def test_mock_step_cant_spawn(read_config: None, sq: SquareTiling,
     while len(sq.tiles) < test_t:
         sq._add_new_layer()
     blocked_tile = sq.tiles[test_t-1][
-        sq._tile_loc_to_id(sq.buffer_tile_loc[il.trajectory.start_coord])]
+        sq.buffer_tile_loc[il.trajectory.start_coord]]
     blocked_tile.confirm_reservation(
         Reservation(vehicle2, il.trajectory.start_coord,
                     {test_t-1: {blocked_tile: 1}}, il,
@@ -1170,7 +1168,7 @@ def test_mock_step_invalid(read_config: None, sq: SquareTiling,
     while len(sq.tiles) < test_t+2:
         sq._add_new_layer()
     blocked_tile = sq.tiles[test_t+1][
-        sq._tile_loc_to_id(sq.buffer_tile_loc[il.trajectory.end_coord])]
+        sq.buffer_tile_loc[il.trajectory.end_coord]]
     blocked_tile.confirm_reservation(
         Reservation(vehicle2, il.trajectory.start_coord,
                     {test_t+1: {blocked_tile: 1}}, il,
