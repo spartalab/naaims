@@ -15,12 +15,12 @@ from test.conftest import intersection as intersec
 
 
 @fixture
-def intersection(read_config: None, lanes: int = 1, turns: bool = False):
+def intersection(load_shared: None, lanes: int = 1, turns: bool = False):
     yield intersec(StopSignManager, lanes, False)
 
     # Reset shared pathfinder to default of nothing.
     reload(SHARED)
-    SHARED.SETTINGS.read()
+    SHARED.SETTINGS.load()
 
 
 def test_init(incoming_road_lane_by_coord: Dict[Coord, RoadLane],

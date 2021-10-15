@@ -12,7 +12,7 @@ from naaims.util import VehicleSection
 from test.test_lane import straight_trajectory
 
 
-def test_road_lane_init(read_config: None, rl: RoadLane):
+def test_road_lane_init(load_shared: None, rl: RoadLane):
     assert rl.entrance_end == 0.3
     assert rl.lcregion_end == 0.7
     with raises(ValueError):

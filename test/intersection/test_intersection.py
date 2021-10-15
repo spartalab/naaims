@@ -14,7 +14,7 @@ from naaims.vehicles import AutomatedVehicle
 import naaims.shared as SHARED
 
 
-def test_init_2_lane(read_config: None):
+def test_init_2_lane(load_shared: None):
     trajectory1 = BezierTrajectory(Coord(0, 0), Coord(100, 0),
                                    [Coord(50, 0)])
     trajectory2 = BezierTrajectory(Coord(200, 0), Coord(300, 0),
@@ -79,7 +79,7 @@ def test_init_2_lane(read_config: None):
     assert intersection.manager.tiling.tile_width == 5
 
 
-def test_init_3_lane(read_config: None):
+def test_init_3_lane(load_shared: None):
     trajectory1 = BezierTrajectory(Coord(0, 0), Coord(100, 0),
                                    [Coord(50, 0)])
     trajectory2 = BezierTrajectory(Coord(200, 0), Coord(300, 0),
@@ -127,7 +127,7 @@ def test_init_3_lane(read_config: None):
         road_out.lanes[1].trajectory.start_coord
 
 
-def test_init_right_turn(read_config: None):
+def test_init_right_turn(load_shared: None):
     trajectory1 = BezierTrajectory(Coord(0, 0), Coord(100, 0),
                                    [Coord(50, 0)])
     trajectory2 = BezierTrajectory(Coord(150, -50), Coord(150, -150),
@@ -171,7 +171,7 @@ def test_init_right_turn(read_config: None):
     )
 
 
-def test_init_left_turn(read_config: None):
+def test_init_left_turn(load_shared: None):
     trajectory1 = BezierTrajectory(Coord(0, 0), Coord(100, 0),
                                    [Coord(50, 0)])
     trajectory2 = BezierTrajectory(Coord(150, 50), Coord(150, 150),
@@ -215,7 +215,7 @@ def test_init_left_turn(read_config: None):
     )
 
 
-def test_speed_and_step(read_config: None, vehicle: AutomatedVehicle,
+def test_speed_and_step(load_shared: None, vehicle: AutomatedVehicle,
                         vehicle2: AutomatedVehicle):
 
     trajectory1 = BezierTrajectory(Coord(-100, 0), Coord(0, 0),

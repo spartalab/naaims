@@ -9,7 +9,7 @@ from naaims.util import VehicleTransfer, VehicleSection, Coord
 from naaims.road import Road
 
 
-def test_remover(mocker: MockerFixture, read_config: None):
+def test_remover(mocker: MockerFixture, load_shared: None):
 
     # Create a road object to feed to remover, skipping all the checks Road's
     # init does because those aren't in the scope of this unit test.

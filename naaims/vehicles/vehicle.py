@@ -50,7 +50,7 @@ class Vehicle(ABC):
                 The vehicle's maximum acceleration in m/s^2
             max_braking: float
                 The vehicle's maximum braking speed in m/s^2. Must be as good
-                or better than the global config SHARED.max_braking. Negative.
+                or better than the SHARED.SETTINGS.max_braking. Negative.
             length: float
                 Length of the vehicle in meters
             width: float
@@ -80,10 +80,10 @@ class Vehicle(ABC):
             raise ValueError("max_accel must be positive")
         if max_braking > SHARED.SETTINGS.min_braking:
             raise ValueError("max_braking must be as good or better than the "
-                             "max_braking set in the global config.")
+                             "max_braking set in the shared settings.")
         if max_accel < SHARED.SETTINGS.min_acceleration:
             raise ValueError("max_accel must be as good or better than the "
-                             "min_accel set in the global config.")
+                             "min_accel set in the shared settings.")
 
         self._vin = vin
 

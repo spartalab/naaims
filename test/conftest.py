@@ -19,48 +19,48 @@ from test.test_lane import straight_trajectory
 
 
 @fixture(scope="session")
-def read_config():
+def load_shared():
     try:
-        SHARED.SETTINGS.read()
+        SHARED.SETTINGS.load()
     except RuntimeError:
         pass
 
 
 @fixture
-def read_config_clean():
-    """For this test only, reset and reread the config."""
+def load_shared_clean():
+    """For this test only, reset and reload the shared settings."""
     reload(SHARED)
-    SHARED.SETTINGS.read()
+    SHARED.SETTINGS.load()
 
     yield
 
     reload(SHARED)
-    SHARED.SETTINGS.read()
+    SHARED.SETTINGS.load()
 
 
 @fixture
-def clean_config():
-    """For this test only, reset as if the config was not read."""
+def clean_shared():
+    """For this test only, reset as if the shared settings weren't loaded."""
     reload(SHARED)
 
     yield
 
     reload(SHARED)
-    SHARED.SETTINGS.read()
+    SHARED.SETTINGS.load()
 
 
 @fixture
-def vehicle(read_config: None):
+def vehicle(load_shared: None):
     return AutomatedVehicle(0, 0)
 
 
 @fixture
-def vehicle2(read_config: None):
+def vehicle2(load_shared: None):
     return AutomatedVehicle(1, 0)
 
 
 @fixture
-def vehicle3(read_config: None):
+def vehicle3(load_shared: None):
     return AutomatedVehicle(2, 0)
 
 

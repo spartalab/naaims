@@ -6,7 +6,7 @@ from naaims.vehicles import AutomatedVehicle
 from naaims.util import Coord
 import naaims.shared as SHARED
 
-SHARED.SETTINGS.read()
+SHARED.SETTINGS.load()
 
 
 def test_position(vehicle: AutomatedVehicle):

@@ -52,13 +52,13 @@ def sq_timeouts(speed_limit: int = 30):
     return square_tiling(0, 100, 0, 200, 1, speed_limit, timeout=True)
 
 
-def test_timesteps_forward(read_config: None):
+def test_timesteps_forward(load_shared: None):
     assert Tiling._exit_res_timesteps_forward(0) == 18
     assert Tiling._exit_res_timesteps_forward(15) == 18
     assert Tiling._exit_res_timesteps_forward(15.1) == 20
 
 
-def test_res_acceptance(read_config: None, sq: SquareTiling, vehicle: Vehicle):
+def test_res_acceptance(load_shared: None, sq: SquareTiling, vehicle: Vehicle):
     SHARED.t = 0
     for _ in range(9):
         sq._add_new_layer()
@@ -111,7 +111,7 @@ def test_res_acceptance(read_config: None, sq: SquareTiling, vehicle: Vehicle):
     assert len(sq.active_reservations) == 0
 
 
-def test_new_timestep(read_config: None, sq: SquareTiling, vehicle: Vehicle,
+def test_new_timestep(load_shared: None, sq: SquareTiling, vehicle: Vehicle,
                       vehicle2: Vehicle):
     SHARED.t = 0
     for _ in range(3):
@@ -131,7 +131,7 @@ def test_new_timestep(read_config: None, sq: SquareTiling, vehicle: Vehicle,
     assert sq.tiles[1][2].will_reservation_work(res2) is True
 
 
-def test_mock_speed_update(read_config: None, sq: SquareTiling,
+def test_mock_speed_update(load_shared: None, sq: SquareTiling,
                            vehicle: Vehicle, vehicle2: Vehicle,
                            vehicle3: Vehicle):
     il = sq.lanes[0]
@@ -164,7 +164,7 @@ def test_mock_speed_update(read_config: None, sq: SquareTiling,
     assert vehicle3.acceleration == SHARED.SETTINGS.min_acceleration
 
 
-def test_mock_outgoing_step(read_config: None, sq: SquareTiling,
+def test_mock_outgoing_step(load_shared: None, sq: SquareTiling,
                             vehicle: Vehicle, vehicle2: Vehicle):
 
     # Test normal case
@@ -198,7 +198,7 @@ def test_mock_outgoing_step(read_config: None, sq: SquareTiling,
         sq._mock_outgoing_step_vehicles(orl)
 
 
-def test_mock_intersection_step_transfer(read_config: None, sq: SquareTiling,
+def test_mock_intersection_step_transfer(load_shared: None, sq: SquareTiling,
                                          vehicle: Vehicle, vehicle2: Vehicle,
                                          vehicle3: Vehicle):
     il = sq.lanes[0]
@@ -262,7 +262,7 @@ def test_mock_intersection_step_transfer(read_config: None, sq: SquareTiling,
         None, None), 1e-2)
 
 
-def test_mock_intersection_step_io_ok(read_config: None, sq: SquareTiling,
+def test_mock_intersection_step_io_ok(load_shared: None, sq: SquareTiling,
                                       vehicle: Vehicle, vehicle2: Vehicle,
                                       vehicle3: Vehicle):
     il = sq.lanes[0]
@@ -332,7 +332,7 @@ def test_mock_intersection_step_io_ok(read_config: None, sq: SquareTiling,
     #     (dist_covered - 1e-6*il.trajectory.length)/orl.trajectory.length)}
 
 
-def test_mock_intersection_step_block(read_config: None, sq: SquareTiling,
+def test_mock_intersection_step_block(load_shared: None, sq: SquareTiling,
                                       vehicle: Vehicle, vehicle2: Vehicle,
                                       vehicle3: Vehicle):
     il = sq.lanes[0]
@@ -390,13 +390,13 @@ def test_mock_intersection_step_block(read_config: None, sq: SquareTiling,
     # TODO (stochastic, auction): Test marking and dependencies
 
 
-def test_mock_intersection_step_exit_block(read_config: None, sq: SquareTiling,
+def test_mock_intersection_step_exit_block(load_shared: None, sq: SquareTiling,
                                            vehicle: Vehicle, vehicle2: Vehicle,
                                            vehicle3: Vehicle):
     pass
 
 
-def test_mock_incoming_step_normal(read_config: None, sq: SquareTiling,
+def test_mock_incoming_step_normal(load_shared: None, sq: SquareTiling,
                                    vehicle: Vehicle):
     il = sq.lanes[0]
     irl = sq.incoming_road_lane_by_coord[sq.lanes[0].trajectory.start_coord]
@@ -433,7 +433,7 @@ def test_mock_incoming_step_normal(read_config: None, sq: SquareTiling,
     assert vehicle.heading == approx(irl.trajectory.get_heading(p_next))
 
 
-def test_mock_incoming_step_transfer(read_config: None, sq: SquareTiling,
+def test_mock_incoming_step_transfer(load_shared: None, sq: SquareTiling,
                                      vehicle: Vehicle):
     il = sq.lanes[0]
     irl = sq.incoming_road_lane_by_coord[sq.lanes[0].trajectory.start_coord]
@@ -477,7 +477,7 @@ def test_mock_incoming_step_transfer(read_config: None, sq: SquareTiling,
     assert vehicle.heading == approx(il.trajectory.get_heading(p_next), 1e-3)
 
 
-def test_mock_incoming_step_with_last(read_config: None, sq: SquareTiling,
+def test_mock_incoming_step_with_last(load_shared: None, sq: SquareTiling,
                                       vehicle: Vehicle, vehicle2: Vehicle):
     il = sq.lanes[0]
     irl = sq.incoming_road_lane_by_coord[sq.lanes[0].trajectory.start_coord]
@@ -517,7 +517,7 @@ def test_mock_incoming_step_with_last(read_config: None, sq: SquareTiling,
     assert vehicle.heading == approx(irl.trajectory.get_heading(p_next))
 
 
-def test_mock_incoming_step_complete(read_config: None, sq: SquareTiling,
+def test_mock_incoming_step_complete(load_shared: None, sq: SquareTiling,
                                      vehicle: Vehicle, vehicle2: Vehicle):
     il = sq.lanes[0]
     irl = sq.incoming_road_lane_by_coord[sq.lanes[0].trajectory.start_coord]
@@ -570,7 +570,7 @@ def test_mock_incoming_step_complete(read_config: None, sq: SquareTiling,
     # before this timestep, its position is not updated by this call.
 
 
-def test_all_pos(read_config: None, sq: SquareTiling, vehicle: Vehicle,
+def test_all_pos(load_shared: None, sq: SquareTiling, vehicle: Vehicle,
                  vehicle2: Vehicle, vehicle3: Vehicle):
     il = sq.lanes[0]
     irl = sq.incoming_road_lane_by_coord[sq.lanes[0].trajectory.start_coord]
@@ -612,7 +612,7 @@ def test_all_pos(read_config: None, sq: SquareTiling, vehicle: Vehicle,
                                                     res)
 
 
-def test_all_pos_block(read_config: None, sq: SquareTiling, vehicle: Vehicle,
+def test_all_pos_block(load_shared: None, sq: SquareTiling, vehicle: Vehicle,
                        vehicle2: Vehicle):
     il = sq.lanes[0]
     irl = sq.incoming_road_lane_by_coord[sq.lanes[0].trajectory.start_coord]
@@ -657,7 +657,7 @@ def test_all_pos_block(read_config: None, sq: SquareTiling, vehicle: Vehicle,
 # TODO (sequence): Test chained reservations
 
 
-def test_clone_spawn(read_config: None, sq: SquareTiling, vehicle: Vehicle):
+def test_clone_spawn(load_shared: None, sq: SquareTiling, vehicle: Vehicle):
     il_original = sq.lanes[0]
     il = il_original.clone()
     irl = sq.incoming_road_lane_by_coord[sq.lanes[0].trajectory.start_coord]
@@ -700,7 +700,7 @@ def test_clone_spawn(read_config: None, sq: SquareTiling, vehicle: Vehicle):
         (), None)
 
 
-def test_clone_spawn_io_fail(read_config: None, sq: SquareTiling,
+def test_clone_spawn_io_fail(load_shared: None, sq: SquareTiling,
                              vehicle: Vehicle, vehicle2: Vehicle):
     il_original = sq.lanes[0]
     il = il_original.clone()
@@ -740,7 +740,7 @@ def test_clone_spawn_io_fail(read_config: None, sq: SquareTiling,
     assert valid_reservations == []
 
 
-def test_clone_spawn_tile_fail(read_config: None, sq: SquareTiling,
+def test_clone_spawn_tile_fail(load_shared: None, sq: SquareTiling,
                                vehicle: Vehicle, vehicle2: Vehicle):
     il_original = sq.lanes[0]
     il = il_original.clone()
@@ -807,7 +807,7 @@ def set_up_spawn(sq: SquareTiling, vehicle: Vehicle, vehicle2: Vehicle):
         originals, irl_original, il_original
 
 
-def test_mock_step_spawn(read_config: None, sq: SquareTiling,
+def test_mock_step_spawn(load_shared: None, sq: SquareTiling,
                          vehicle: Vehicle, vehicle2: Vehicle):
     counter, end_at, test_t, new_exit, irl, il, orl, clone_to_original, \
         test_reservations, valid_reservations, last_exit, originals, \
@@ -853,7 +853,7 @@ def test_mock_step_spawn(read_config: None, sq: SquareTiling,
         (), None)
 
 
-def test_mock_step_cant_spawn(read_config: None, sq: SquareTiling,
+def test_mock_step_cant_spawn(load_shared: None, sq: SquareTiling,
                               vehicle: Vehicle, vehicle2: Vehicle):
     counter, end_at, test_t, new_exit, irl, il, orl, clone_to_original, \
         test_reservations, valid_reservations, last_exit, originals, \
@@ -877,7 +877,7 @@ def test_mock_step_cant_spawn(read_config: None, sq: SquareTiling,
     assert complete
 
 
-def test_mock_step_spawn_exit(read_config: None, sq: SquareTiling,
+def test_mock_step_spawn_exit(load_shared: None, sq: SquareTiling,
                               vehicle: Vehicle):
     il_original = sq.lanes[0]
     il = il_original.clone()
@@ -933,7 +933,7 @@ def test_mock_step_spawn_exit(read_config: None, sq: SquareTiling,
     assert new_exit_new is None
 
 
-def test_mock_step_continue(read_config: None, sq: SquareTiling,
+def test_mock_step_continue(load_shared: None, sq: SquareTiling,
                             vehicle: Vehicle):
     il_original = sq.lanes[0]
     il = il_original.clone()
@@ -986,7 +986,7 @@ def test_mock_step_continue(read_config: None, sq: SquareTiling,
         il, test_t, clone, test_reservations[clone])
 
 
-def test_mock_step_exiting(read_config: None, sq: SquareTiling,
+def test_mock_step_exiting(load_shared: None, sq: SquareTiling,
                            vehicle: Vehicle):
     il_original = sq.lanes[0]
     il = il_original.clone()
@@ -1044,7 +1044,7 @@ def test_mock_step_exiting(read_config: None, sq: SquareTiling,
         il, test_t, clone, test_reservations[clone])
 
 
-def set_up_outgoing(read_config: None, sq: SquareTiling,
+def set_up_outgoing(load_shared: None, sq: SquareTiling,
                     vehicle: Vehicle, exiting: bool = True):
     il_og = sq.lanes[0]
     il = sq.lanes[0].clone()
@@ -1085,13 +1085,13 @@ def set_up_outgoing(read_config: None, sq: SquareTiling,
         il_og, a, timestep, reservation, clone
 
 
-def test_mock_step_outgoing(read_config: None, sq: SquareTiling,
+def test_mock_step_outgoing(load_shared: None, sq: SquareTiling,
                             vehicle: Vehicle):
 
     (counter, end_at, test_t, irl, il, orl, clone_to_original,
         test_reservations, valid_reservations, last_exit, originals, irl_og,
         il_og, a, timestep, reservation, clone) = set_up_outgoing(
-            read_config, sq, vehicle, False)
+            load_shared, sq, vehicle, False)
 
     complete, counter_new, test_t_new, last_exit_new, new_exit_new = \
         sq._mock_step(counter, end_at, test_t, None, irl, il, orl,
@@ -1121,13 +1121,13 @@ def test_mock_step_outgoing(read_config: None, sq: SquareTiling,
                                                         reservation)
 
 
-def test_mock_step_exited(read_config: None, sq: SquareTiling,
+def test_mock_step_exited(load_shared: None, sq: SquareTiling,
                           vehicle: Vehicle):
 
     (counter, end_at, test_t, irl, il, orl, clone_to_original,
         test_reservations, valid_reservations, last_exit, originals, irl_og,
         il_og, a, timestep, reservation, clone) = set_up_outgoing(
-            read_config, sq, vehicle)
+            load_shared, sq, vehicle)
 
     complete, counter_new, test_t_new, last_exit_new, new_exit_new = \
         sq._mock_step(counter, end_at, test_t, None, irl, il, orl,
@@ -1157,12 +1157,12 @@ def test_mock_step_exited(read_config: None, sq: SquareTiling,
                                                   reservation, False)
 
 
-def test_mock_step_invalid(read_config: None, sq: SquareTiling,
+def test_mock_step_invalid(load_shared: None, sq: SquareTiling,
                            vehicle: Vehicle, vehicle2: Vehicle):
 
     (counter, end_at, test_t, irl, il, orl, clone_to_original,
         test_reservations, valid_reservations, last_exit, originals, irl_og,
-        il_og, _, _, _, _) = set_up_outgoing(read_config, sq, vehicle)
+        il_og, _, _, _, _) = set_up_outgoing(load_shared, sq, vehicle)
 
     # Block a tile
     while len(sq.tiles) < test_t+2:
@@ -1182,7 +1182,7 @@ def test_mock_step_invalid(read_config: None, sq: SquareTiling,
 
 
 @fixture(scope='module')
-def clean_request(read_config: None):
+def clean_request(load_shared: None):
     # Redefined due to session particulars with pytest fixtures
     sq = square_tiling(0, 100, 0, 200, 1, 30)
     vehicle: Vehicle = AutomatedVehicle(0, 0)
@@ -1369,22 +1369,22 @@ def request_timeout_option(timeout: bool, p_back: float = .9):
 
 
 @fixture(scope='function')
-def request_with_timeout(read_config_clean: None):
+def request_with_timeout(load_shared_clean: None):
     return request_timeout_option(True)
 
 
 @fixture(scope='function')
-def request_with_timeout_short(read_config_clean: None):
+def request_with_timeout_short(load_shared_clean: None):
     return request_timeout_option(True, p_back=.99)
 
 
 @fixture(scope='function')
-def request_without_timeout(read_config_clean: None):
+def request_without_timeout(load_shared_clean: None):
     return request_timeout_option(False)
 
 
 @fixture(scope='function')
-def request_without_timeout_short(read_config_clean: None):
+def request_without_timeout_short(load_shared_clean: None):
     return request_timeout_option(False, p_back=.99)
 
 

@@ -35,23 +35,23 @@ Vehicles are assumed to be rectangles with fixed length and width. When updating
 
 On the topic of lanes, instead of using a vehicle's true position directly, lanes track their vehicles' proportional progress along the lane (AKA longitudinal movement) and use that to do all calculations. This has the advantage of reducing updates to one dimension which should make calculations simpler. If 2D movement is necessary, lanes also track a vehicle's lateral deviation away from the lane's centerline and mix that with a vehicle's progress to find its true position.
 
-To make stopping distance guarantees, vehicles are assumed to have a braking speed of at least some value, specified in the config file.
+To make stopping distance guarantees, vehicles are assumed to have a braking speed of at least some minimum value specified at simulation initialization.
 
 ## Directory structure
 
 This library is structured like a pip package, with all source files (other than `main.py`) contained in the eponymous `naaims/` directory.
 
-Scripts to run new simulation instances and config files will live in the main directory, at a locations to be determined. Documentation is, of course, in `docs/`.
+Scripts to run new simulation instances will live in `scenarios/`. Documentation is, of course, in `docs/`.
 
 Inside `naaims/`, modules are grouped into folders by the general class of object they're associated with, e.g. IntersectionManagers in `intersections/`. Some folders only contain a single module, since I anticipate their scope might grow enough to be split into multiple files as time goes on, so this will make backwards compatibility easier.
 
-Unit tests will go into `naaims/tests`.
+Unit tests go into `test`.
 
-Most module names should be self explanatory and will be discussed in detail later in this reading guide, except for these: - `archtypes.py` contain interfaces that spawners, removers, intersections, and roads implement - `shared.py` is a module that holds instanced data that's shared across all classes (e.g., configs) - `util.py` contains miscellaneous utility functions
+Most module names should be self explanatory and will be discussed in detail later in this reading guide, except for these: - `archtypes.py` contain interfaces that spawners, removers, intersections, and roads implement - `shared.py` is a module that holds instanced data that's shared across all classes - `util.py` contains miscellaneous utility functions
 
 ## Initialization
 
-Start by looking in `naaims/simulators/simulator.py`, specifically at the init function for the base Simulator class. Initialization of a new naaims instance is contained to this init and the methods it calls. As such, this function's signature is as general as possible, with the ability to create as many roads, intersections, spawners, and removers as specification dicts it's provided.
+Start by looking in `naaims/simulator.py`, specifically at the init function for the base Simulator class. Initialization of a new naaims instance is contained to this init and the methods it calls. As such, this function's signature is as general as possible, with the ability to create as many roads, intersections, spawners, and removers as specification dicts it's provided.
 
 The specification dicts are JSON-like packages that contain the input arguments necessary for the initialization of objects and their properties. For example, an intersection's spec dict will contain its connectivity matrix, the road objects it's connected to, and a spec dict that it will use to create its manager.
 
@@ -63,7 +63,7 @@ Spawners, intersections, and removers can only be connected to roads (e.g., an i
 
 ## Step cycle
 
-This cycle is defined in `Simulator.step()` in `naaims/simulators/simulator.py`. I recommend reading it linearly, jumping in and out of function definitions as needed. It consists of the following sub-steps:
+This cycle is defined in `Simulator.step()` in `naaims/simulator.py`. I recommend reading it linearly, jumping in and out of function definitions as needed. It consists of the following sub-steps:
 
 1. [Update speeds](#update-speeds)
 2. [Step vehicles](#step-vehicles)

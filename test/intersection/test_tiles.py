@@ -9,7 +9,7 @@ from naaims.intersection.lane import IntersectionLane
 from naaims.lane import ScheduledExit
 
 
-def test_tile(mocker: MockerFixture, read_config: None):
+def test_tile(mocker: MockerFixture, load_shared: None):
 
     t = DeterministicTile(0, 0)
     v1 = AutomatedVehicle(0, 0)

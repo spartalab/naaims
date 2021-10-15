@@ -10,7 +10,7 @@ from naaims.vehicles import AutomatedVehicle
 from naaims.lane import ScheduledExit, VehicleProgress
 
 
-def test_init(read_config: None):
+def test_init(load_shared: None):
     width = 5
     speed_limit = 30
     rl_start = RoadLane(

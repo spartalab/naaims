@@ -32,7 +32,7 @@ def helper_forward_movement(lane: Lane, vehicle: Vehicle):
     assert vehicle.velocity == SHARED.SETTINGS.min_acceleration * 1/60
 
 
-def test_vehicle_entry_from_spawner(mocker: MockerFixture, read_config: None):
+def test_vehicle_entry_from_spawner(mocker: MockerFixture, load_shared: None):
 
     vehicle_test = AutomatedVehicle(0, 0)
     rl = RoadLane(straight_trajectory, 5, 30, .2, .45,
@@ -74,7 +74,7 @@ def test_vehicle_entry_from_spawner(mocker: MockerFixture, read_config: None):
         SHARED.SETTINGS.min_acceleration*SHARED.SETTINGS.TIMESTEP_LENGTH**2)
 
 
-def test_vehicle_entry_from_facility(mocker: MockerFixture, read_config: None):
+def test_vehicle_entry_from_facility(mocker: MockerFixture, load_shared: None):
 
     vehicle_test = AutomatedVehicle(0, 0)
     il = IntersectionLane(RoadLane(
@@ -126,7 +126,7 @@ def test_vehicle_entry_from_facility(mocker: MockerFixture, read_config: None):
     ).x
 
 
-def test_vehicle_control(mocker: MockerFixture, read_config: None):
+def test_vehicle_control(mocker: MockerFixture, load_shared: None):
 
     vehicle = AutomatedVehicle(0, 0)
     rl_in = RoadLane(
@@ -191,7 +191,7 @@ def test_vehicle_control(mocker: MockerFixture, read_config: None):
     #  vehicle entry gets deleted)
 
 
-def test_consecutive_vehicles(mocker: MockerFixture, read_config: None):
+def test_consecutive_vehicles(mocker: MockerFixture, load_shared: None):
     vehA = AutomatedVehicle(0, 0)
     vehB = AutomatedVehicle(1, 0)
     veh_length = vehA.length*(1 + 2*SHARED.SETTINGS.length_buffer_factor)

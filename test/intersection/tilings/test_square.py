@@ -14,12 +14,12 @@ from naaims.intersection.reservation import Reservation
 from naaims.lane import ScheduledExit
 
 
-def test_failing_init(read_config: None):
+def test_failing_init(load_shared: None):
     with raises(ValueError):
         SquareTiling({}, {}, (), {})
 
 
-def test_simple_init(read_config: None):
+def test_simple_init(load_shared: None):
     coord_top_right = Coord(10, 10)
     rl_top_right = RoadLane(BezierTrajectory(
         coord_top_right, Coord(11, 11), [Coord(10.5, 10.5)]), 5, 30, .1, .1)
@@ -56,7 +56,7 @@ def test_simple_init(read_config: None):
     assert len(sq.buffer_tile_loc) == 4
 
 
-def test_slanted_init(read_config: None):
+def test_slanted_init(load_shared: None):
     coord_top_right = Coord(9, 10)
     rl_top_right = RoadLane(BezierTrajectory(
         coord_top_right, Coord(11, 11), [Coord(10.5, 10.5)]), 5, 30, .1, .1)
@@ -93,7 +93,7 @@ def test_slanted_init(read_config: None):
     assert len(sq.buffer_tile_loc) == 4
 
 
-def test_init_oblong_overtiled(read_config: None):
+def test_init_oblong_overtiled(load_shared: None):
     coord_top_right = Coord(9, 10)
     rl_top_right = RoadLane(BezierTrajectory(
         coord_top_right, Coord(11, 11), [Coord(10.5, 10.5)]), 5, 30, .1, .1)
@@ -170,7 +170,7 @@ def check_line_range(sq: SquareTiling, start: Coord, end: Coord,
     assert x_maxes == x_maxes_true
 
 
-def test_line_to_range_down_right(read_config: None, sq: SquareTiling):
+def test_line_to_range_down_right(load_shared: None, sq: SquareTiling):
     # Fully in
     check_line_range(sq, Coord(0.5, 1.5), Coord(2.5, .5), 0, [], [2, 1])
     check_line_range(sq, Coord(1, 4), Coord(3, 1), 1, [], [3, 2, 1, 1])
@@ -187,7 +187,7 @@ def test_line_to_range_down_right(read_config: None, sq: SquareTiling):
                      [100, 99, 98, 98])
 
 
-def test_line_to_range_down_left(read_config: None, sq: SquareTiling):
+def test_line_to_range_down_left(load_shared: None, sq: SquareTiling):
     # Fully in
     check_line_range(sq, Coord(2.5, 1.5), Coord(.5, .5), 0, [], [1, 2])
 
@@ -206,7 +206,7 @@ def test_line_to_range_down_left(read_config: None, sq: SquareTiling):
                      [-4, -3, -2, -1])
 
 
-def test_line_to_range_up_left(read_config: None, sq: SquareTiling):
+def test_line_to_range_up_left(load_shared: None, sq: SquareTiling):
     # Fully in
     check_line_range(sq, Coord(2.5, .5), Coord(.5, 1.5), 0, [1, 0], [])
 
@@ -235,7 +235,7 @@ def test_line_to_range_up_left(read_config: None, sq: SquareTiling):
     check_line_range(sq5, start, end, 2, [-1], [-1])
 
 
-def test_line_to_range_up_right(read_config: None, sq: SquareTiling):
+def test_line_to_range_up_right(load_shared: None, sq: SquareTiling):
     # Fully in
     check_line_range(sq, Coord(.5, .5), Coord(2.5, 1.5), 0, [0, 1], [])
     check_line_range(sq, Coord(51, 1), Coord(60, 3), 1, [51, 55, 59], [])
@@ -257,19 +257,19 @@ def test_line_to_range_up_right(read_config: None, sq: SquareTiling):
     check_line_range(sq, Coord(.5, .5), Coord(2, 1), 0, [0, 1], [])
 
 
-def test_line_to_range_up(read_config: None, sq: SquareTiling):
+def test_line_to_range_up(load_shared: None, sq: SquareTiling):
     check_line_range(sq, Coord(4, .5), Coord(4, 1.5), 0, [4, 4], [4, 4])
     check_line_range(sq, Coord(100, 0), Coord(100, 3.5), 0,
                      [100, 100, 100, 100], [100, 100, 100, 100])
 
 
-def test_line_to_range_down(read_config: None, sq: SquareTiling):
+def test_line_to_range_down(load_shared: None, sq: SquareTiling):
     check_line_range(sq, Coord(4, 1.5), Coord(4, .5), 0, [4, 4], [4, 4])
     check_line_range(sq, Coord(100, 200), Coord(100, 197.5), 197,
                      [100, 100, 100, 100], [100, 100, 100, 100])
 
 
-def test_line_to_range_left(read_config: None, sq: SquareTiling):
+def test_line_to_range_left(load_shared: None, sq: SquareTiling):
     check_line_range(sq, Coord(2.5, 1), Coord(3.5, 1), 1, [2], [3])
     check_line_range(sq, Coord(100, 200), Coord(98.5, 200), 200, [98], [100])
     # Potential floating point error
@@ -277,7 +277,7 @@ def test_line_to_range_left(read_config: None, sq: SquareTiling):
                      Coord(x=-16.75, y=-17.999999999999996), -18, [-17], [5])
 
 
-def test_line_to_range_right(read_config: None, sq: SquareTiling):
+def test_line_to_range_right(load_shared: None, sq: SquareTiling):
     check_line_range(sq, Coord(3.5, 1.5), Coord(2.5, 1.5), 1, [2], [3])
     check_line_range(sq, Coord(0, 200), Coord(2.5, 200), 200, [0], [2])
 
@@ -291,7 +291,7 @@ def compare_clip(sq: SquareTiling, y_min: int, x_mins: List[int],
     assert x_maxes == x_maxes_true
 
 
-def test_clip_range(read_config: None, sq: SquareTiling):
+def test_clip_range(load_shared: None, sq: SquareTiling):
 
     # No clip
     compare_clip(sq, 98, [5, 5, 5, 5], [5, 5, 5, 5], 98, [5, 5, 5, 5],
@@ -325,7 +325,7 @@ def check_tile_range(sq: SquareTiling, outline: Tuple[Coord, ...],
     assert x_maxes == x_maxes_true
 
 
-def test_outline_to_range_below(read_config: None, sq: SquareTiling):
+def test_outline_to_range_below(load_shared: None, sq: SquareTiling):
 
     # Left
     check_tile_range(sq, (Coord(-1, -1), Coord(-1, -3), Coord(-3, -3)),
@@ -354,7 +354,7 @@ def test_outline_to_range_below(read_config: None, sq: SquareTiling):
                      0, [99], [99])
 
 
-def test_outline_to_range_above(read_config: None, sq: SquareTiling):
+def test_outline_to_range_above(load_shared: None, sq: SquareTiling):
 
     # Left
     check_tile_range(sq, (Coord(-1, 201), Coord(-1, 203), Coord(-3, 203)),
@@ -387,7 +387,7 @@ def test_outline_to_range_above(read_config: None, sq: SquareTiling):
                      199, [99], [99])
 
 
-def test_outline_to_range_left(read_config: None, sq: SquareTiling):
+def test_outline_to_range_left(load_shared: None, sq: SquareTiling):
 
     # Left
     check_tile_range(sq, (Coord(-100, 10), Coord(-90, 20), Coord(-110, 5)),
@@ -398,7 +398,7 @@ def test_outline_to_range_left(read_config: None, sq: SquareTiling):
                      9, [0, 0, 0, 0], [0, 0, 0, 0])
 
 
-def test_outline_to_range_right(read_config: None, sq: SquareTiling):
+def test_outline_to_range_right(load_shared: None, sq: SquareTiling):
 
     # Right
     check_tile_range(sq, (Coord(200, 10), Coord(201, 23), Coord(200, 3)),
@@ -411,7 +411,7 @@ def test_outline_to_range_right(read_config: None, sq: SquareTiling):
                      10, [99, 99, 99], [99, 99, 99])
 
 
-def test_outline_to_range_normal(read_config: None, sq: SquareTiling):
+def test_outline_to_range_normal(load_shared: None, sq: SquareTiling):
 
     # Poke out top left
     check_tile_range(sq, (Coord(-1, 201), Coord(2.5, 199.7), Coord(.1, 196.4)),
@@ -458,7 +458,7 @@ def test_outline_to_range_normal(read_config: None, sq: SquareTiling):
                           Coord(102.6, -1.7)), 0, [98, 99], [99, 99])
 
 
-def test_pos_to_tile(read_config: None, sq: SquareTiling,
+def test_pos_to_tile(load_shared: None, sq: SquareTiling,
                      vehicle: AutomatedVehicle, vehicle2: AutomatedVehicle):
     SHARED.t = 1
     assert len(sq.tiles) == 0
@@ -532,7 +532,7 @@ def test_pos_to_tile(read_config: None, sq: SquareTiling,
     assert len(tiles) == counter
 
 
-def test_io_buffer(read_config: None, sq: SquareTiling,
+def test_io_buffer(load_shared: None, sq: SquareTiling,
                    vehicle: AutomatedVehicle, vehicle2: AutomatedVehicle):
 
     SHARED.t = 0
@@ -582,7 +582,7 @@ def test_io_buffer(read_config: None, sq: SquareTiling,
     assert sq.io_tile_buffer(i_lane0, 1, vehicle, res, False) is None
 
 
-def test_tile_loc_to_id(read_config: None, sq: SquareTiling):
+def test_tile_loc_to_id(load_shared: None, sq: SquareTiling):
     assert sq._tile_loc_to_id((0, 0)) == 0
     assert sq._tile_loc_to_id((0, 1)) == 100
     assert sq._tile_loc_to_id((1, 0)) == 1
@@ -591,7 +591,7 @@ def test_tile_loc_to_id(read_config: None, sq: SquareTiling):
     assert sq._tile_loc_to_id((99, 199)) == 19_999
 
 
-def test_new_layer(read_config: None, sq: SquareTiling):
+def test_new_layer(load_shared: None, sq: SquareTiling):
 
     SHARED.t = 0
     # Recall that that the tiles are called on after all the movements in the
@@ -617,7 +617,7 @@ def test_new_layer(read_config: None, sq: SquareTiling):
     assert hash(sq.tiles[1][13_827]) == hash((13_827, 3))
 
 
-def test_coord_to_tile(read_config: None, sq: SquareTiling):
+def test_coord_to_tile(load_shared: None, sq: SquareTiling):
     assert sq._io_coord_to_tile_id(Coord(1, 1)) == 101
     assert sq._io_coord_to_tile_id(Coord(100, 200)) == 19_999
     assert sq._io_coord_to_tile_id(Coord(0, 11.5)) == 1_100

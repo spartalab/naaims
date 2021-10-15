@@ -109,7 +109,7 @@ def check_spawner_init_basics(spawner: VehicleSpawner, road: Road):
     assert len(spawner.queue) == 0
 
 
-def test_poisson_init(read_config: None, road: Road):
+def test_poisson_init(load_shared: None, road: Road):
     spawner = VehicleSpawner(road, 1, [GaussianVehicleFactory],
                              [gvf_spec_0], [1])
     check_spawner_init_basics(spawner, road)
@@ -129,7 +129,7 @@ def test_poisson_init(read_config: None, road: Road):
         VehicleSpawner(road, 1, [], [gvf_spec_0], [2])
 
 
-def test_predetermined_init(read_config: None, road: Road, vehicle: Vehicle,
+def test_predetermined_init(load_shared: None, road: Road, vehicle: Vehicle,
                             vehicle2: Vehicle, vehicle3: Vehicle):
     spawner = VehicleSpawner(road, 0, [], [], [], [
         (2.1, vehicle), (0.6, vehicle2), (9.9, vehicle3)])
@@ -146,7 +146,7 @@ def test_predetermined_init(read_config: None, road: Road, vehicle: Vehicle,
         9.9/SHARED.SETTINGS.TIMESTEP_LENGTH, vehicle3)
 
 
-def test_poisson_spawn(read_config_clean: None, road: Road,
+def test_poisson_spawn(load_shared_clean: None, road: Road,
                        set_pathfinder_straight: None):
     spawner = VehicleSpawner(road, 99999, [GaussianVehicleFactory],
                              [gvf_spec_0], [1])
@@ -171,7 +171,7 @@ def test_poisson_spawn(read_config_clean: None, road: Road,
         road.entering_vehicle_buffer[2].pos == Coord(0, 2)
 
 
-def test_predetermined_spawn(read_config_clean: None, road: Road,
+def test_predetermined_spawn(load_shared_clean: None, road: Road,
                              set_pathfinder_straight: None, vehicle: Vehicle,
                              vehicle2: Vehicle, vehicle3: Vehicle):
     vehicle._Vehicle__destination = vehicle2._Vehicle__destination = 1
@@ -204,7 +204,7 @@ def test_predetermined_spawn(read_config_clean: None, road: Road,
         9.9/SHARED.SETTINGS.TIMESTEP_LENGTH, vehicle3)
 
 
-def test_multi_spawn(read_config_clean: None, road: Road,
+def test_multi_spawn(load_shared_clean: None, road: Road,
                      set_pathfinder_straight: None, vehicle: Vehicle,
                      vehicle2: Vehicle, vehicle3: Vehicle):
     vehicle._Vehicle__destination = vehicle2._Vehicle__destination = \
@@ -240,7 +240,7 @@ def test_multi_spawn(read_config_clean: None, road: Road,
     assert spawner.queue[0][0] is vehicle3
 
 
-def test_spawn_lane(read_config_clean: None, road: Road,
+def test_spawn_lane(load_shared_clean: None, road: Road,
                     set_pathfinder_split: None, vehicle: Vehicle,
                     vehicle2: Vehicle):
     vehicle._Vehicle__destination = 1
@@ -259,7 +259,7 @@ def test_spawn_lane(read_config_clean: None, road: Road,
             assert transfer.pos == Coord(0, -2)
 
 
-def test_lane_spawn_block(read_config_clean: None, road: Road,
+def test_lane_spawn_block(load_shared_clean: None, road: Road,
                           set_pathfinder_split: None, vehicle: Vehicle,
                           vehicle2: Vehicle, vehicle3: Vehicle):
 
@@ -301,7 +301,7 @@ def test_lane_spawn_block(read_config_clean: None, road: Road,
     assert spawner.queue[0][0] is vehicle2
 
 
-def test_lane_preblock(read_config_clean: None, road: Road,
+def test_lane_preblock(load_shared_clean: None, road: Road,
                        set_pathfinder_split: None, vehicle: Vehicle,
                        vehicle2: Vehicle, vehicle3: Vehicle):
 

@@ -13,7 +13,7 @@ from naaims.vehicles import AutomatedVehicle
 from test.test_lane import straight_trajectory
 
 
-def test_road_lane_offsets(mocker: MockerFixture, read_config: None):
+def test_road_lane_offsets(mocker: MockerFixture, load_shared: None):
 
     lane_width = 4
 
@@ -102,7 +102,7 @@ def test_road_lane_offsets(mocker: MockerFixture, read_config: None):
     ))
 
 
-def test_step_and_speeds(read_config: None):
+def test_step_and_speeds(load_shared: None):
     road = Road(straight_trajectory, .2*straight_trajectory.length,
                 SHARED.SETTINGS.speed_limit,
                 upstream_is_spawner=True, downstream_is_remover=True,
@@ -148,7 +148,7 @@ def test_step_and_speeds(read_config: None):
     )
 
 
-def test_transfer_error(read_config: None):
+def test_transfer_error(load_shared: None):
     road = Road(straight_trajectory, .2*straight_trajectory.length,
                 SHARED.SETTINGS.speed_limit,
                 upstream_is_spawner=True, downstream_is_remover=True,

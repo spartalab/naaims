@@ -43,7 +43,12 @@ class Simulator:
                  remover_specs: List[Dict[str, Any]],
                  lane_destination_pairs: Optional[Dict[Tuple[Coord, int],
                                                        List[Coord]]] = None,
-                 config_filename: str = './config.ini',
+                 steps_per_second: int = 60,
+                 speed_limit: int = 15,
+                 min_braking: float = -2.6,
+                 min_acceleration: float = 3,
+                 max_vehicle_length: float = 5.5,
+                 length_buffer_factor: float = 0.1,
                  visualize: bool = False) -> None:
         """Create all roads, intersections, and suppport structures.
 
@@ -60,14 +65,40 @@ class Simulator:
                 If provided, overrides default Pathfinder behavior by
                 hardcoding paths through the intersection network, obviating
                 the need for shortest path calculations.
-            config_filename: str = './config.ini'
-                The location of the config file.
+            steps_per_second: int = 60
+                The number of steps the simulation calculates per second of
+                simulated time.
+            speed_limit: int = 15
+                The default speed limit in meters per second (can be overridden
+                by specific roads or intersections in their specifications).
+            min_braking: float = -2.6
+                Maximum comfortable deceleration (braking) for all vehicles in
+                m/s^2. Because this is based on human comfort, this should be
+                also be lower than the maximum deceleration possible by every
+                vehicle in the simulation, to the extent that we don't need to
+                specify a separate deceleration for every vehicle in the
+                simulation. Although this is called min_braking, this should be
+                the braking rate expressed in negative values, corresponding to
+                negative acceleration.
+            min_acceleration: float = 3
+                Like min_braking, for a vehicle's (positive) acceleration rate.
+            max_vehicle_length: float = 5.5
+            length_buffer_factor: float = 0.1
+                Amount of clearance to maintain before and after each vehicle
+                (separately), as a function of the vehicle's length. The
+                default option, 0.1, makes a vehicle 10% longer in front and
+                10% longer behind than it actually is.
             visualize: bool = False
                 Whether to visualize the progress of the simulation.
         """
 
-        # 0. Read in the config file.
-        SHARED.SETTINGS.read(config_filename)
+        # 0. Load shared settings.
+        SHARED.SETTINGS.load(steps_per_second=steps_per_second,
+                             speed_limit=speed_limit,
+                             min_braking=min_braking,
+                             min_acceleration=min_acceleration,
+                             max_vehicle_length=max_vehicle_length,
+                             length_buffer_factor=length_buffer_factor)
 
         # 1. Create the Upstream and Downstream objects
         #   a. Create the roads and organize by intersection and road to be
