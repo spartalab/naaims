@@ -33,8 +33,10 @@ class Vehicle(ABC):
                  max_braking: float = -3.4,
                  length: float = 4.5,
                  width: float = 3,
-                 throttle_score: float = 0,
-                 tracking_score: float = 0,
+                 throttle_mn: float = 0,
+                 throttle_sd: float = 0,
+                 tracking_mn: float = 0,
+                 tracking_sd: float = 0,
                  vot: float = 0
                  ) -> None:
         """Construct a vehicle instance.
@@ -99,8 +101,10 @@ class Vehicle(ABC):
         self.__max_braking = max_braking
         self.__length = length
         self.__width = width
-        self.__throttle_score = throttle_score
-        self.__tracking_score = tracking_score
+        self.__throttle_mn = throttle_mn
+        self.__throttle_sd = throttle_sd
+        self.__tracking_mn = tracking_mn
+        self.__tracking_sd = tracking_sd
         self.__vot = vot
 
     @property
@@ -173,12 +177,20 @@ class Vehicle(ABC):
         return self.__width
 
     @property
-    def throttle_score(self) -> float:
-        return self.__throttle_score
+    def throttle_mn(self) -> float:
+        return self.__throttle_mn
 
     @property
-    def tracking_score(self) -> float:
-        return self.__tracking_score
+    def throttle_sd(self) -> float:
+        return self.__throttle_sd
+
+    @property
+    def tracking_mn(self) -> float:
+        return self.__tracking_mn
+
+    @property
+    def tracking_sd(self) -> float:
+        return self.__tracking_sd
 
     @property
     def vot(self) -> float:

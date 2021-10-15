@@ -29,10 +29,14 @@ class GaussianVehicleFactory(VehicleFactory):
                  length_sd: float = 0,
                  width_mn: float = 3,  # width in meters
                  width_sd: float = 0,
-                 throttle_score_mn: float = 0,
-                 throttle_score_sd: float = 0,
-                 tracking_score_mn: float = 0,
-                 tracking_score_sd: float = 0,
+                 throttle_mn_mn: float = 0,
+                 throttle_mn_sd: float = 0,
+                 throttle_sd_mn: float = 0,
+                 throttle_sd_sd: float = 0,
+                 tracking_mn_mn: float = 0,
+                 tracking_mn_sd: float = 0,
+                 tracking_sd_mn: float = 0,
+                 tracking_sd_sd: float = 0,
                  vot_mn: float = 0,  # value of time
                  vot_sd: float = 0) -> None:
         """Create a new normally distributed VehicleFactory."""
@@ -67,20 +71,25 @@ class GaussianVehicleFactory(VehicleFactory):
             raise ValueError("VOT must be at least 0.")
         self.vot_mn = vot_mn
 
-        self.throttle_score_mn = throttle_score_mn
-        self.tracking_score_mn = tracking_score_mn
+        self.throttle_mn_mn = throttle_mn_mn
+        self.throttle_sd_mn = throttle_sd_mn
+        self.tracking_mn_mn = tracking_mn_mn
+        self.tracking_sd_mn = tracking_sd_mn
 
         if ((max_accel_sd < 0) or (max_braking_sd < 0) or (length_sd < 0)
-                or (width_sd < 0) or (vot_sd < 0) or (throttle_score_sd < 0)
-                or (tracking_score_sd < 0)):
+                or (width_sd < 0) or (vot_sd < 0) or (throttle_mn_sd < 0)
+                or (throttle_sd_sd < 0) or (tracking_mn_sd < 0)
+                or (tracking_sd_sd < 0)):
             raise ValueError("Standard deviation must be at least zero.")
         self.max_accel_sd = max_accel_sd
         self.max_braking_sd = max_braking_sd
         self.length_sd = length_sd
         self.width_sd = width_sd
         self.vot_sd = vot_sd
-        self.throttle_score_sd = throttle_score_sd
-        self.tracking_score_sd = tracking_score_sd
+        self.throttle_mn_sd = throttle_mn_sd
+        self.throttle_sd_sd = throttle_sd_sd
+        self.tracking_mn_sd = tracking_mn_sd
+        self.tracking_sd_sd = tracking_sd_sd
 
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
@@ -109,10 +118,14 @@ class GaussianVehicleFactory(VehicleFactory):
             length_sd=spec['length_sd'],
             width_mn=spec['width_mn'],
             width_sd=spec['width_sd'],
-            throttle_score_mn=spec['throttle_score_mn'],
-            throttle_score_sd=spec['throttle_score_sd'],
-            tracking_score_mn=spec['tracking_score_mn'],
-            tracking_score_sd=spec['tracking_score_sd'],
+            throttle_mn_mn=spec.get('throttle_mn_mn', 0),
+            throttle_mn_sd=spec.get('throttle_mn_sd', 0),
+            throttle_sd_mn=spec.get('throttle_sd_mn', 0),
+            throttle_sd_sd=spec.get('throttle_sd_sd', 0),
+            tracking_mn_mn=spec.get('tracking_mn_mn', 0),
+            tracking_mn_sd=spec.get('tracking_mn_sd', 0),
+            tracking_sd_mn=spec.get('tracking_sd_mn', 0),
+            tracking_sd_sd=spec.get('tracking_sd_sd', 0),
             vot_mn=spec['vot_mn'],
             vot_sd=spec['vot_sd']
         )
@@ -125,8 +138,10 @@ class GaussianVehicleFactory(VehicleFactory):
         max_braking = gauss(self.max_braking_mn, self.max_braking_sd)
         length = gauss(self.length_mn, self.length_sd)
         width = gauss(self.width_mn, self.width_sd)
-        throttle = gauss(self.throttle_score_mn, self.throttle_score_sd)
-        tracking = gauss(self.tracking_score_mn, self.tracking_score_sd)
+        throttle_mn = gauss(self.throttle_mn_mn, self.throttle_mn_sd)
+        throttle_sd = gauss(self.throttle_sd_mn, self.throttle_sd_sd)
+        tracking_mn = gauss(self.tracking_mn_mn, self.tracking_mn_sd)
+        tracking_sd = gauss(self.tracking_sd_mn, self.tracking_sd_sd)
         vot = gauss(self.vot_mn, self.vot_sd)
         return self.vehicle_type(
             vin=self._assign_new_vin(),
@@ -138,7 +153,9 @@ class GaussianVehicleFactory(VehicleFactory):
             ) else SHARED.SETTINGS.min_braking),
             length=length if length > 0 else 1,
             width=width if width > 0 else 1,
-            throttle_score=throttle,
-            tracking_score=tracking,
+            throttle_mn=throttle_mn,
+            throttle_sd=throttle_sd,
+            tracking_mn=tracking_mn,
+            tracking_sd=tracking_sd,
             vot=vot if vot >= 0 else 0
         )

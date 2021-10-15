@@ -4,7 +4,7 @@ of the AIM simulator, including visualizations if enabled.
 """
 
 from __future__ import annotations
-from typing import Generator, List, Tuple, Dict, Optional, Set, Any
+from typing import Generator, List, Tuple, Dict, Optional, Set, Any, Union
 from math import sin, cos
 
 from matplotlib.pyplot import subplots
@@ -248,8 +248,7 @@ class Simulator:
         #    well as global entry, exit, and routing success for performance
         #    evaluation. See fetch_log for more information.
         self.vehicles_in_scope: Set[Vehicle] = set()
-        self.vehicle_entry_times: Dict[int, Tuple[int, int]] = {}
-        self.vehicle_exit_log: Dict[int, Tuple[int, int]] = {}
+        self.vehicle_log: Dict[int, Dict[str, Union[int, float, str]]] = {}
 
         # 5. If the visualize flag is enabled, draw the basemap image of
         #    roads and intersections for use later.
@@ -398,9 +397,25 @@ class Simulator:
             incoming_packet = u.step_vehicles()
             if incoming_packet is not None:
                 spawned_vehicles, entering_vehicles = incoming_packet
-                for spawned_vehicle in spawned_vehicles:
-                    self.vehicle_entry_times[spawned_vehicle.vin] = (
-                        SHARED.t, spawned_vehicle.destination)
+                for spawn in spawned_vehicles:
+                    self.vehicle_log[spawn.vin] = {}
+                    self.vehicle_log[spawn.vin]['t_spawn'] = SHARED.t
+                    self.vehicle_log[spawn.vin][
+                        'destination_target'] = spawn.destination
+                    self.vehicle_log[spawn.vin]['width'] = spawn.width
+                    self.vehicle_log[spawn.vin]['length'] = spawn.length
+                    self.vehicle_log[spawn.vin][
+                        'throttle_mn'] = spawn.throttle_mn
+                    self.vehicle_log[spawn.vin][
+                        'throttle_sd'] = spawn.throttle_sd
+                    self.vehicle_log[spawn.vin][
+                        'tracking_mn'] = spawn.tracking_mn
+                    self.vehicle_log[spawn.vin][
+                        'tracking_sd'] = spawn.tracking_sd
+                    self.vehicle_log[spawn.vin]['vot'] = spawn.vot
+                    self.vehicle_log[spawn.vin]['type'] = type(spawn).__name__
+                for entering in entering_vehicles:
+                    self.vehicle_log[entering.vin]['t_entry'] = SHARED.t
                 self.vehicles_in_scope.update(entering_vehicles)
 
         # 3. Have every downstream object (roads, intersections, and vehicle
@@ -412,14 +427,14 @@ class Simulator:
             # only vehicle_removers return vehicles, iff any get removed
             # in this cycle
             if exiting_vehicles is not None:
-                for vehicle in exiting_vehicles:
-                    # log the vehicle
-                    self.vehicle_exit_log[vehicle.vin] = (SHARED.t, -1)
+                for exiting in exiting_vehicles:
+                    self.vehicle_log[exiting.vin]['t_exit'] = SHARED.t
                     # TODO: (multiple) determine if a vehicle successfully
-                    #       reached its destination. Give removers ID property.
+                    #       reached its destination. Will require adding an ID
+                    #       property to VehicleRemovers.
 
                     # remove it from our tracker
-                    self.vehicles_in_scope.remove(vehicle)
+                    self.vehicles_in_scope.remove(exiting)
 
         # 4. Have facility managers handle their special internal logic (e.g.,
         #    lane changes and reservations).
@@ -430,20 +445,45 @@ class Simulator:
         SHARED.t += 1
         SHARED.SETTINGS.pathfinder.update(None)
 
-    def fetch_log(self) -> List[Tuple[int, Optional[int], int, Optional[int]]]:
-        """Returns log of times that vehicles spawned and exited the sim.
+    def save_log(self, filename: str) -> None:
+        """Save log of vehicles spawned in the simulation to file in CSV form.
 
-        This is a list of four int tuples denoting each spawned vehicle's
-            1. entry/spawning timestep
-            2. exit/removal timestep, if it's exited
-            3. intended destination index
-            4. actual destination index, if it's exited
+        The row ID is each vehicle's VIN. In order, each row is a vehicle's
+             1. spawn time (seconds)
+             2. time it enters the simulation space (seconds) if available
+                (this will be the same as the spawn time unless the spawn lane
+                queue backs up past the length of the lane) and -1 if it has
+                yet to enter
+             3. simulation space exit time (seconds) if available
+             4. intended destination
+             5. actual destination, if it's exited (-1 if unavailable)
+             6. width in meters
+             7. length in meters
+             8. throttle mean
+             9. throttle sd
+            10. tracking mean
+            11. tracking sd
+            12. value of time (VOT) in units per second
+            13. vehicle type/class
         """
-        log_image: List[Tuple[int, Optional[int], int, Optional[int]]] = []
-        for vin, (t_enter, d_intended) in self.vehicle_entry_times.items():
-            t_exit, d_actual = self.vehicle_exit_log.get(vin, (None, None))
-            log_image.append((t_enter, t_exit, d_intended, d_actual))
-        return log_image
+        with open(filename, 'w') as f:
+            f.write("t_spawn,t_entry,t_exit,destination_target,"
+                    "destination_actual,width,length,throttle_mn,throttle_sd,"
+                    "tracking_mn,tracking_sd,vot,type")
+            for _, vehicle_log in sorted(self.vehicle_log.items()):
+                f.write(f'{vehicle_log["t_spawn"]},'
+                        f'{vehicle_log.get("t_entry", -1)},'
+                        f'{vehicle_log.get("t_exit", -1)},'
+                        f'{vehicle_log["destination_target"]},'
+                        f'{vehicle_log.get("destination_actual", -1)},'
+                        f'{vehicle_log["width"]},'
+                        f'{vehicle_log["length"]},'
+                        f'{vehicle_log["throttle_mn"]},'
+                        f'{vehicle_log["throttle_sd"]},'
+                        f'{vehicle_log["tracking_mn"]},'
+                        f'{vehicle_log["tracking_sd"]},'
+                        f'{vehicle_log["vot"]},'
+                        f'{vehicle_log["type"]}\n')
 
     def animate(self, frame_ratio: int = 1, max_timestep: int = 10*60
                 ) -> FuncAnimation:

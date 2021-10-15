@@ -40,10 +40,14 @@ class ThreeLaneRoadSim(Simulator):
             length_sd=0,
             width_mn=3,
             width_sd=0,
-            throttle_score_mn=0,
-            throttle_score_sd=0,
-            tracking_score_mn=0,
-            tracking_score_sd=0,
+            throttle_mn_mn=0,
+            throttle_mn_sd=0,
+            throttle_sd_mn=0,
+            throttle_sd_sd=0,
+            tracking_mn_mn=0,
+            tracking_mn_sd=0,
+            tracking_sd_mn=0,
+            tracking_sd_sd=0,
             vot_mn=0,
             vot_sd=0
         )

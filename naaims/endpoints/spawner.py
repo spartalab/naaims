@@ -141,7 +141,8 @@ class VehicleSpawner(Configurable, Upstream):
             factory_selection_probabilities=spec[
                 'factory_selection_probabilities'],
             factory_types=spec['factory_types'],
-            factory_specs=spec['factory_specs']
+            factory_specs=spec['factory_specs'],
+            predetermined_spawns=spec.get('predetermined_spawns', [])
         )
 
     def step_vehicles(self) -> Tuple[List[Vehicle], List[Vehicle]]:
