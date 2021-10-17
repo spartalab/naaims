@@ -221,11 +221,22 @@ class VehicleSpawner(Configurable, Upstream):
             # can enter one of them later.
             vehicle_can_transfer: bool = False
             for lane in eligible_lanes:
-                if (lane not in blocked_lanes) and (lane.room_to_enter() > (
-                    vehicle_to_transfer.length *
+                room_to_enter = lane.room_to_spawn()
+                effective_length = vehicle_to_transfer.length * \
                     (1 + 2 * SHARED.SETTINGS.length_buffer_factor)
-                )):
+                if (lane not in blocked_lanes) and \
+                        (room_to_enter > effective_length):
                     vehicle_can_transfer = True
+
+                    # Adjust the entering vehicle's speed so that it'll be
+                    # going just fast enough to brake to a stop at the end of
+                    # its vailable space. (Or just set it to the speed limit if
+                    # it's too fast.)
+                    vehicle_to_transfer.velocity = min(
+                        self.downstream.speed_limit,
+                        VehicleSpawner._fastest_v_no_collision(
+                            room_to_enter, effective_length,
+                            SHARED.SETTINGS.min_braking))
 
                     self.downstream.transfer_vehicle(VehicleTransfer(
                         vehicle=vehicle_to_transfer,
@@ -267,3 +278,10 @@ class VehicleSpawner(Configurable, Upstream):
         # Pass newly spawned vehicles and newly transferred vehicles back to
         # the Simulator if there are any
         return spawns_this_timestep, vehicles_transferred
+
+    @staticmethod
+    def _fastest_v_no_collision(room_to_enter: float, effective_length: float,
+                                b: float) -> float:
+        """The fastest speed a vehicle can fully brake from in x_to_brake."""
+        x_to_brake = room_to_enter - effective_length
+        return (2*-b*x_to_brake)**.5

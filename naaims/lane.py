@@ -17,7 +17,6 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Tuple, Optional, List, Dict, Set, \
     NamedTuple, TypeVar
 from warnings import warn
-# from copy import copy
 
 import naaims.shared as SHARED
 from naaims.util import (Coord, VehicleSection, SpeedUpdate, VehicleTransfer,

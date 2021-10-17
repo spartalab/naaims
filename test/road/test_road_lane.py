@@ -22,7 +22,7 @@ def test_road_lane_init(load_shared: None, rl: RoadLane):
                   .45*straight_trajectory.length)
     assert rl.entrance_end == .2
     assert rl.lcregion_end == .55
-    assert rl.room_to_enter() == .2*straight_trajectory.length
+    assert rl.room_to_spawn() == .2*straight_trajectory.length
     assert hash(rl) == hash(straight_trajectory)
 
 
@@ -179,12 +179,17 @@ def test_remove(rl: RoadLane, vehicle: AutomatedVehicle,
 
 
 def test_room(rl: RoadLane, vehicle: AutomatedVehicle):
-    assert rl.room_to_enter() == 300  # see conftest.py
+    assert rl.room_to_spawn() == 300
+    assert rl.room_to_enter(False) == 1000
     rl.add_vehicle(vehicle)
     rl.vehicle_progress[vehicle] = VehicleProgress(None, None, .2)
-    assert rl.room_to_enter() == 200
+    assert rl.room_to_spawn() == 200
+    assert rl.room_to_enter(False) == 1000 - vehicle.length * (
+        1 + 2*SHARED.SETTINGS.length_buffer_factor)
     rl.vehicle_progress[vehicle] = VehicleProgress(None, None, .5)
-    assert rl.room_to_enter() == 300
+    assert rl.room_to_spawn() == 300
+    assert rl.room_to_enter(False) == 1000 - vehicle.length * (
+        1 + 2*SHARED.SETTINGS.length_buffer_factor)
 
 
 # def test_first_permission in test_integration because it depends on several
@@ -196,16 +201,6 @@ def test_x_to_intersection(rl: RoadLane):
     assert rl._x_to_intersection(.1) == 900
     assert rl._x_to_intersection(0) == 1000
     assert rl._x_to_intersection(1) == 0
-
-
-def test_ff_exit():
-    assert RoadLane._free_flow_exit(0, 1, 10, 10, 50, 50) == (10, 10)
-    assert RoadLane._free_flow_exit(0, 1, 10, 10, 50, 10) == approx(
-        (4.47213595499958, 4.47213595499958))
-    assert RoadLane._free_flow_exit(0, 1, 10, 10, 50, 60) == (11, 10)
-    t_odd = 5**.5-1
-    assert RoadLane._free_flow_exit(1, 1, 3, 2, 4, 2) == (t_odd, 1+t_odd)
-    assert RoadLane._free_flow_exit(1, 1, 3, 2, 4, 7) == (3, 3)
 
 
 def test_x_in_intersection():

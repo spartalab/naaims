@@ -85,11 +85,10 @@ def test_vehicle_entry_from_facility(mocker: MockerFixture, load_shared: None):
         30)
 
     # Add the vehicle's front section to the lane
-    length_front = vehicle_test.length * \
-        (1 + 2*.1)
+    length_front = vehicle_test.length * (1 + 2*.1)
     il.enter_vehicle_section(VehicleTransfer(
-        vehicle_test, VehicleSection.FRONT, None, il.trajectory.start_coord
-    ))
+        vehicle_test, VehicleSection.FRONT, length_front,
+        il.trajectory.start_coord))
     assert len(il.vehicles) == 1
     assert len(il.vehicle_progress) == 1
     assert il.vehicles[0] == vehicle_test

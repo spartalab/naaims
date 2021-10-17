@@ -46,7 +46,7 @@ class SignalsManager(IntersectionManager):
                 vehicle: Vehicle = lane.vehicles[index]
                 if vehicle.length > self.outgoing_road_lane_by_coord[
                     vehicle.next_movements(lane.trajectory.end_coord)[0]
-                ].room_to_enter(tight=False):
+                ].room_to_enter():
                     break
 
                 # Estimate this vehicle's exit parameters and use those to see

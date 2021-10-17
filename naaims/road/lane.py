@@ -200,47 +200,60 @@ class RoadLane(Lane):
 
     # Used by spawner and/or intersection manager
 
-    def room_to_enter(self, tight: bool = True) -> float:
+    def room_to_spawn(self, tight: bool = True) -> float:
         """Return the amount of free space left in the entrance region.
 
-        If tight, check only the space immediately behind the current position
-        of the last vehicle. This is used to check if there's room to spawn a
-        vehicle.
-
-        If not tight, return the total amount of free space in the entire
-        entrance region, including in between vehicles, assuming that all
-        vehicles currently in the entrance region have braked at maximum power
-        (which will make even more free space available). This is used when
-        deciding whether to allow new vehicles into the upstream intersection,
-        as they'll need enough room to exit in a worst-case scenario.
+        Returns the amount of space available for a vehicle to appear in full,
+        i.e., when spawning, so it checks only the space immediately behind the
+        current position of the last vehicle.
         """
 
-        if tight:
-            if len(self.vehicles) > 0:
-                last = self.vehicles[-1]
-                p = self.vehicle_progress[last].rear
-                if p is not None:
-                    return min(self.entrance_end*self.trajectory.length,
-                               p*self.trajectory.length)
-                else:
-                    return 0
+        if len(self.vehicles) > 0:
+            last = self.vehicles[-1]
+            p = self.vehicle_progress[last].rear
+            if p is not None:
+                return min(self.entrance_end*self.trajectory.length,
+                           p*self.trajectory.length)
             else:
-                return self.entrance_end*self.trajectory.length
+                return 0
         else:
-            # TODO: Assume that vehicle at the front of the entrance region
-            #       brakes. The vehicles in the entrance region behind it
-            #       should already be under lf behavior and be able to come to
-            #       a stop.
-            #       If it stops outside the entrance region, do the same for
-            #       the next vehicle until one of them stops inside the
-            #       entrance region.
-            #       After the determining how much of the entrance region this
-            #       vehicle occupies, subtract this value and the sum total
-            #       lengths of the other vehicles in the entrance region from
-            #       the total length of the entrance region and return this
-            #       value.
-            raise NotImplementedError("TODO")
-            # TODO: (low) Consider caching this value, resetting it each step.
+            return self.entrance_end*self.trajectory.length
+
+    def room_to_enter(self, tight: bool = True) -> float:
+        """Return the amount of room a vehicle has to enter.
+
+        Assume that vehicle at the front of the entrance region brakes. The
+        vehicles in the entrance region behind it should already be under lf
+        behavior and be able to come to a stop.
+
+        Return the total amount of free space in the entire lane region,
+        including in between vehicles, assuming that all vehicles currently in
+        lane brake at maximum power (which will make even more free space
+        available). This is used when deciding whether to allow new vehicles
+        into the upstream intersection, as they'll need enough room to exit in
+        a worst-case scenario.
+        """
+        if tight:
+            # TODO: (lane change) finish adjusting for entrance region only.
+            return self.room_to_spawn()
+        length_available = self.trajectory.length * \
+            (self.entrance_end if tight else 1)
+        first_vehicle = True
+        for vehicle in self.vehicles:
+            if not tight and first_vehicle and \
+                    not vehicle.permission_to_enter_intersection:
+                length_available -= vehicle.stopping_distance()
+                first_vehicle = False
+            else:
+                rear = self.vehicle_progress[vehicle].rear
+                if rear is not None:
+                    if rear > self.entrance_end:
+                        continue
+                    else:
+                        raise NotImplementedError("TODO")
+            length_available -= vehicle.length * (
+                1 + 2*SHARED.SETTINGS.length_buffer_factor)
+        return length_available
 
     def first_without_permission(self, targets: Optional[Set[Coord]] = None,
                                  sequence: bool = False
@@ -291,7 +304,7 @@ class RoadLane(Lane):
             # TODO: (low) Should this check be based on the front or end of
             #       the vehicle?
             # TODO: Check that this vehicle is fully in lane. If not, ignore it
-            #       since we can't calculate a SoonestExit for it.
+            #       since we can't calculate a ScheduledExit for it.
             if (p < self.lcregion_end) or \
                     (self.vehicle_progress[vehicle].rear is None):
                 # This vehicle is outside of the approach area or not fully in

@@ -146,6 +146,11 @@ def test_predetermined_init(load_shared: None, road: Road, vehicle: Vehicle,
         9.9/SHARED.SETTINGS.TIMESTEP_LENGTH, vehicle3)
 
 
+def test_fastest_v_no_collision():
+    assert VehicleSpawner._fastest_v_no_collision(0, 0, 0) == 0
+    assert VehicleSpawner._fastest_v_no_collision(7, 5, -1) == 2
+
+
 def test_poisson_spawn(load_shared_clean: None, road: Road,
                        set_pathfinder_straight: None):
     spawner = VehicleSpawner(road, 99999, [GaussianVehicleFactory],
@@ -158,7 +163,8 @@ def test_poisson_spawn(load_shared_clean: None, road: Road,
     assert spawn is enter
     assert spawn.vin == 0
     assert spawn.vot == 0
-    assert spawn.velocity == spawn.acceleration == 0
+    assert spawn.velocity == 15
+    assert spawn.acceleration == 0
     assert len(road.entering_vehicle_buffer) == 3
     assert road.entering_vehicle_buffer[0].vehicle is \
         road.entering_vehicle_buffer[1].vehicle is \
