@@ -123,7 +123,7 @@ class Lane(ABC):
         vehicle: Vehicle
             (Used only by IntersectionLane) Provide the vehicle to allow us to
             adjust the effective speed limit based on its characteristics.
-            TODO: (stochasticity) remove if unused.
+            TODO: (stochasticity+) remove if unused.
         """
         return min(self.speed_limit, self.trajectory.effective_speed_limit(p))
 
@@ -216,11 +216,6 @@ class Lane(ABC):
         return self.accel_update_following(
             vehicle, p, available_stopping_distance=available_stopping_distance
         )
-
-    @staticmethod
-    def t_to_v(v0: float, a: float, vf: float) -> float:
-        """Given v0, acceleration, and vf, find the time to reach vf."""
-        return (vf - v0)/a
 
     @staticmethod
     def x_over_constant_a(v0: float, a: float, t: float) -> float:
@@ -366,7 +361,7 @@ class Lane(ABC):
                                    effective_speed_limit else 0)
             else:
                 return SpeedUpdate(velocity=v_new, acceleration=accel)
-        # TODO: (stochasticity) Consider enforcing the speed limit clip in
+        # TODO: (stochasticity+) Consider enforcing the speed limit clip in
         #       accel_update instead of here to make perturbing speed and
         #       acceleration easier. Will need to double check for functions
         #       that assume only 3 possible acceleration values instead of
@@ -379,9 +374,11 @@ class Lane(ABC):
                       ) -> List[VehicleTransfer]:
         """Execute position step for all vehicles in this lane.
 
-        lateral_movements contains precalculated lateral movements for vehicles
-        in this lane. If a lateral movement is not provided for a vehicle, the
-        lane will calculate the deviation itself.
+        lateral_deviations contains externally calculated lateral movements for
+        vehicles in this lane, which is handled differently depending on the
+        lane type. For road lanes, it's the only source of lateral deviation
+        calculations. For intersection lanes, this isn't used and the lane
+        calculates the vehicle's lateral deviation itself.
         """
 
         # Track exiting vehicle sections we want to return to the road and
@@ -570,7 +567,11 @@ class Lane(ABC):
 
     def lateral_deviation_for(self, vehicle: Vehicle,
                               new_progress: float) -> float:
-        """Return the lateral movement for a vehicle. 0 unless overridden."""
+        """Return the lateral movement for a vehicle. 0 unless overridden.
+
+        By convention, a positive value means deviation to the right of the
+        intersection, and a negative value means deviation to the left.
+        """
         return 0
 
     def update_vehicle_position(self, vehicle: Vehicle, new_p: float,

@@ -1,12 +1,15 @@
 from __future__ import annotations
 from copy import copy
 from math import ceil, sqrt, isclose
-from typing import Literal, TYPE_CHECKING, Tuple, Optional, List, Dict, Set, TypeVar
+from typing import (Literal, TYPE_CHECKING, Tuple, Optional, List, Dict, Set,
+                    TypeVar)
 
 import naaims.shared as SHARED
 from naaims.lane import Lane, VehicleProgress, ScheduledExit
 from naaims.util import (Coord, VehicleSection, SpeedUpdate, VehicleTransfer,
-                         CollisionError)  # TODO: (low) Check for collisions.
+                         t_to_v, x_over_constant_a, free_flow_exit,
+                         CollisionError)
+# TODO: (low) Check for collisions.
 
 if TYPE_CHECKING:
     from naaims.trajectories import Trajectory
@@ -200,60 +203,31 @@ class RoadLane(Lane):
 
     # Used by spawner and/or intersection manager
 
-    def room_to_spawn(self, tight: bool = True) -> float:
-        """Return the amount of free space left in the entrance region.
+    def room_to_enter(self, tight: bool = True) -> float:
+        """Return the amount of free space for a vehicle to enter.
 
-        Returns the amount of space available for a vehicle to appear in full,
-        i.e., when spawning, so it checks only the space immediately behind the
-        current position of the last vehicle.
+        If tight, returns the amount of space available for a vehicle to appear
+        in full, i.e., when spawning, so it checks only the space immediately
+        behind the current position of the last vehicle.
+
+        If not tight, return all the space behind the last vehicle in the lane,
+        if any.
         """
 
         if len(self.vehicles) > 0:
             last = self.vehicles[-1]
             p = self.vehicle_progress[last].rear
             if p is not None:
-                return min(self.entrance_end*self.trajectory.length,
-                           p*self.trajectory.length)
+                to_return = p*self.trajectory.length
             else:
-                return 0
+                return 0.
         else:
-            return self.entrance_end*self.trajectory.length
+            to_return = self.trajectory.length
 
-    def room_to_enter(self, tight: bool = True) -> float:
-        """Return the amount of room a vehicle has to enter.
-
-        Assume that vehicle at the front of the entrance region brakes. The
-        vehicles in the entrance region behind it should already be under lf
-        behavior and be able to come to a stop.
-
-        Return the total amount of free space in the entire lane region,
-        including in between vehicles, assuming that all vehicles currently in
-        lane brake at maximum power (which will make even more free space
-        available). This is used when deciding whether to allow new vehicles
-        into the upstream intersection, as they'll need enough room to exit in
-        a worst-case scenario.
-        """
         if tight:
-            # TODO: (lane change) finish adjusting for entrance region only.
-            return self.room_to_spawn()
-        length_available = self.trajectory.length * \
-            (self.entrance_end if tight else 1)
-        first_vehicle = True
-        for vehicle in self.vehicles:
-            if not tight and first_vehicle and \
-                    not vehicle.permission_to_enter_intersection:
-                length_available -= vehicle.stopping_distance()
-                first_vehicle = False
-            else:
-                rear = self.vehicle_progress[vehicle].rear
-                if rear is not None:
-                    if rear > self.entrance_end:
-                        continue
-                    else:
-                        raise NotImplementedError("TODO")
-            length_available -= vehicle.length * (
-                1 + 2*SHARED.SETTINGS.length_buffer_factor)
-        return length_available
+            return min(to_return, self.entrance_end*self.trajectory.length)
+        else:
+            return to_return
 
     def first_without_permission(self, targets: Optional[Set[Coord]] = None,
                                  sequence: bool = False
@@ -431,9 +405,9 @@ class RoadLane(Lane):
 
         # 1. Evaluate the free flow case with no preceding exit to find the
         #    ScheduledExit that gets to the intersection as fast as possible.
-        t_to_v_max: float = self.t_to_v(v0, a, v_max)
-        x_to_v_max: float = self.x_over_constant_a(v0, a, t_to_v_max)
-        t_fastest_exit, v_fastest_exit = self._free_flow_exit(
+        t_to_v_max: float = t_to_v(v0, a, v_max)
+        x_to_v_max: float = x_over_constant_a(v0, a, t_to_v_max)
+        t_fastest_exit, v_fastest_exit = free_flow_exit(
             v0, a, v_max, t_to_v_max, x_to_v_max, x_to_intersection)
         t_fastest_in_timesteps = ceil((t0 + t_fastest_exit) *
                                       SHARED.SETTINGS.steps_per_second)
@@ -454,8 +428,8 @@ class RoadLane(Lane):
         # how much distance it's covered by then.
         v0_p: float = last_rear_exit.velocity
         t_p_exit: float = last_rear_exit.t * SHARED.SETTINGS.TIMESTEP_LENGTH
-        t_p_to_v_max: float = self.t_to_v(v0_p, a, v_max)
-        x_crit: float = self.x_over_constant_a(v0_p, a, t_p_to_v_max)
+        t_p_to_v_max: float = t_to_v(v0_p, a, v_max)
+        x_crit: float = x_over_constant_a(v0_p, a, t_p_to_v_max)
         t_crit: float = t_p_exit + t_p_to_v_max - t0
         # The collision window is between t_p_exit + [0, t_p_to_v_max]. If the
         # study vehicle overtakes the preceding vehicle in this time window,
@@ -530,38 +504,22 @@ class RoadLane(Lane):
         return (1-progress)*self.trajectory.length
 
     @staticmethod
-    def _free_flow_exit(v0: float, a: float, v_max: float, t_to_v_max: float,
-                        x_to_v_max: float, x_to_intersection: float
-                        ) -> Tuple[float, float]:
-        """Return the time and velocity of the free flow exit."""
-        if x_to_v_max > x_to_intersection:
-            # The vehicle will exit before reaching the speed limit.
-            t_fastest_exit = (-v0 + sqrt(v0**2 + 2*a*x_to_intersection)) / a
-            v_fastest_exit = v0 + a*t_fastest_exit
-        else:
-            # The vehicle will exit after reaching the speed limit.
-            t_fastest_exit = t_to_v_max + \
-                (x_to_intersection - x_to_v_max)/v_max
-            v_fastest_exit = v_max
-        return t_fastest_exit, v_fastest_exit
-
-    @staticmethod
     def _x_in_intersection(v_guess: float, v_max: float, a: float,
                            t_crit: float, t_exit_guess: float) -> float:
         """Find how far into the intersection this vehicle gets at t_crit."""
         t_i_guess = t_crit - t_exit_guess
         if v_guess + a*t_i_guess > v_max:
             # Vehicle reaches the speed limit before t_crit.
-            t_i_guess_to_v_max = RoadLane.t_to_v(v_guess, a, v_max)
-            x_i_guess_to_v_max = RoadLane.x_over_constant_a(
+            t_i_guess_to_v_max = t_to_v(v_guess, a, v_max)
+            x_i_guess_to_v_max = x_over_constant_a(
                 v_guess, a, t_i_guess_to_v_max)
             t_i_guess_at_v_max = t_i_guess - t_i_guess_to_v_max
-            x_i_guess_at_v_max = RoadLane.x_over_constant_a(
+            x_i_guess_at_v_max = x_over_constant_a(
                 v_max, 0, t_i_guess_at_v_max)
             return x_i_guess_to_v_max + x_i_guess_at_v_max
         else:
             # Vehicle does not reach the speed limit before t_crit.
-            return RoadLane.x_over_constant_a(v_guess, a, t_i_guess)
+            return x_over_constant_a(v_guess, a, t_i_guess)
 
     @staticmethod
     def _enough_separation(t_exit: float, v_exit: float, a: float,
@@ -656,8 +614,8 @@ class RoadLane(Lane):
         Returns a few support variables that will facilitate binary search if
         this exit ends up being valid.
         """
-        t_brake_from_v_max: float = RoadLane.t_to_v(v_max, b, 0)
-        x_brake_from_v_max: float = RoadLane.x_over_constant_a(
+        t_brake_from_v_max: float = t_to_v(v_max, b, 0)
+        x_brake_from_v_max: float = x_over_constant_a(
             v_max, b, t_brake_from_v_max)
 
         t_slowest_exit: float
@@ -774,8 +732,8 @@ class RoadLane(Lane):
             reaches_v_max_before_intersection = False
         else:
             # This braking time may hit the speed limit. Check here.
-            x_brake_guess_from_v_max = RoadLane.x_over_constant_a(
-                v_max, b, t_brake_guess)
+            x_brake_guess_from_v_max = x_over_constant_a(v_max, b,
+                                                         t_brake_guess)
 
             if x_to_v_max + x_brake_guess_from_v_max > x_to_intersection:
                 # Braking must start before reaching v_max.
@@ -796,8 +754,8 @@ class RoadLane(Lane):
                             t_to_v_max: float) -> Tuple[float, float]:
         """Find the time and velocity of exit given t_brake_guess."""
         if reaches_v_max_before_intersection:
-            x_brake_guess_from_v_max = RoadLane.x_over_constant_a(
-                v_max, b, t_brake_guess)
+            x_brake_guess_from_v_max = x_over_constant_a(v_max, b,
+                                                         t_brake_guess)
             x_guess_at_v_max = RoadLane._x_at_v_max(
                 x_to_intersection, x_to_v_max, x_brake_guess_from_v_max)
             t_exit_guess = RoadLane._t_of_v_max_exit(

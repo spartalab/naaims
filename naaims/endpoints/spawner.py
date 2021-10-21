@@ -221,11 +221,11 @@ class VehicleSpawner(Configurable, Upstream):
             # can enter one of them later.
             vehicle_can_transfer: bool = False
             for lane in eligible_lanes:
-                room_to_enter = lane.room_to_spawn()
+                room_to_spawn = lane.room_to_enter()
                 effective_length = vehicle_to_transfer.length * \
                     (1 + 2 * SHARED.SETTINGS.length_buffer_factor)
                 if (lane not in blocked_lanes) and \
-                        (room_to_enter > effective_length):
+                        (room_to_spawn > effective_length):
                     vehicle_can_transfer = True
 
                     # Adjust the entering vehicle's speed so that it'll be
@@ -235,7 +235,7 @@ class VehicleSpawner(Configurable, Upstream):
                     vehicle_to_transfer.velocity = min(
                         self.downstream.speed_limit,
                         VehicleSpawner._fastest_v_no_collision(
-                            room_to_enter, effective_length,
+                            lane.room_to_enter(False), effective_length,
                             SHARED.SETTINGS.min_braking))
 
                     self.downstream.transfer_vehicle(VehicleTransfer(

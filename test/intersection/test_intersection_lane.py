@@ -53,12 +53,6 @@ def test_add_remove(il: IntersectionLane, vehicle: AutomatedVehicle,
     assert len(il.lateral_deviation) == 0
 
 
-def test_lateral_deviation(il: IntersectionLane, vehicle: AutomatedVehicle):
-    il.add_vehicle(vehicle)
-    il.lateral_deviation[vehicle] = 10
-    assert il.lateral_deviation_for(vehicle, 5) == 0
-
-
 def test_rear_exit_road(il: IntersectionLane, vehicle: AutomatedVehicle):
     v_max, a = 15, 3
 

@@ -186,12 +186,12 @@ class IntersectionLane(Lane):
         v: float
         if v_full_accel <= v_max:
             # Accelerating its entire length still won't reach the speed limit.
-            t += ceil(self.t_to_v(v0, a, v_full_accel))
+            t += ceil(t_to_v(v0, a, v_full_accel))
             v = v_full_accel
         else:
             # It hits the speed limit while transitioning.
-            t_to_v_max = self.t_to_v(v0, a, v_max)
-            x_to_v_max = self.x_over_constant_a(v0, a, t_to_v_max)
+            t_to_v_max = t_to_v(v0, a, v_max)
+            x_to_v_max = x_over_constant_a(v0, a, t_to_v_max)
             t_at_v_max = (x - x_to_v_max)/v_max
             t += ceil(t_to_v_max + t_at_v_max)
             v = v_max

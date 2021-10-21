@@ -62,9 +62,6 @@ class Pathfinder:
         this method (except VehicleSpawner) needs a target in order to work.
         """
 
-        if at_least_one:
-            warn("TODO: with inferred destinations")
-
         # Bypass full routing check if the requested source-destination pair
         # has already been provided.
         if self.provided is not None:
@@ -74,7 +71,10 @@ class Pathfinder:
             elif pair in self.provided:
                 return self.provided[pair]
 
-        raise NotImplementedError("TODO: Inferred destinations")
+        # TODO: Inferred destinations
+        raise NotImplementedError("This source destination pair was not "
+                                  "pre-calculated/provided and inferred "
+                                  "destinations haven't been implemented yet.")
 
     # TODO: ? Why did I think I needed this?
     # def lane(self, vehicle: Vehicle) -> Coord:

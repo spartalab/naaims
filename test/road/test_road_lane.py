@@ -7,7 +7,7 @@ import naaims.shared as SHARED
 from naaims.road.lane import RoadLane, ScheduledExit
 from naaims.vehicles import AutomatedVehicle
 from naaims.lane import VehicleProgress
-from naaims.util import VehicleSection
+from naaims.util import VehicleSection, x_over_constant_a
 
 from test.test_lane import straight_trajectory
 
@@ -22,7 +22,7 @@ def test_road_lane_init(load_shared: None, rl: RoadLane):
                   .45*straight_trajectory.length)
     assert rl.entrance_end == .2
     assert rl.lcregion_end == .55
-    assert rl.room_to_spawn() == .2*straight_trajectory.length
+    assert rl.room_to_enter() == .2*straight_trajectory.length
     assert hash(rl) == hash(straight_trajectory)
 
 
@@ -179,17 +179,15 @@ def test_remove(rl: RoadLane, vehicle: AutomatedVehicle,
 
 
 def test_room(rl: RoadLane, vehicle: AutomatedVehicle):
-    assert rl.room_to_spawn() == 300
+    assert rl.room_to_enter() == 300
     assert rl.room_to_enter(False) == 1000
     rl.add_vehicle(vehicle)
     rl.vehicle_progress[vehicle] = VehicleProgress(None, None, .2)
-    assert rl.room_to_spawn() == 200
-    assert rl.room_to_enter(False) == 1000 - vehicle.length * (
-        1 + 2*SHARED.SETTINGS.length_buffer_factor)
+    assert rl.room_to_enter() == 200
+    assert rl.room_to_enter(False) == 200
     rl.vehicle_progress[vehicle] = VehicleProgress(None, None, .5)
-    assert rl.room_to_spawn() == 300
-    assert rl.room_to_enter(False) == 1000 - vehicle.length * (
-        1 + 2*SHARED.SETTINGS.length_buffer_factor)
+    assert rl.room_to_enter() == 300
+    assert rl.room_to_enter(False) == 500
 
 
 # def test_first_permission in test_integration because it depends on several
@@ -276,8 +274,8 @@ def brake_before_v_max_helper(v0: float, a: float, b: float, x: float):
     assert t > 0
     t_b = RoadLane._t_brake_given_t_slowest(t, v0, a, b)
     t_a = t - t_b
-    x_a = RoadLane.x_over_constant_a(v0, a, t_a)
-    x_b = RoadLane.x_over_constant_a(v0+a*t_a, b, t_b)
+    x_a = x_over_constant_a(v0, a, t_a)
+    x_b = x_over_constant_a(v0+a*t_a, b, t_b)
     assert x_a + x_b == approx(x)
 
 
