@@ -55,25 +55,31 @@ class Vehicle(ABC):
                 Length of the vehicle in meters
             width: float
                 Width of the vehicle in meters
-            throttle_score: float
-                Describes how well this vehicle should generally do at
-                following the acceleration instructions it's given. A positive
-                value means that it generally accelerates more and brakes less
-                than it should so it reaches tiles ahead of expected, while a
-                negative value means that it generally accelerates less and
-                brakes more than it should, so it's late to its reserved tiles.
-                The magnitude describes how much it generally deviates from the
-                proper throttling.
-            tracking_score: float
-                Describes how well this vehicle should generally do at
-                following an intersection trajectory. For the meaning of its
-                values, consider a vector pointing from south to north.
-                Positive values mean to deviate from the trajectory laterally
-                to the east, while negative values mean that the vehicle tends
-                to deviate laterally to the west. The magnitude describes how
-                strong this lateral deviation is typically.
+            throttle_mn: float
+            throttle_sd: float
+                Describes how well this vehicle tends to do at matching the
+                acceleration profile it's given using a normal/Gaussian
+                distribution. A positive value means that it generally
+                accelerates more than it should so it moves faster and arrives
+                earlier than it should, while a negative value means that it
+                generally accelerates less than it should, so it takes longer
+                than expected to cross an intersection and it's late to its
+                reserved tiles. The magnitude describes how much faster or
+                slower it completes its trajectory relative to the acceleration
+                profile it was given.
+            tracking_mn: float
+            tracking_sd: float
+                Describes how well this vehicle tends to do at tracking the
+                trajectory it's given laterally through an intersection using a
+                normal/Gaussian distribution. A positive value means that it
+                deviates toward the inside of the trajectory (e.g., toward the
+                right on a right turn or left on a left turn), while negative
+                values mean that the vehicle tends to deviate outward. The
+                magnitude describes how much its deviation is relative to the
+                depth of the trajectory's curve compared to a straight line
+                between its start and end points.
             vot: float
-                The vehicle's value of time, to be used in auctions.
+                The vehicle's value of time, for use in auction mechanisms.
         """
 
         if max_accel <= 0:

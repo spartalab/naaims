@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Dict, Tuple, Type, Any, TypeVar
 
 from naaims.archetypes import Configurable
 from naaims.util import Coord
-from naaims.intersection.tilings import SquareTiling, ArcTiling
+from naaims.intersection.tilings import SquareTiling
 
 if TYPE_CHECKING:
     from naaims.road import RoadLane
@@ -82,8 +82,6 @@ class IntersectionManager(Configurable):
         # Based on the spec, identify the correct tiling type
         if tiling_type.lower() in {'square', 'squaretiling'}:
             spec['tiling_type'] = SquareTiling
-        elif tiling_type.lower() in {'arc', 'arctiling'}:
-            spec['tiling_type'] = ArcTiling
         else:
             raise ValueError("Unsupported Tiling type.")
 

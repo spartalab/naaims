@@ -30,8 +30,6 @@ class Reservation:
         tiles: Dict[int, Dict[Tile, float]]
             A dict with timesteps keyed to to the tiles used at that timestep
             and the proportion at which they're used.
-            # TODO: (stochastic) The tiles themselves probably hold these
-            #       probabilities. Are these necessary to save here?
         lane: IntersectionLane
         its_exit: ScheduledExit
             The scheduled time and speed of the vehicle's exit from road into

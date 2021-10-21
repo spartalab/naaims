@@ -5,7 +5,7 @@ from naaims.archetypes import Configurable
 from naaims.util import Coord, VehicleSection
 from naaims.lane import ScheduledExit
 from naaims.vehicles import Vehicle
-from naaims.intersection.tilings import Tiling, SquareTiling, ArcTiling
+from naaims.intersection.tilings import Tiling, SquareTiling
 from naaims.intersection.reservation import Reservation
 from naaims.intersection import IntersectionLane
 from naaims.intersection.managers.manager import IntersectionManager
