@@ -264,18 +264,18 @@ class SquareTiling(Tiling):
             # line we need to step from start in x-units to reach the next Tile
             # with a new (integer) y-value.
             step_y: int
-            x_mins: List[int] = []
-            x_maxes: List[int] = []
+            x_mins = []
+            x_maxes = []
             if dy < 0:  # down right or left, maxes
                 y_max = floor(start.y)
                 y_min = floor(end.y)
-                x_maxes: List[int] = [floor(start.x)]*(y_max-y_min+1)
+                x_maxes = [floor(start.x)]*(y_max-y_min+1)
                 step_y = -1
                 x_of_next_y_tile = x_of_y(floor(start.y))
             else:  # up right or left, mins
                 y_min = floor(start.y)
                 y_max = floor(end.y)
-                x_mins: List[int] = [floor(start.x)]*(y_max-y_min+1)
+                x_mins = [floor(start.x)]*(y_max-y_min+1)
                 step_y = 1
                 x_of_next_y_tile = x_of_y(ceil(start.y))
             x_to_next_y_tile: float = abs(start.x - x_of_next_y_tile)
@@ -556,7 +556,8 @@ class SquareTiling(Tiling):
         """
         new_timestep = SHARED.t + 1 + len(self.tiles)
         self.tiles.append(tuple([
-            self.tile_type(self._tile_loc_to_id((x, y)), new_timestep)
+            self.tile_type(self._tile_loc_to_id((x, y)), new_timestep,
+                           rejection_threshold=self.rejection_threshold)
             for y in range(self.y_tile_count)
             for x in range(self.x_tile_count)]))
 

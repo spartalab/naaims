@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 L = TypeVar('L', bound='Lane')
 
 
-class LateralDeviation:
+class LateralDeviation(NamedTuple):
     """Describes how far a vehicle has deviated perpendicular to a lane.
 
     lane: Lane
