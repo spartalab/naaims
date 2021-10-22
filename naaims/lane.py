@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Tuple, Optional, List, Dict, Set, \
     NamedTuple, TypeVar
 from warnings import warn
+from math import pi, sin, cos
 
 import naaims.shared as SHARED
 from naaims.util import (Coord, VehicleSection, SpeedUpdate, VehicleTransfer,
@@ -576,20 +577,24 @@ class Lane(ABC):
 
     def update_vehicle_position(self, vehicle: Vehicle, new_p: float,
                                 lateral_deviation: float = 0) -> None:
-        """Should update the vehicle's position, including lateral movement."""
+        """Should update the vehicle's position, including lateral movement.
 
-        # longitudinal update
-        pos: Coord = self.trajectory.get_position(new_p)
-        heading: float = self.trajectory.get_heading(new_p)
+        By convention, a positive lateral_deviation deviates to the right of
+        the vehicle, and negative deviates to the left. Experimentally we see
+        that human drivers tend to go left more than right on all turning
+        trajectories.
+        """
 
+        # write new values to vehicle, longitudinal update only
+        vehicle.pos = self.trajectory.get_position(new_p)
+        vehicle.heading = self.trajectory.get_heading(new_p)
+
+        # update its position again if it has a lateral deviation
         if lateral_deviation != 0:
-            # TODO: (multiple) (stochasticity) use trajectory.heading(new_p) to
-            #       calculate the lateral deviation away from pos.
-            raise NotImplementedError("TODO")
-
-        # write new values to vehicle
-        vehicle.pos = pos
-        vehicle.heading = heading
+            theta_right = vehicle.heading - pi/2
+            vehicle.pos = Coord(
+                vehicle.pos.x + lateral_deviation * cos(theta_right),
+                vehicle.pos.y + lateral_deviation * sin(theta_right))
 
     def has_vehicle_exited(self, progress: VehicleProgress) -> bool:
         """Check if a vehicle has fully exited from the lane."""

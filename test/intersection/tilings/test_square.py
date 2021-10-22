@@ -16,7 +16,7 @@ from naaims.lane import ScheduledExit
 
 def test_failing_init(load_shared: None):
     with raises(ValueError):
-        SquareTiling({}, {}, (), {})
+        SquareTiling({}, {}, (), {}, 0)
 
 
 def test_simple_init(load_shared: None):
@@ -42,6 +42,7 @@ def test_simple_init(load_shared: None):
                        coord_bot_right: rl_bot_right}, (il_down, il_up),
                       {(coord_top_left, coord_bot_right): il_down,
                        (coord_bot_left, coord_top_right): il_up},
+                      2e-8,
                       misc_spec={'tile_width': 5})
 
     # Check SquareTiling-specific information
@@ -54,6 +55,8 @@ def test_simple_init(load_shared: None):
     assert sq.x_tile_count == 2
     assert sq.y_tile_count == 2
     assert len(sq.buffer_tile_loc) == 4
+    assert sq.rejection_threshold_registered
+    assert sq.rejection_threshold == 2e-8/4
 
 
 def test_slanted_init(load_shared: None):
@@ -79,6 +82,7 @@ def test_slanted_init(load_shared: None):
                        coord_bot_right: rl_bot_right}, (il_down, il_up),
                       {(coord_top_left, coord_bot_right): il_down,
                        (coord_bot_left, coord_top_right): il_up},
+                      1e-6,
                       misc_spec={'tile_width': 5})
 
     # Check SquareTiling-specific information
@@ -91,6 +95,8 @@ def test_slanted_init(load_shared: None):
     assert sq.x_tile_count == 2
     assert sq.y_tile_count == 2
     assert len(sq.buffer_tile_loc) == 4
+    assert sq.rejection_threshold_registered
+    assert sq.rejection_threshold == 1e-6/4
 
 
 def test_init_oblong_overtiled(load_shared: None):
@@ -116,6 +122,7 @@ def test_init_oblong_overtiled(load_shared: None):
                        coord_bot_right: rl_bot_right}, (il_down, il_up),
                       {(coord_top_left, coord_bot_right): il_down,
                        (coord_bot_left, coord_top_right): il_up},
+                      0,
                       misc_spec={'tile_width': 11.5})
 
     # Check SquareTiling-specific information
@@ -132,7 +139,8 @@ def test_init_oblong_overtiled(load_shared: None):
 
 def square_tiling_polygon(x_min: float, x_max: float, y_min: float,
                           y_max: float, tile_width: float,
-                          speed_limit: int = 1) -> SquareTiling:
+                          speed_limit: int = 1, p_crash_total: float = 0
+                          ) -> SquareTiling:
     top_left = Coord(x_min, y_max)
     top_mid = Coord((x_max - x_min)/2 + x_min, y_max)
     top_right = Coord(x_max, y_max)
@@ -153,12 +161,18 @@ def square_tiling_polygon(x_min: float, x_max: float, y_min: float,
                          bot_left: rl_bot}, (il_down, il_up),
                         {(top_right, bot_left): il_down,
                          (bot_right, top_left): il_up},
+                        p_crash_total,
                         misc_spec={'tile_width': tile_width})
 
 
 @fixture
 def sq():
     return square_tiling_polygon(0, 100, 0, 200, 1)
+
+
+@fixture
+def sq_stochastic():
+    return square_tiling_polygon(0, 100, 0, 200, 1, p_crash_total=2e-8)
 
 
 def check_line_range(sq: SquareTiling, start: Coord, end: Coord,
@@ -490,7 +504,7 @@ def test_pos_to_tile(load_shared: None, sq: SquareTiling,
     vehicle.heading = 1.1
     tiles = sq.pos_to_tiles(i_lane0, 5, vehicle, res)
     assert tiles is not None
-    x_mins = [50, 48, 47, 48, 48, 49, 49]
+    x_mins = [49, 47, 47, 47, 48, 49, 49]
     x_maxes = [50, 51, 51, 52, 52, 52, 50]
     counter = 0
     for i, y in enumerate(range(97, 97+7)):
@@ -521,9 +535,9 @@ def test_pos_to_tile(load_shared: None, sq: SquareTiling,
     tiles = sq_1p1_2p1.pos_to_tiles(sq.lanes[0], 3, vehicle, res_1p1)
     assert tiles is not None
     assert len(sq_1p1_2p1.tiles) == 2
-    x_maxes = [6, 3, 0]
+    x_maxes = [9, 6, 3, 0]
     counter = 0
-    for y in range(3):
+    for y in range(4):
         for x in range(0, x_maxes[y]+1):
             tile = sq_1p1_2p1.tiles[1][sq_1p1_2p1._tile_loc_to_id((x, y))]
             assert tile in tiles
@@ -591,30 +605,36 @@ def test_tile_loc_to_id(load_shared: None, sq: SquareTiling):
     assert sq._tile_loc_to_id((99, 199)) == 19_999
 
 
-def test_new_layer(load_shared: None, sq: SquareTiling):
+def test_new_layer(load_shared: None, sq_stochastic: SquareTiling):
 
     SHARED.t = 0
     # Recall that that the tiles are called on after all the movements in the
     # current timestep are completed, so the first entry in the tile stack
     # represents the current SHARED.t + 1.
-    assert len(sq.tiles) == 0
-    sq._add_new_layer()
-    assert len(sq.tiles) == 1
-    assert len(sq.tiles[0]) == 20_000
-    assert hash(sq.tiles[0][13_827]) == hash((13_827, 1))
-    sq._add_new_layer()
-    assert len(sq.tiles) == 2
-    assert len(sq.tiles[1]) == 20_000
-    assert hash(sq.tiles[1][13_827]) == hash((13_827, 2))
+    assert len(sq_stochastic.tiles) == 0
+    sq_stochastic._add_new_layer()
+    assert len(sq_stochastic.tiles) == 1
+    assert len(sq_stochastic.tiles[0]) == 20_000
+    assert hash(sq_stochastic.tiles[0][13_827]) == hash((13_827, 1))
+    assert sq_stochastic.tiles[0][13_827]._Tile__rejection_threshold == \
+        sq_stochastic.rejection_threshold
+    sq_stochastic._add_new_layer()
+    assert len(sq_stochastic.tiles) == 2
+    assert len(sq_stochastic.tiles[1]) == 20_000
+    assert hash(sq_stochastic.tiles[1][13_827]) == hash((13_827, 2))
+    assert sq_stochastic.tiles[0][13_827]._Tile__rejection_threshold == \
+        sq_stochastic.rejection_threshold
 
     # Mock next timestep
     SHARED.t += 1
-    sq.tiles.pop(0)
-    assert len(sq.tiles) == 1
-    assert hash(sq.tiles[0][13_827]) == hash((13_827, 2))
-    sq._add_new_layer()
-    assert hash(sq.tiles[0][13_827]) == hash((13_827, 2))
-    assert hash(sq.tiles[1][13_827]) == hash((13_827, 3))
+    sq_stochastic.tiles.pop(0)
+    assert len(sq_stochastic.tiles) == 1
+    assert hash(sq_stochastic.tiles[0][13_827]) == hash((13_827, 2))
+    sq_stochastic._add_new_layer()
+    assert hash(sq_stochastic.tiles[0][13_827]) == hash((13_827, 2))
+    assert hash(sq_stochastic.tiles[1][13_827]) == hash((13_827, 3))
+    assert sq_stochastic.tiles[0][13_827]._Tile__rejection_threshold == \
+        sq_stochastic.rejection_threshold
 
 
 def test_coord_to_tile(load_shared: None, sq: SquareTiling):
