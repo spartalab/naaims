@@ -519,6 +519,25 @@ def test_pos_update(rl: RoadLane, vehicle: AutomatedVehicle):
     assert vehicle.heading == pi
 
 
+def test_pos_with_lateral(rl: RoadLane, vehicle: AutomatedVehicle):
+    rl.update_vehicle_position(vehicle, .5, 2)
+    assert vehicle.pos == Coord(500, -2)
+    assert vehicle.heading == 0
+    rl.update_vehicle_position(vehicle, 1, -2)
+    assert vehicle.pos == Coord(1000, 2)
+    assert vehicle.heading == 0
+
+    rl.trajectory = BezierTrajectory(Coord(0, 0), Coord(0, -1000),
+                                     [Coord(0, -500)])
+    rl.update_vehicle_position(vehicle, .5, 1.1)
+    assert vehicle.pos == Coord(-1.1, -500)
+    assert vehicle.heading == 3*pi/2
+
+    rl.update_vehicle_position(vehicle, .1, -.1)
+    assert vehicle.pos == Coord(.1, -100)
+    assert vehicle.heading == 3*pi/2
+
+
 def test_exit_check(rl: RoadLane):
     assert rl.has_vehicle_exited(VehicleProgress(None, None, None))
     assert not rl.has_vehicle_exited(VehicleProgress(1, 1, 1))
