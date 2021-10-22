@@ -18,8 +18,8 @@ class Tile(ABC):
     than a deterministic tile.
     """
 
-    # TODO: (sequence) (stochastic) Consider banning the use of stochastic AND
-    #       sequenced reservations. It's supported but the overhead is a lot.
+    # TODO: (sequence) Consider banning the use of stochastic AND sequenced
+    #       reservations. It's technically supported but the overhead is a lot.
 
     @abstractmethod
     def __init__(self, id: int, time: int, rejection_threshold: float = 0
@@ -32,20 +32,16 @@ class Tile(ABC):
             time: int
                 The timestep that this tile tracks (for hashing).
             rejection_threshold: float
-                (Used only for stochastic reservations subclass). If the
+                (Used only for the stochastic tile subclass.) If the
                 probability that confirming the next request makes the
                 likelihood that this tile is used greater than this threshold,
                 reject the request. (Check does not apply to the first
                 reservation on this tile.)
         """
-
-        if rejection_threshold < 0:
-            raise ValueError("Rejection threshold must be non-negative.")
-
         self.__hash = hash((id, time))
         self.__potentials: Dict[Reservation, float] = {}
-        self.__reserved_by: Dict[Optional[int], float] = {}  # by VIN
-        self.__rejection_threshold = rejection_threshold
+        self.reserved_by: Dict[Optional[int], float] = {}  # by VIN
+        self.rejection_threshold = 0  # overridden by StochasticTile
 
     # TODO: (sequence) Change all of these tile checks to account for the total
     #       probability that a tile is used by every vehicle in its sequence.
@@ -70,16 +66,8 @@ class Tile(ABC):
                 The probability that the reservation being requested uses this
                 tile. (Only used for stochastic reservations.)
         """
-
-        if (len(self.__reserved_by) == 0) or \
-                (r.vehicle.vin in self.__reserved_by):
-            # TODO: What if the same vehicle wants to use this Tile in
-            #       different reservations?
-            # TODO: (stochastic) Or with different probabilities?
-            return True
-        else:
-            return sum(v for v in self.__reserved_by.values()) + p < \
-                self.__rejection_threshold
+        return (len(self.reserved_by) == 0) or \
+            (r.vehicle.vin in self.reserved_by)
 
     def mark(self, r: Reservation, p: float = 1) -> None:
         """Log a potential reservation onto a tile."""
@@ -108,7 +96,7 @@ class Tile(ABC):
         # TODO: (low) Consider not bothering with checking if the request will
         #       work or for the force flag.
         if force or self.will_reservation_work(r, p):
-            self.__reserved_by[r.vehicle.vin if r is not None else None] = p
+            self.reserved_by[r.vehicle.vin if r is not None else None] = p
         else:
             raise ValueError("This request is incompatible with this tile.")
 
@@ -123,4 +111,4 @@ class Tile(ABC):
     def _clear_all_reservations(self):
         """Self-explanatory. Only for debugging and automated cleanup."""
         self.__potentials: Dict[Reservation, float] = {}
-        self.__reserved_by: Dict[Optional[int], float] = {}  # by VIN
+        self.reserved_by: Dict[Optional[int], float] = {}  # by VIN

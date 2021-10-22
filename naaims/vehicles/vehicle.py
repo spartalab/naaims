@@ -72,12 +72,10 @@ class Vehicle(ABC):
                 Describes how well this vehicle tends to do at tracking the
                 trajectory it's given laterally through an intersection using a
                 normal/Gaussian distribution. A positive value means that it
-                deviates toward the inside of the trajectory (e.g., toward the
-                right on a right turn or left on a left turn), while negative
-                values mean that the vehicle tends to deviate outward. The
-                magnitude describes how much its deviation is relative to the
-                depth of the trajectory's curve compared to a straight line
-                between its start and end points.
+                deviates toward the right of the trajectory, while negative
+                values mean that the vehicle tends to deviate to the left. The
+                magnitude describes how much the deviation is relative to the
+                length of the trajectory.
             vot: float
                 The vehicle's value of time, for use in auction mechanisms.
         """

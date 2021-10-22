@@ -10,8 +10,9 @@ class DeterministicTile(Tile):
     is check for sums.
     """
 
-    # TODO: (low) streamline default tile logic to take advantage of these
-    #       tiles being deterministic instead of stochastic.
+    # TODO: (low) streamline more of the default tile logic to take advantage
+    #       of these tiles being deterministic instead of stochastic, e.g.,
+    #       change reserved_by to a single vehicle instead of a dict.
     def __init__(self, id: int, time: int, rejection_threshold: float = 0
                  ) -> None:
         if rejection_threshold != 0:
