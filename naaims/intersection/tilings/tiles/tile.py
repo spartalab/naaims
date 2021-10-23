@@ -41,7 +41,7 @@ class Tile(ABC):
         self.__hash = hash((id, time))
         self.__potentials: Dict[Reservation, float] = {}
         self.reserved_by: Dict[Optional[int], float] = {}  # by VIN
-        self.rejection_threshold = 0  # overridden by StochasticTile
+        self.rejection_threshold: float = 0  # overridden by StochasticTile
 
     # TODO: (sequence) Change all of these tile checks to account for the total
     #       probability that a tile is used by every vehicle in its sequence.
@@ -50,6 +50,7 @@ class Tile(ABC):
     #       movements means one spacetime tile can have nonzero probabilities
     #       from more than one vehicle.
 
+    @abstractmethod
     def will_reservation_work(self, r: Reservation, p: float = 1) -> bool:
         """Try a request and return false if it can't work.
 
@@ -66,8 +67,10 @@ class Tile(ABC):
                 The probability that the reservation being requested uses this
                 tile. (Only used for stochastic reservations.)
         """
-        return (len(self.reserved_by) == 0) or \
-            (r.vehicle.vin in self.reserved_by)
+        if not (0 <= p <= 1):
+            raise ValueError("p must be between 0 and 1 (inclusive).")
+        return ((len(self.reserved_by) == 0) or
+                (r.vehicle.vin in self.reserved_by)) if (p > 0) else True
 
     def mark(self, r: Reservation, p: float = 1) -> None:
         """Log a potential reservation onto a tile."""
@@ -96,9 +99,14 @@ class Tile(ABC):
         # TODO: (low) Consider not bothering with checking if the request will
         #       work or for the force flag.
         if force or self.will_reservation_work(r, p):
-            self.reserved_by[r.vehicle.vin if r is not None else None] = p
+            self.confirm(r, p)
         else:
             raise ValueError("This request is incompatible with this tile.")
+
+    @abstractmethod
+    def confirm(self, r: Reservation, p: float = 1) -> None:
+        """Register this reservation in reserved_by."""
+        raise NotImplementedError("Should be implemented in child classes.")
 
     def remove_all_marks(self) -> None:
         """Clear all markings on this tile."""

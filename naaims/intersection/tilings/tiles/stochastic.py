@@ -18,7 +18,6 @@ class StochasticTile(Tile):
         self.rejection_threshold = rejection_threshold
 
     def will_reservation_work(self, r: Reservation, p: float = 1) -> bool:
-
         if super().will_reservation_work(r, p=p):
             return True
         else:
@@ -33,3 +32,7 @@ class StochasticTile(Tile):
                         p_none_except_i *= 1-ps[j]
                 p_one += ps[i] * p_none_except_i
             return 1 - p_none - p_one <= self.rejection_threshold
+
+    def confirm(self, r: Reservation, p: float = 1) -> None:
+        vin = r.vehicle.vin if r is not None else None
+        self.reserved_by[vin] = max(p, self.reserved_by.get(vin, 0))

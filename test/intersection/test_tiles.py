@@ -23,6 +23,8 @@ def test_deterministic_tile(load_shared: None, vehicle: Vehicle,
     tile.confirm_reservation(r1)
     assert tile.will_reservation_work(r1) is True
     assert tile.will_reservation_work(r2) is False
+    tile.confirm_reservation(r1, .5)
+    assert tile.reserved_by[vehicle.vin] == 1
 
 
 def test_stochastic_tile(load_shared: None, vehicle: Vehicle,
@@ -60,3 +62,9 @@ def test_stochastic_tile(load_shared: None, vehicle: Vehicle,
     assert tile.will_reservation_work(r2, 1e-2) is False
     r39 = res(vehicle3, tile, 9e-3)
     assert tile.will_reservation_work(r39, 9e-3) is True
+
+    assert tile.reserved_by[vehicle.vin] == 1e-7
+    tile.confirm_reservation(r7, 1e-11)
+    assert tile.reserved_by[vehicle.vin] == 1e-7
+    tile.confirm_reservation(r7, 1)
+    assert tile.reserved_by[vehicle.vin] == 1

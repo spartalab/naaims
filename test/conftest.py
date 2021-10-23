@@ -15,6 +15,7 @@ from naaims.intersection import Intersection
 from naaims.intersection.lane import IntersectionLane
 from naaims.intersection.managers import IntersectionManager, StopSignManager
 from naaims.pathfinder import Pathfinder
+from naaims.vehicles.human_guided import HumanGuidedVehicle
 from test.test_lane import straight_trajectory
 
 
@@ -62,6 +63,18 @@ def vehicle2(load_shared: None):
 @fixture
 def vehicle3(load_shared: None):
     return AutomatedVehicle(2, 0)
+
+
+@fixture
+def h_vehicle(load_shared: None):
+    return HumanGuidedVehicle(0, 0, throttle_mn=.01, throttle_sd=.01,
+                              tracking_mn=.01, tracking_sd=.01)
+
+
+@fixture
+def h_vehicle2(load_shared: None):
+    return HumanGuidedVehicle(0, 0, throttle_mn=.02, throttle_sd=.02,
+                              tracking_mn=.02, tracking_sd=.02)
 
 
 @fixture
