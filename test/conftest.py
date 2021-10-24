@@ -83,8 +83,7 @@ def rl():
                     downstream_is_remover=True)
 
 
-@fixture
-def il():
+def il_pattern(movement_model: Type[MovementModel] = DeterministicModel):
     width = 5
     speed_limit = SHARED.SETTINGS.speed_limit
     rl_start = RoadLane(
@@ -95,7 +94,18 @@ def il():
         BezierTrajectory(Coord(100, 0), Coord(110, 0), [Coord(105, 0)]),
         width, speed_limit, .2, .45
     )
-    return IntersectionLane(rl_start, rl_end, speed_limit)
+    return IntersectionLane(rl_start, rl_end, speed_limit,
+                            movement_model)
+
+
+@fixture
+def il():
+    return il_pattern()
+
+
+@fixture
+def il_stochastic():
+    return il_pattern(OneDrawStochasticModel)
 
 
 def intersection(manager: Type[IntersectionManager] = StopSignManager,
