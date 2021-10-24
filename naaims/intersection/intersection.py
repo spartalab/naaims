@@ -28,6 +28,8 @@ from typing import TYPE_CHECKING, Set, Type, Dict, Any, List, Tuple, Optional
 from naaims.archetypes import Configurable, Facility, Upstream, Downstream
 from naaims.util import Coord, VehicleTransfer, SpeedUpdate, VehicleSection
 from naaims.intersection.lane import IntersectionLane
+from naaims.intersection.movement import (
+    MovementModel, DeterministicModel, OneDrawStochasticModel)
 from naaims.intersection.managers import IntersectionManager, FCFSManager
 
 if TYPE_CHECKING:
@@ -43,7 +45,8 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                  connectivity: List[Tuple[Road, Road, bool]],
                  manager_type: Type[IntersectionManager],
                  manager_spec: Dict[str, Any],
-                 speed_limit: int
+                 speed_limit: int,
+                 movement_model: Type[MovementModel] = DeterministicModel
                  ) -> None:
         """Create a new intersection.
 
@@ -72,8 +75,11 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                 The type of IntersectionManager to init.
             manager_spec: Dict[str, Any]
                 Specifications to create the manager with.
-            speed_limit: int = SHARED.speed_limit
+            speed_limit: int
                 The speed limit.
+            movement_model: Type[MovementModel] = DeterministicModel
+                What model of vehicle movement (e.g., stochastic) to use in
+                IntersectionLanes. Defaults to deterministic movement.
         """
 
         # Index the upstream and downstream roads by their lanes' Coords
@@ -81,11 +87,11 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         self.outgoing_road_lane_by_coord: Dict[Coord, RoadLane] = {}
         self.outgoing_road_by_lane_coord: Dict[Coord, Road] = {}
         for r in incoming_roads:
-            for coord, lane in r.lanes_by_end.items():
-                self.incoming_road_lane_by_coord[coord] = lane
+            for coord, road_lane in r.lanes_by_end.items():
+                self.incoming_road_lane_by_coord[coord] = road_lane
         for r in outgoing_roads:
-            for coord, lane in r.lanes_by_start.items():
-                self.outgoing_road_lane_by_coord[coord] = lane
+            for coord, road_lane in r.lanes_by_start.items():
+                self.outgoing_road_lane_by_coord[coord] = road_lane
                 self.outgoing_road_by_lane_coord[coord] = r
 
         # Given the upstream and downstream roads and connectivity matrix,
@@ -130,9 +136,9 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
                             shortest_pair = (incoming_lane, outgoing_lane)
                             shortest_dist = dist
 
-                lanes.append(IntersectionLane(shortest_pair[0],
-                                              shortest_pair[1],
-                                              speed_limit))
+                lanes.append(IntersectionLane(
+                    shortest_pair[0], shortest_pair[1], speed_limit,
+                    movement_model))
                 if fully_connected:
                     # Remove connected lanes from the eligible pool, with a
                     # more lenient check for the outgoing lane because it could
@@ -172,6 +178,14 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         self.manager: IntersectionManager = manager_type.from_spec(
             manager_spec)
 
+        # Pass the tiles' rejection threshold to the lane stochastic movement
+        # models. (This is dependent on the number of tiles there are so it
+        # has to wait until the lanes, manager, and tiling have all been
+        # constructed.)
+        for lane in self.lanes:
+            lane.movement_model.register_rejection_threshold(
+                self.manager.tiling.rejection_threshold)
+
         # Init buffer for incoming vehicles
         Downstream.__init__(self)
 
@@ -203,13 +217,21 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         Note that what spec_from_str returns needs additional processing before
         it can be handled by this method.
         """
+        model: Type[MovementModel] = DeterministicModel
+        if spec.get('movement_model', '').lower() in \
+                {'one draw', 'one_draw', 'onedraw', 'onedrawmodel',
+                 'one draw model', 'one_draw_model'}:
+            model = OneDrawStochasticModel
+        else:
+            model = DeterministicModel
         return cls(
             incoming_roads=spec['incoming_roads'],
             outgoing_roads=spec['outgoing_roads'],
             connectivity=spec['connectivity'],
             manager_type=spec['manager_type'],
             manager_spec=spec['manager_spec'],
-            speed_limit=spec['speed_limit']
+            speed_limit=spec['speed_limit'],
+            movement_model=model
         )
 
     # Begin simulation cycle methods

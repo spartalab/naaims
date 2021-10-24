@@ -1,5 +1,3 @@
-from math import pi
-
 from pytest import approx
 
 from naaims.intersection import Intersection
@@ -9,6 +7,7 @@ from naaims.trajectories import BezierTrajectory
 from naaims.intersection.managers import StopSignManager
 from naaims.intersection.tilings import SquareTiling
 from naaims.intersection.tilings.tiles import DeterministicTile
+from naaims.intersection.movement import DeterministicModel, OneDrawStochasticModel
 from naaims.vehicles import AutomatedVehicle
 
 import naaims.shared as SHARED
@@ -39,6 +38,7 @@ def test_init_2_lane(load_shared: None):
                                     'tiling_type': SquareTiling,
                                     'tiling_spec': {
                                         'tile_type': DeterministicTile,
+                                        'crash_probability_tolerance': 0,
                                         'misc_spec': {
                                             'tile_width': 5
                                         }
@@ -78,6 +78,9 @@ def test_init_2_lane(load_shared: None):
     assert intersection.manager.tiling.tile_type is DeterministicTile
     assert intersection.manager.tiling.tile_width == 5
 
+    assert isinstance(intersection.lanes[0].movement_model, DeterministicModel)
+    assert isinstance(intersection.lanes[1].movement_model, DeterministicModel)
+
 
 def test_init_3_lane(load_shared: None):
     trajectory1 = BezierTrajectory(Coord(0, 0), Coord(100, 0),
@@ -104,12 +107,14 @@ def test_init_3_lane(load_shared: None):
                                     'tiling_type': SquareTiling,
                                     'tiling_spec': {
                                         'tile_type': DeterministicTile,
+                                        'crash_probability_tolerance': 1e-8,
                                         'misc_spec': {
                                             'tile_width': 5
-                                        }
+                                        },
                                     }
     },
-        speed_limit=SHARED.SETTINGS.speed_limit)
+        speed_limit=SHARED.SETTINGS.speed_limit,
+        movement_model=OneDrawStochasticModel)
 
     # Test that the IO lanes got connected correctly
     assert len(intersection.lanes) == 3
@@ -125,6 +130,15 @@ def test_init_3_lane(load_shared: None):
         road_in.lanes[1].trajectory.end_coord
     assert intersection.lanes[2].trajectory.end_coord == \
         road_out.lanes[1].trajectory.start_coord
+
+    assert isinstance(intersection.lanes[0].movement_model,
+                      OneDrawStochasticModel)
+    assert isinstance(intersection.lanes[1].movement_model,
+                      OneDrawStochasticModel)
+    assert isinstance(intersection.lanes[2].movement_model,
+                      OneDrawStochasticModel)
+    assert intersection.manager.tiling.rejection_threshold == \
+        intersection.lanes[1].movement_model.rejection_threshold == 1e-8
 
 
 def test_init_right_turn(load_shared: None):
@@ -152,6 +166,7 @@ def test_init_right_turn(load_shared: None):
                                     'tiling_type': SquareTiling,
                                     'tiling_spec': {
                                         'tile_type': DeterministicTile,
+                                        'crash_probability_tolerance': 0,
                                         'misc_spec': {
                                             'tile_width': 5
                                         }
@@ -196,6 +211,7 @@ def test_init_left_turn(load_shared: None):
                                     'tiling_type': SquareTiling,
                                     'tiling_spec': {
                                         'tile_type': DeterministicTile,
+                                        'crash_probability_tolerance': 0,
                                         'misc_spec': {
                                             'tile_width': 5
                                         }
@@ -242,6 +258,7 @@ def test_speed_and_step(load_shared: None, vehicle: AutomatedVehicle,
                                     'tiling_type': SquareTiling,
                                     'tiling_spec': {
                                         'tile_type': DeterministicTile,
+                                        'crash_probability_tolerance': 0,
                                         'misc_spec': {
                                             'tile_width': 5
                                         }
