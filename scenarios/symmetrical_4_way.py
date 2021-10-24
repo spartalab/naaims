@@ -10,7 +10,7 @@ from naaims.intersection.tilings import SquareTiling
 from naaims.intersection.tilings.tiles import Tile, DeterministicTile
 
 
-class SingleIntersectionSim(Simulator):
+class Symmetrical4Way(Simulator):
 
     def __init__(self, visualize: bool = True, length: float = 100,
                  num_lanes: int = 3, speed_limit: float = 15,

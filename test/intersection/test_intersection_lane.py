@@ -1,13 +1,14 @@
 from math import ceil
 
-from pytest import approx
+from pytest import approx, raises
 
 from naaims.intersection import IntersectionLane
 from naaims.road import RoadLane
-from naaims.util import Coord, VehicleSection
+from naaims.util import Coord, VehicleSection, VehicleTransfer
 from naaims.trajectories import BezierTrajectory
-from naaims.vehicles import AutomatedVehicle
-from naaims.lane import ScheduledExit, VehicleProgress
+from naaims.vehicles import Vehicle
+from naaims.lane import LateralDeviation, ScheduledExit, VehicleProgress
+from naaims.intersection.movement import OneDrawStochasticModel
 
 
 def test_init(load_shared: None):
@@ -21,13 +22,15 @@ def test_init(load_shared: None):
         BezierTrajectory(Coord(1, 1), Coord(2, 1), [Coord(1.5, 1)]),
         width, speed_limit, .2, .45
     )
-    il = IntersectionLane(rl_start, rl_end, speed_limit)
+    il = IntersectionLane(rl_start, rl_end, speed_limit,
+                          OneDrawStochasticModel)
     assert hash(il.trajectory) == hash(
         BezierTrajectory(Coord(0, 0), Coord(1, 1), [Coord(0, 1)]))
+    assert type(il.movement_model) is OneDrawStochasticModel
+    assert il.movement_model.trajectory is il.trajectory
 
 
-def test_add_remove(il: IntersectionLane, vehicle: AutomatedVehicle,
-                    vehicle2: AutomatedVehicle):
+def test_add_remove(il: IntersectionLane, vehicle: Vehicle, vehicle2: Vehicle):
     il.add_vehicle(vehicle)
     assert len(il.vehicles) == 1
     assert il.vehicles[0] is vehicle
@@ -53,7 +56,7 @@ def test_add_remove(il: IntersectionLane, vehicle: AutomatedVehicle,
     assert len(il.lateral_deviation) == 0
 
 
-def test_rear_exit_road(il: IntersectionLane, vehicle: AutomatedVehicle):
+def test_rear_exit_road(il: IntersectionLane, vehicle: Vehicle):
     v_max, a = 15, 3
 
     # Stays below speed limit
@@ -88,7 +91,7 @@ def test_rear_exit_road(il: IntersectionLane, vehicle: AutomatedVehicle):
 
 
 def test_rear_exit_intersection(il: IntersectionLane,
-                                vehicle: AutomatedVehicle):
+                                vehicle: Vehicle):
     v_max, a = 15, 3
 
     # TODO: Stays below speed limit
@@ -116,11 +119,98 @@ def test_rear_exit_intersection(il: IntersectionLane,
                                   / v0) + t0
 
 
-def test_clone(il: IntersectionLane, vehicle: AutomatedVehicle,
-               vehicle2: AutomatedVehicle):
+def test_step(il: IntersectionLane, vehicle: Vehicle):
+    with raises(ValueError):
+        il.step_vehicles({vehicle: LateralDeviation(il, 0.1)})
+
+
+def test_clone(il: IntersectionLane, vehicle: Vehicle, vehicle2: Vehicle,
+               il_stochastic: IntersectionLane):
     il.add_vehicle(vehicle)
     il.add_vehicle(vehicle2)
     cl = il.clone()
     assert len(cl.vehicles) == 0
     assert len(cl.vehicle_progress) == 0
     assert len(cl.lateral_deviation) == 0
+
+    il_stochastic.add_vehicle(vehicle)
+    cl = il_stochastic.clone()
+    assert type(cl.movement_model) is OneDrawStochasticModel
+    assert cl.movement_model.disable_stochasticity
+
+
+def test_section_enter_exit(il: IntersectionLane, vehicle: Vehicle,
+                            vehicle2: Vehicle,
+                            il_stochastic: IntersectionLane):
+    assert vehicle not in il.lateral_deviation
+    assert vehicle2 not in il.lateral_deviation
+    il.add_vehicle(vehicle)
+    il_stochastic.add_vehicle(vehicle)
+    assert il.lateral_deviation[vehicle] == 0
+    assert il_stochastic.lateral_deviation[vehicle] == 0
+
+    assert type(il_stochastic.movement_model) is OneDrawStochasticModel
+    t1f = VehicleTransfer(vehicle, VehicleSection.FRONT, 0, Coord(0, 0))
+    il.enter_vehicle_section(t1f)
+    il_stochastic.enter_vehicle_section(t1f)
+    assert vehicle in il_stochastic.movement_model.p_cutoff
+    assert vehicle not in il_stochastic.movement_model.max_lateral_deviation
+    t1c = VehicleTransfer(
+        vehicle, VehicleSection.CENTER, 0, Coord(0, 0))
+    il.enter_vehicle_section(t1c)
+    il_stochastic.enter_vehicle_section(t1c)
+    assert vehicle in il_stochastic.movement_model.max_lateral_deviation
+    assert vehicle in il_stochastic.movement_model.p_cutoff
+
+    t2f = VehicleTransfer(vehicle2, VehicleSection.FRONT, 0, Coord(0, 0))
+    t2c = VehicleTransfer(vehicle2, VehicleSection.CENTER, 0, Coord(0, 0))
+    il.enter_vehicle_section(t2f)
+    il.enter_vehicle_section(t2c)
+    il_stochastic.enter_vehicle_section(t2f)
+    il_stochastic.enter_vehicle_section(t2c)
+
+    il.remove_vehicle(vehicle)
+    assert vehicle not in il.lateral_deviation
+    assert vehicle2 in il.lateral_deviation
+    il_stochastic.remove_vehicle(vehicle)
+    assert vehicle not in il_stochastic.lateral_deviation
+    assert vehicle2 in il_stochastic.lateral_deviation
+    assert vehicle not in il_stochastic.movement_model.p_cutoff
+    assert vehicle2 in il_stochastic.movement_model.p_cutoff
+    assert vehicle not in il_stochastic.movement_model.max_lateral_deviation
+    assert vehicle2 in il_stochastic.movement_model.max_lateral_deviation
+
+
+def test_lateral(il: IntersectionLane, vehicle: Vehicle,
+                 il_stochastic: IntersectionLane):
+    lat = il.movement_model.fetch_lateral_deviation(vehicle, .5)
+    assert il.lateral_deviation_for(vehicle, .5) == lat
+    assert il.lateral_deviation[vehicle] == lat == 0
+
+    t1c = VehicleTransfer(
+        vehicle, VehicleSection.CENTER, 0, Coord(0, 0))
+    il_stochastic.add_vehicle(vehicle)
+    il_stochastic.enter_vehicle_section(t1c)
+    lat = il_stochastic.movement_model.fetch_lateral_deviation(vehicle, .5)
+    assert il_stochastic.lateral_deviation_for(vehicle, .5) == lat
+    assert il_stochastic.lateral_deviation[vehicle] == lat
+
+
+def test_accel_update(il: IntersectionLane, vehicle: Vehicle,
+                      il_stochastic: IntersectionLane, h_vehicle: Vehicle):
+
+    assert il.accel_update(vehicle, VehicleSection.FRONT, .5, None
+                           ) == il.accel_update_uncontested(vehicle, .5)
+    il_stochastic.add_vehicle(vehicle)
+    il_stochastic.enter_vehicle_section(VehicleTransfer(
+        vehicle, VehicleSection.CENTER, 0, Coord(0, 0)))
+    assert il_stochastic.accel_update(
+        vehicle, VehicleSection.FRONT, .5, None
+    ) == il.accel_update_uncontested(vehicle, .5)
+
+    il_stochastic.add_vehicle(h_vehicle)
+    il_stochastic.enter_vehicle_section(VehicleTransfer(
+        h_vehicle, VehicleSection.FRONT, 0, Coord(0, 0)))
+    assert il_stochastic.accel_update(
+        h_vehicle, VehicleSection.FRONT, .5, None
+    ) < il.accel_update_uncontested(h_vehicle, .5)

@@ -1,12 +1,15 @@
 from __future__ import annotations
 from copy import copy
-from typing import TYPE_CHECKING, Tuple, Optional, Dict, TypeVar
+from typing import TYPE_CHECKING, Tuple, Optional, Dict, TypeVar, List, Type
 from math import ceil, sqrt
 
 import naaims.shared as SHARED
-from naaims.lane import Lane, ScheduledExit
-from naaims.util import VehicleSection
+from naaims.lane import Lane, ScheduledExit, LateralDeviation
+from naaims.util import (VehicleSection, VehicleTransfer, t_to_v,
+                         x_over_constant_a)
 from naaims.trajectories import BezierTrajectory
+from naaims.intersection.movement import (MovementModel,
+                                          DeterministicModel)
 
 if TYPE_CHECKING:
     from naaims.road import RoadLane
@@ -26,7 +29,9 @@ class IntersectionLane(Lane):
     def __init__(self,
                  start_lane: RoadLane,
                  end_lane: RoadLane,
-                 speed_limit: int):
+                 speed_limit: int,
+                 movement_model: Type[MovementModel] = DeterministicModel
+                 ) -> None:
         """Create a new IntersectionLane.
 
         Instead of taking an explicit trajectory, the Intersection Lane infers
@@ -54,6 +59,9 @@ class IntersectionLane(Lane):
         self.min_traversal_time = (trajectory.length/speed_limit *
                                    SHARED.SETTINGS.steps_per_second)
 
+        # Initialize model of stochastic vehicle movement
+        self.movement_model = movement_model(trajectory)
+
         # Track vehicles' lateral deviation from centerline in meters
         self.lateral_deviation: Dict[Vehicle, float] = {}
 
@@ -79,7 +87,7 @@ class IntersectionLane(Lane):
         """Return the effective speed limit at the given progression."""
         return super().effective_speed_limit(p, vehicle)
 
-        # TODO: (stochasticity) Consider making the effective speed limit a
+        # TODO: (stochasticity+) Consider making the effective speed limit a
         #       function of a vehicle's ability to follow instructions
         #       precisely (to account for it over-accelerating) and its
         #       deviation from the lane's centerline to allow it to hit the
@@ -91,7 +99,15 @@ class IntersectionLane(Lane):
                      preceding: Optional[Vehicle]) -> float:
         """Return a vehicle's new acceleration.
 
-        Just calls the parent's accel_update() (for now).
+        NAAIMS assumes that, in an intersection, vehicles will always move as
+        fast as possible, i.e., accelerate to the speed limit and then stay
+        there while any part of it is in the intersection. No braking or
+        staying at any speed under the speed limit.
+
+        The only exception to this rule would be due to stochastic deviations,
+        where vehicles would be slightly faster or slower to reach the speed
+        limit depending on their ability to follow their instructed
+        acceleration profile.
         """
 
         # TODO: (platoon) Insert vehicle chain override here.
@@ -99,22 +115,13 @@ class IntersectionLane(Lane):
         #       chains before they start results in vehicles simply following
         #       normal reservation behavior with chained accelerations.
 
-        return super().accel_update(vehicle, section, p, preceding)
+        if (vehicle.throttle_mn > 0) or (vehicle.throttle_sd > 0):
+            return self.movement_model.fetch_throttle_deviation(
+                vehicle, section, p)
+        return super().accel_update_uncontested(vehicle, p)
 
-        # TODO: (stochasticity) Change the return so the speed and acceleration
-        #       update is affected by both:
-        #           1. A stochastic term dependent on the vehicle's reliability
-        #              in following speed updates. They may exceed the actual
-        #              speed limit if their acceleration control is poor.
-        #           2. What side of the trajectory the vehicle is on and how
-        #              far from the centerline the vehicle is laterally.
-        #              Vehicles that cut corners at the speed limit will have a
-        #              higher effective speed limit in-lane, and vehicles that
-        #              turn too loose will have a slower effective speed limit.
-        #       This would require tweaking the effective speed limit for the
-        #       specific vehicle in addition to this acceleration update, since
-        #       in the velocity update the effective speed limit trims the
-        #       acceleration to the speed limit if it exceeds the speed limit.
+        # TODO: (stochasticity+) Change so speed and acceleration can be
+        # affected by the extent and location of its lateral deviation.
 
     def downstream_stopping_distance(self) -> Optional[float]:
         """Check the downstream road lane's required stopping distance."""
@@ -122,27 +129,40 @@ class IntersectionLane(Lane):
 
     # Support functions for step updates
 
-    def remove_vehicle(self, vehicle: Vehicle) -> None:
-        """Remove records for this vehicle from this trajectory."""
-
-        # Do the normal stuff
-        super().remove_vehicle(vehicle)
-
-        # Delete the vehicle's record from our lateral deviation tracker.
-        del self.lateral_deviation[vehicle]
+    def step_vehicles(self,
+                      lateral_deviations: Dict[Vehicle, LateralDeviation] = {}
+                      ) -> List[VehicleTransfer]:
+        if len(lateral_deviations) > 0:
+            raise ValueError("IntersectionLane should not have externally "
+                             "calculated lateral deviations.")
+        return super().step_vehicles()
 
     def lateral_deviation_for(self, vehicle: Vehicle,
                               new_progress: float) -> float:
-        """Calculate and return the lateral deviation of this vehicle."""
+        """Return the lateral movement for a vehicle."""
+        self.lateral_deviation[vehicle] = \
+            self.movement_model.fetch_lateral_deviation(vehicle,
+                                                        new_progress)
+        return self.lateral_deviation[vehicle]
 
-        # TODO: (stochastic) Retrieve self.lateral_deviation[vehicle] and
-        #       calculate the new deviation in this timestep. Add them
-        #       together, log it back to self.lateral_deviation[vehicle],
-        #       and return it.
+    def remove_vehicle(self, vehicle: Vehicle) -> None:
+        """Remove records for this vehicle from this trajectory.
 
-        return 0
+        On top of what the parent remove_vehicle() does, deletes the vehicle
+        from IntersectionLane support structures."""
+        super().remove_vehicle(vehicle)
+        del self.lateral_deviation[vehicle]
+        self.movement_model.remove_vehicle(vehicle)
 
     # Support functions for vehicle transfers
+
+    def enter_vehicle_section(self, transfer: VehicleTransfer) -> None:
+        if transfer.section is VehicleSection.FRONT:
+            self.movement_model.init_throttle_deviation(
+                transfer.vehicle, transfer, self.speed_limit)
+        elif transfer.section is VehicleSection.CENTER:
+            self.movement_model.init_lateral_deviation(transfer.vehicle)
+        return super().enter_vehicle_section(transfer)
 
     def add_vehicle(self, vehicle: Vehicle) -> None:
         """Create entries for this vehicle in lane support structures.
@@ -200,9 +220,14 @@ class IntersectionLane(Lane):
     # Misc functions
 
     def clone(self: L) -> L:
-        """Return a copy of the lane with vehicle-specific data removed."""
+        """Return a copy of the lane with vehicle-specific data removed.
+
+        Also sets the MovementModel to a variant intended for use in
+        tiling.check_request().
+        """
         clone = copy(self)
         clone.vehicles = []
         clone.vehicle_progress = {}
         clone.lateral_deviation = {}
+        clone.movement_model = self.movement_model.reset_for_requests()
         return clone

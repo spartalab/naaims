@@ -1,3 +1,3 @@
 from scenarios.single_lane_x_no_turns import SingleLaneXNoTurnsSim
 from scenarios.zipper import ZipperMergeSim
-from scenarios.single_intersection import SingleIntersectionSim
+from scenarios.symmetrical_4_way import Symmetrical4Way
