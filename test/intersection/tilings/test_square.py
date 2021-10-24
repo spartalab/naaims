@@ -1,17 +1,20 @@
-from typing import List, Tuple
+from typing import List, Tuple, Type
 from math import pi, ceil
+from random import seed
 
 from pytest import raises, fixture
 
 import naaims.shared as SHARED
-from naaims.util import Coord, VehicleSection
+from naaims.util import CollisionError, Coord, VehicleSection
 from naaims.trajectories import BezierTrajectory
 from naaims.road import RoadLane
 from naaims.intersection import IntersectionLane
 from naaims.intersection.tilings import SquareTiling
-from naaims.vehicles import AutomatedVehicle
+from naaims.vehicles import Vehicle
 from naaims.intersection.reservation import Reservation
-from naaims.lane import ScheduledExit
+from naaims.lane import ScheduledExit, VehicleProgress
+from naaims.intersection.movement import (MovementModel, DeterministicModel,
+                                          OneDrawStochasticModel)
 
 
 def test_failing_init(load_shared: None):
@@ -56,7 +59,7 @@ def test_simple_init(load_shared: None):
     assert sq.y_tile_count == 2
     assert len(sq.buffer_tile_loc) == 4
     assert sq.rejection_threshold_registered
-    assert sq.rejection_threshold == 2e-8/4
+    assert sq.rejection_threshold == 2e-8
 
 
 def test_slanted_init(load_shared: None):
@@ -96,7 +99,7 @@ def test_slanted_init(load_shared: None):
     assert sq.y_tile_count == 2
     assert len(sq.buffer_tile_loc) == 4
     assert sq.rejection_threshold_registered
-    assert sq.rejection_threshold == 1e-6/4
+    assert sq.rejection_threshold == 1e-6
 
 
 def test_init_oblong_overtiled(load_shared: None):
@@ -139,7 +142,9 @@ def test_init_oblong_overtiled(load_shared: None):
 
 def square_tiling_polygon(x_min: float, x_max: float, y_min: float,
                           y_max: float, tile_width: float,
-                          speed_limit: int = 1, p_crash_total: float = 0
+                          speed_limit: int = 1, p_crash_total: float = 0,
+                          movement_model: Type[MovementModel
+                                               ] = DeterministicModel
                           ) -> SquareTiling:
     top_left = Coord(x_min, y_max)
     top_mid = Coord((x_max - x_min)/2 + x_min, y_max)
@@ -152,8 +157,8 @@ def square_tiling_polygon(x_min: float, x_max: float, y_min: float,
     rl_bot = RoadLane(BezierTrajectory(
         bot_left, bot_right, [bot_mid]), 0, speed_limit, 0, 0)
 
-    il_down = IntersectionLane(rl_top, rl_bot, speed_limit)
-    il_up = IntersectionLane(rl_bot, rl_top, speed_limit)
+    il_down = IntersectionLane(rl_top, rl_bot, speed_limit, movement_model)
+    il_up = IntersectionLane(rl_bot, rl_top, speed_limit, movement_model)
 
     return SquareTiling({top_right: rl_top,
                          bot_right: rl_bot},
@@ -172,7 +177,23 @@ def sq():
 
 @fixture
 def sq_stochastic():
-    return square_tiling_polygon(0, 100, 0, 200, 1, p_crash_total=2e-8)
+    return square_tiling_polygon(0, 5, 0, 10, 1, p_crash_total=2e-8,
+                                 movement_model=OneDrawStochasticModel)
+
+
+def test_check_for_collisions(sq: SquareTiling, vehicle: Vehicle,
+                              vehicle2: Vehicle, sq_stochastic: SquareTiling):
+    sq.lanes[0].vehicles = [vehicle, vehicle2]
+    sq_stochastic.lanes[0].vehicles = [vehicle, vehicle2]
+    vehicle.pos = Coord(0, 0)
+    vehicle2.pos = Coord(100, 100)
+    sq.check_for_collisions()
+    sq_stochastic.check_for_collisions()
+
+    vehicle2.pos = Coord(4, 0)
+    sq.check_for_collisions()
+    with raises(CollisionError):
+        sq_stochastic.check_for_collisions()
 
 
 def check_line_range(sq: SquareTiling, start: Coord, end: Coord,
@@ -473,7 +494,7 @@ def test_outline_to_range_normal(load_shared: None, sq: SquareTiling):
 
 
 def test_pos_to_tile(load_shared: None, sq: SquareTiling,
-                     vehicle: AutomatedVehicle, vehicle2: AutomatedVehicle):
+                     vehicle: Vehicle, vehicle2: Vehicle):
     SHARED.t = 1
     assert len(sq.tiles) == 0
     i_lane0 = sq.lanes[0]
@@ -546,8 +567,57 @@ def test_pos_to_tile(load_shared: None, sq: SquareTiling,
     assert len(tiles) == counter
 
 
+def test_loc_to_coord(load_shared: None, sq_stochastic: SquareTiling):
+    assert sq_stochastic._tile_loc_to_coord((0, 0)) == Coord(0, 0)
+    assert sq_stochastic._tile_loc_to_coord(
+        (1, 0)) == Coord(sq_stochastic.tile_width, 0)
+    assert sq_stochastic._tile_loc_to_coord(
+        (0, 1)) == Coord(0, sq_stochastic.tile_width)
+
+
+def test_pos_to_tiles_stochastic(load_shared: None,
+                                 sq_stochastic: SquareTiling,
+                                 h_vehicle: Vehicle):
+    sq = sq_stochastic
+    vehicle = h_vehicle
+
+    SHARED.t = 1
+    assert len(sq.tiles) == 0
+    i_lane0 = sq.lanes[0]
+    coord0 = i_lane0.trajectory.start_coord
+    res = Reservation(vehicle, coord0, {}, i_lane0, ScheduledExit(
+        vehicle, VehicleSection.FRONT, 1, 10))
+
+    # Load vehicle onto lane
+    seed(0)
+    v0 = .1
+    ts0 = 2
+    en = ScheduledExit(h_vehicle, VehicleSection.FRONT, ts0, v0)
+    v_max = 15
+    i_lane0.vehicle_progress[h_vehicle] = VehicleProgress(.6, .6, .6)
+    assert i_lane0.movement_model.prepend_probabilities(h_vehicle, en, v_max
+                                                        ) == [1]
+    SHARED.t = 3
+    ts = 100
+    vf = 10
+    res.its_exit = ScheduledExit(vehicle, VehicleSection.FRONT, ts, vf)
+
+    # Diagonal heading, inside
+    vehicle.pos = Coord(2.6, 5.1)
+    vehicle.heading = pi/4
+    tiles = sq.pos_to_tiles(i_lane0, ts, vehicle, res)
+    assert tiles is not None
+    t_obs = ts-SHARED.t-1
+    assert len(tiles) == len(sq.tiles[t_obs])
+    assert set(tiles.keys()) == set(sq.tiles[t_obs])
+    assert sum(tiles.values()) > 0
+    tile_center = sq.tiles[t_obs][sq._tile_loc_to_id((4, 5))]
+    tile_other = sq.tiles[t_obs][sq._tile_loc_to_id((0, 0))]
+    assert tiles[tile_center] > .5 > tiles[tile_other]
+
+
 def test_io_buffer(load_shared: None, sq: SquareTiling,
-                   vehicle: AutomatedVehicle, vehicle2: AutomatedVehicle):
+                   vehicle: Vehicle, vehicle2: Vehicle):
 
     SHARED.t = 0
     assert len(sq.tiles) == 0
@@ -614,26 +684,26 @@ def test_new_layer(load_shared: None, sq_stochastic: SquareTiling):
     assert len(sq_stochastic.tiles) == 0
     sq_stochastic._add_new_layer()
     assert len(sq_stochastic.tiles) == 1
-    assert len(sq_stochastic.tiles[0]) == 20_000
-    assert hash(sq_stochastic.tiles[0][13_827]) == hash((13_827, 1))
-    assert sq_stochastic.tiles[0][13_827]._Tile__rejection_threshold == \
+    assert len(sq_stochastic.tiles[0]) == 50
+    assert hash(sq_stochastic.tiles[0][22]) == hash((22, 1))
+    assert sq_stochastic.tiles[0][22].rejection_threshold == \
         sq_stochastic.rejection_threshold
     sq_stochastic._add_new_layer()
     assert len(sq_stochastic.tiles) == 2
-    assert len(sq_stochastic.tiles[1]) == 20_000
-    assert hash(sq_stochastic.tiles[1][13_827]) == hash((13_827, 2))
-    assert sq_stochastic.tiles[0][13_827]._Tile__rejection_threshold == \
+    assert len(sq_stochastic.tiles[1]) == 50
+    assert hash(sq_stochastic.tiles[1][22]) == hash((22, 2))
+    assert sq_stochastic.tiles[0][22].rejection_threshold == \
         sq_stochastic.rejection_threshold
 
     # Mock next timestep
     SHARED.t += 1
     sq_stochastic.tiles.pop(0)
     assert len(sq_stochastic.tiles) == 1
-    assert hash(sq_stochastic.tiles[0][13_827]) == hash((13_827, 2))
+    assert hash(sq_stochastic.tiles[0][22]) == hash((22, 2))
     sq_stochastic._add_new_layer()
-    assert hash(sq_stochastic.tiles[0][13_827]) == hash((13_827, 2))
-    assert hash(sq_stochastic.tiles[1][13_827]) == hash((13_827, 3))
-    assert sq_stochastic.tiles[0][13_827]._Tile__rejection_threshold == \
+    assert hash(sq_stochastic.tiles[0][22]) == hash((22, 2))
+    assert hash(sq_stochastic.tiles[1][22]) == hash((22, 3))
+    assert sq_stochastic.tiles[0][22].rejection_threshold == \
         sq_stochastic.rejection_threshold
 
 
@@ -644,3 +714,64 @@ def test_coord_to_tile(load_shared: None, sq: SquareTiling):
     assert sq._io_coord_to_tile_id(Coord(100, 11.5)) == 1_199
     assert sq._io_coord_to_tile_id(Coord(67.7, 0)) == 67
     assert sq._io_coord_to_tile_id(Coord(67.7, 200)) == 19_967
+
+
+def test_io_stochastic(load_shared_clean: None, sq_stochastic: SquareTiling,
+                       h_vehicle: Vehicle):
+
+    SHARED.t = 0
+    assert len(sq_stochastic.tiles) == 0
+    i_lane0 = sq_stochastic.lanes[0]
+    coord0 = i_lane0.trajectory.start_coord
+    i_lane_start_tiles_idx = sq_stochastic.buffer_tile_loc[coord0]
+    i_lane_end_tiles_idx = sq_stochastic.buffer_tile_loc[
+        i_lane0.trajectory.end_coord]
+    res = Reservation(h_vehicle, coord0, {}, i_lane0, ScheduledExit(
+        h_vehicle, VehicleSection.FRONT, 0, 10))
+    res.its_exit = ScheduledExit(h_vehicle, VehicleSection.FRONT, 1, 10)
+
+    sq = sq_stochastic
+    vehicle = h_vehicle
+    # Prepending a reservation before or at the current timestep
+    with raises(ValueError):
+        assert sq.io_tile_buffer(i_lane0, 0, vehicle, res, True)
+
+    # Prepending a reservation for the timestep just after the current one
+    res.its_exit = ScheduledExit(vehicle, VehicleSection.FRONT, 1, 10)
+    assert sq.io_tile_buffer(i_lane0, 1, vehicle, res, True) == {}
+
+    # Normal case accepted future prepend reservation
+    prepended = sq.io_tile_buffer(i_lane0, 2, vehicle, res, True)
+    assert prepended is not None
+    assert len(sq.tiles) == 1
+    assert len(prepended) == 1
+    assert 1 in prepended
+    assert prepended[1] == {sq.tiles[0][i_lane_start_tiles_idx]: 1}
+
+    # Load vehicle onto lane
+    seed(0)
+    v0 = .1
+    ts0 = 2
+    en = ScheduledExit(h_vehicle, VehicleSection.FRONT, ts0, v0)
+    v_max = 15
+    assert i_lane0.movement_model.prepend_probabilities(h_vehicle, en, v_max
+                                                        ) == [1]
+    SHARED.t = 169
+    ts = 170
+    vf = 10
+    res.its_exit = ScheduledExit(vehicle, VehicleSection.FRONT, ts, vf)
+
+    # Normal case accepted future postpend reservation
+    vehicle.velocity = 15.
+    postpended = sq.io_tile_buffer(i_lane0, ts, vehicle, res, False)
+    assert postpended is not None
+    steps_forward = ceil(.3 * SHARED.SETTINGS.steps_per_second)
+    assert len(sq.tiles) - 1 == len(postpended) > steps_forward
+    seed(0)
+    assert i_lane0.movement_model.prepend_probabilities(h_vehicle, en, v_max
+                                                        ) == [1]
+    p_post = i_lane0.movement_model.postpend_probabilities(
+        h_vehicle, sq._exit_res_timesteps_forward(vf), ts)
+    for i in range(len(postpended)):
+        assert postpended[SHARED.t+i+2] == {sq.tiles[i+1]
+                                            [i_lane_end_tiles_idx]: p_post[i]}

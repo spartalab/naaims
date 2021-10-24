@@ -16,6 +16,8 @@ from naaims.intersection.lane import IntersectionLane
 from naaims.intersection.managers import IntersectionManager, StopSignManager
 from naaims.pathfinder import Pathfinder
 from naaims.vehicles.human_guided import HumanGuidedVehicle
+from naaims.intersection.movement import (MovementModel, DeterministicModel,
+                                          OneDrawStochasticModel)
 from test.test_lane import straight_trajectory
 
 
@@ -150,6 +152,7 @@ def intersection(manager: Type[IntersectionManager] = StopSignManager,
                                     'tiling_type': SquareTiling,
                                     'tiling_spec': {
                                         'tile_type': DeterministicTile,
+                                        'crash_probability_tolerance': 0,
                                         'misc_spec': {
                                             'tile_width': 5
                                         }
@@ -191,4 +194,5 @@ def lanes_by_endpoints(intersection: Intersection) -> Dict[Tuple[Coord, Coord],
 
 @fixture
 def square_tiling_spec() -> Dict[str, Any]:
-    return {'tile_type': DeterministicTile, 'misc_spec': {'tile_width': 5}}
+    return {'tile_type': DeterministicTile, 'crash_probability_tolerance': 0.,
+            'misc_spec': {'tile_width': 5}}

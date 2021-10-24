@@ -495,9 +495,9 @@ class OneDrawStochasticModel(MovementModel):
         self.check_update_mc(vehicle, t)
         to_return: List[float] = []
         while not all(self.mc_complete[vehicle]):
-            self.check_update_mc(vehicle, t)
             to_return.append(1-mean(self.mc_complete[vehicle]))  # type: ignore
             t += 1
+            self.check_update_mc(vehicle, t)
 
         # Clean up after throttle
         self.clean_up_projection(vehicle)

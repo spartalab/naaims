@@ -13,12 +13,14 @@ from naaims.road import RoadLane
 from naaims.vehicles.vehicle import Vehicle
 from naaims.vehicles.automated import AutomatedVehicle
 from naaims.pathfinder import Pathfinder
+from naaims.intersection.tilings.tiles import StochasticTile, DeterministicTile
 import naaims.shared as SHARED
 
 
 def square_tiling(x_min: float, x_max: float, y_min: float,
-                  y_max: float, tile_width: float,
-                  speed_limit: int = 1, timeout: bool = False) -> SquareTiling:
+                  y_max: float, tile_width: float, speed_limit: int = 1,
+                  crash_probability_tolerance: float = 0,
+                  timeout: bool = False) -> SquareTiling:
     x_mid = (x_max-x_min)/2
     y_mid = (y_max-y_min)/2
 
@@ -38,7 +40,8 @@ def square_tiling(x_min: float, x_max: float, y_min: float,
     il = IntersectionLane(rl_in, rl_out, speed_limit)
 
     return SquareTiling({in_coord: rl_in}, {out_coord: rl_out}, (il,),
-                        {(in_coord, out_coord): il}, timeout=timeout,
+                        {(in_coord, out_coord): il},
+                        crash_probability_tolerance, timeout=timeout,
                         misc_spec={'tile_width': tile_width})
 
 
@@ -50,6 +53,14 @@ def sq(speed_limit: int = 30):
 @fixture
 def sq_timeouts(speed_limit: int = 30):
     return square_tiling(0, 100, 0, 200, 1, speed_limit, timeout=True)
+
+
+def test_init(load_shared: None):
+    sq = square_tiling(0, 100, 0, 200, 1, 30, 1e-6)
+    assert sq.rejection_threshold == 1e-6
+    assert sq.tile_type is StochasticTile
+    assert square_tiling(0, 100, 0, 200, 1,
+                         30).tile_type is DeterministicTile
 
 
 def test_timesteps_forward(load_shared: None):

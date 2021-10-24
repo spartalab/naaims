@@ -1,11 +1,10 @@
 from __future__ import annotations
-from typing import Any, TYPE_CHECKING, Optional, Set, Dict, Tuple, Type, List
+from typing import Any, TYPE_CHECKING, Optional, Set, Dict, Tuple, List
 from math import ceil, floor, isclose
 
 import naaims.shared as SHARED
-from naaims.util import Coord
+from naaims.util import Coord, CollisionError
 from naaims.intersection.tilings.tiling import Tiling
-from naaims.intersection.tilings.tiles import DeterministicTile
 
 if TYPE_CHECKING:
     from naaims.road import RoadLane
@@ -22,26 +21,21 @@ class SquareTiling(Tiling):
                  lanes: Tuple[IntersectionLane, ...],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
-                 tile_type: Type[Tile] = DeterministicTile,
+                 crash_probability_tolerance: float,
                  cycle: Optional[List[
                      Tuple[Set[IntersectionLane], int]
                  ]] = None,
                  timeout: bool = False,
                  misc_spec: Dict[str, Any] = {}
                  ) -> None:
-        """Creates a new square (pixelated) tiling.
+        """Creates a new square (pixelated) tiling."""
 
-        Additional parameters:
-            tile_side_length: Optional[int]
-                Only sort of optional. Dictates the size of each square tile,
-                in meters.
-        """
         super().__init__(
             incoming_road_lane_by_coord=incoming_road_lane_by_coord,
             outgoing_road_lane_by_coord=outgoing_road_lane_by_coord,
             lanes=lanes,
+            crash_probability_tolerance=crash_probability_tolerance,
             lanes_by_endpoints=lanes_by_endpoints,
-            tile_type=tile_type,
             cycle=cycle,
             timeout=timeout
         )
@@ -87,11 +81,49 @@ class SquareTiling(Tiling):
             self.buffer_tile_loc[start] = self._io_coord_to_tile_id(start)
             self.buffer_tile_loc[end] = self._io_coord_to_tile_id(end)
 
+        # Find rejection threshold for each tile from the
+        # crash_probability_tolerance over the entire intersection by using a
+        # simple approximation where each tile is independently contributing to
+        # the total probability of rejection.
+        # total_tiles = self.x_tile_count * self.y_tile_count
+        # The following two expressions are equivalent for small probabilities,
+        # which the crash probability should always be, thanks to the magic of
+        # Taylor series expansions.
+        # self._rejection_threshold = 1 - (1-crash_probability_tolerance)**(
+        #     1 / total_tiles) if (total_tiles > 0) else 0
+        # self._rejection_threshold = crash_probability_tolerance / \
+        #     total_tiles if (total_tiles > 0) else 0
+        # Above is a stricter calculation of the rejection threshold, but I
+        # think this should be fine as the probability of crashes across
+        # multiple tiles is highly correlated.
+        self._rejection_threshold = crash_probability_tolerance
+        self.rejection_threshold_registered = True
+
     def check_for_collisions(self) -> None:
-        """Check for collisions in the intersection."""
-        # TODO: (low) May only be necessary if we have stochastic movement.
-        #       Otherwise collisions should not occur if implemented correctly.
-        pass
+        """Check for collisions in the intersection.
+
+        Collisions are only possible when stochastic movement is on, so this
+        only runs in that case.
+        """
+        if self.rejection_threshold > 0:
+            seen: Set[Tuple[int, int]] = set()
+            for lane in self.lanes:
+                for vehicle in lane.vehicles:
+                    y_min, x_mins, x_maxes = self._outline_to_tile_range(tuple(
+                        Coord((c.x - self.origin.x)/self.tile_width,
+                              (c.y - self.origin.y)/self.tile_width)
+                        for c in vehicle.get_outline()))
+                    for j in range(len(x_mins)):
+                        y = y_min + j
+                        for i in range((x_maxes[j]+1)-x_mins[j]):
+                            x = x_mins[j]+i
+                            loc = (x, y)
+                            if loc in seen:
+                                raise CollisionError(
+                                    "Two or more vehicles using the tile at "
+                                    f"{self._tile_loc_to_coord(loc)}.")
+                            else:
+                                seen.add(loc)
 
     def update_active_reservations(self) -> None:
         """Given vehicle movement in the last step, update their reservations.
@@ -144,15 +176,21 @@ class SquareTiling(Tiling):
         # Call super to extend the tile stack to cover up to t if necessary.
         super().pos_to_tiles(lane, t, clone, reservation, force, mark)
 
-        # Fetch the vehicle's outline, normalize them to the grid's internal
-        # coordinate system using self.origin and self.tile_width, and find the
-        # x and y range covered by the outline (assuming that it's convex).
-        y_min, x_mins, x_maxes = self._outline_to_tile_range(tuple(
-            Coord((c.x - self.origin.x)/self.tile_width,
-                  (c.y - self.origin.y)/self.tile_width)
-            for c in clone.get_outline()))
-        # TODO: (stochastic) Modify here or in vehicle.get_outline() to
-        #       accommodate larger reservations dependent on vehicle shape.
+        if self.rejection_threshold == 0:
+            # Fetch the vehicle's outline as provided by the lane's stochastic
+            # movement model, normalize it to the grid's internal coordinate
+            # system using self.origin and self.tile_width, and find the x and
+            # y range covered by the outline under the assumption that the
+            # outline is a convex shape.
+            y_min, x_mins, x_maxes = self._outline_to_tile_range(tuple(
+                Coord((c.x - self.origin.x)/self.tile_width,
+                      (c.y - self.origin.y)/self.tile_width)
+                for c in clone.get_outline(static_buffer=.1)))
+        else:
+            # Crash probability is non-zero. Look at every tile.
+            y_min = 0
+            x_mins = [0 for _ in range(self.y_tile_count)]
+            x_maxes = [self.x_tile_count-1 for _ in range(self.y_tile_count)]
 
         # After the outlining process is complete, loop through the min and max
         # y-Tiles via the x-bound lists. For each y-value, add every tile
@@ -165,13 +203,20 @@ class SquareTiling(Tiling):
             for i in range((x_maxes[j]+1)-x_mins[j]):
                 x = x_mins[j]+i
                 tile = self.tiles[t_idx][self._tile_loc_to_id((x, y))]
-                p = 1  # TODO: (stochastic) probabilistic reservation
-                if tile.will_reservation_work(reservation, p):
-                    tiles_covered[tile] = 1
-                else:
+
+                # If crash probability is non-zero, find a probability of usage
+                # for every tile. If not, only tiles that will be used have
+                # been outlined, so they'll be reserved with 100% usage.
+                p = lane.movement_model.find_probability_of_usage(
+                    clone, lane.vehicle_progress[clone],
+                    self._tile_loc_to_coord((x, y)), self.tile_width, t) \
+                    if (self.rejection_threshold > 0) else 1
+
+                if not tile.will_reservation_work(reservation, p):
+                    lane.movement_model.clean_up_projection(clone)
                     return None
-        # TODO: (stochastic) lane, force, mark are unused but may be useful for
-        #       stochastic reservations.
+                tiles_covered[tile] = p
+        # TODO: (auction) incorporate force and mark
 
         return tiles_covered
 
@@ -434,6 +479,11 @@ class SquareTiling(Tiling):
 
         return y_min, x_mins, x_maxes
 
+    def _tile_loc_to_coord(self, tile_loc: Tuple[int, int]) -> Coord:
+        """Convert a tile's (x,y) location to its true Coord."""
+        return Coord(tile_loc[0]*self.tile_width + self.min_x,
+                     tile_loc[1]*self.tile_width + self.min_y)
+
     def io_tile_buffer(self, lane: IntersectionLane, t: int,
                        clone: Vehicle, reservation: Reservation,
                        prepend: bool, force: bool = False, mark: bool = False
@@ -479,38 +529,48 @@ class SquareTiling(Tiling):
 
         # Recall that the first tile layer represents the next timestep.
         t0 = SHARED.t + 1
+        to_return: Dict[int, Dict[Tile, float]] = {}
         if prepend:
             if t == t0:
-                return {}
-            # Find the tile one timestep before the current one to account for
-            # rounding errors; otherwise soonest_exit ought to guarantee that
-            # there will be no conflicts as vehicles enter the intersection.
-            t_prepend = t-1
+                return to_return
+
+            p_prepend = lane.movement_model.prepend_probabilities(
+                clone, reservation.its_exit, lane.speed_limit)
+            if t - len(p_prepend) < t0:
+                p_prepend = p_prepend[len(p_prepend) - (t - t0):]
+                t_prepend = t0
+            else:
+                t_prepend = t-1
+
             while len(self.tiles) < t_prepend - SHARED.t:
                 self._add_new_layer()
-            tile = self.tiles[t_prepend - t0][
-                self.buffer_tile_loc[lane.trajectory.start_coord]]
-            if tile.will_reservation_work(reservation):
-                # TODO: (stochastic) reservations.
-                return {t_prepend: {tile: 1}}
-            else:
-                return None
+
+            tile_id = self.buffer_tile_loc[lane.trajectory.start_coord]
+            for i, p in enumerate(p_prepend):
+                t_res = t_prepend + i
+                tile = self.tiles[t_res - t0][tile_id]
+                if not tile.will_reservation_work(reservation, p):
+                    lane.movement_model.clean_up_projection(clone)
+                    return None
+                to_return[t_res] = {tile: p}
+
         else:
-            timesteps_forward = Tiling._exit_res_timesteps_forward(
-                clone.velocity)
-            tile_id = self.buffer_tile_loc[lane.trajectory.end_coord]
-            while len(self.tiles) < t + timesteps_forward - SHARED.t:
+            p_postpend = lane.movement_model.postpend_probabilities(
+                clone, Tiling._exit_res_timesteps_forward(clone.velocity), t)
+
+            while len(self.tiles) < t + len(p_postpend) - SHARED.t:
                 self._add_new_layer()
-            to_return: Dict[int, Dict[Tile, float]] = {}
-            for i in range(1, timesteps_forward+1):
-                t_res = t + i
+
+            tile_id = self.buffer_tile_loc[lane.trajectory.end_coord]
+            for i, p in enumerate(p_postpend):
+                t_res = t + i + 1
                 tile_t_index = t_res - t0
                 tile = self.tiles[tile_t_index][tile_id]
-                if not tile.will_reservation_work(reservation):
+                if not tile.will_reservation_work(reservation, p):
                     return None
-                # TODO: (stochastic) reservations.
-                to_return[t_res] = {tile: 1}
-            return to_return
+                to_return[t_res] = {tile: p}
+
+        return to_return
 
     def _tile_loc_to_id(self, tile_loc: Tuple[int, int]) -> int:
         """Convert a tile's (x,y) location to its 1D integer ID.

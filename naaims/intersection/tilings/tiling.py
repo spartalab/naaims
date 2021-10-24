@@ -42,7 +42,7 @@ class Tiling(Configurable):
                  lanes: Tuple[IntersectionLane, ...],
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
-                 tile_type: Type[Tile] = DeterministicTile,
+                 crash_probability_tolerance: float,
                  cycle: Optional[List[
                      Tuple[Set[IntersectionLane], int]
                  ]] = None,
@@ -66,7 +66,8 @@ class Tiling(Configurable):
         self.outgoing_road_lane_by_coord = outgoing_road_lane_by_coord
         self.lanes = lanes
         self.lanes_by_endpoints = lanes_by_endpoints
-        self.tile_type = tile_type
+        self.tile_type = DeterministicTile if \
+            (crash_probability_tolerance == 0) else StochasticTile
 
         # Initialize reservation dicts.
         self.active_reservations: Dict[Vehicle, Reservation] = {}
@@ -93,6 +94,10 @@ class Tiling(Configurable):
         # Initialize a dict to track request checking timeouts
         self.timeout_until: Optional[Dict[Vehicle, int]] = {} if timeout else \
             None
+
+        # Initialize rejection threshold. This must be set by child classes.
+        self._rejection_threshold: float = 0
+        self.rejection_threshold_registered: bool = False
 
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
@@ -125,8 +130,8 @@ class Tiling(Configurable):
             outgoing_road_lane_by_coord=spec[
                 'outgoing_road_lane_by_coord'],
             lanes=spec['lanes'],
+            crash_probability_tolerance=spec['crash_probability_tolerance'],
             lanes_by_endpoints=spec['lanes_by_endpoints'],
-            tile_type=spec['tile_type'],
             cycle=spec.get('cycle'),
             misc_spec=spec.get('misc_spec', {})
         )
@@ -931,3 +936,10 @@ class Tiling(Configurable):
         represents time SHARED.t+1.
         """
         raise NotImplementedError("Must be implemented in child classes.")
+
+    @property
+    def rejection_threshold(self) -> float:
+        """Return the rejection threshold per tile."""
+        if not self.rejection_threshold_registered:
+            raise RuntimeError("Rejection threshold not yet registered.")
+        return self._rejection_threshold
