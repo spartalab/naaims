@@ -58,8 +58,8 @@ def test_simple_init(load_shared: None):
     assert sq.x_tile_count == 2
     assert sq.y_tile_count == 2
     assert len(sq.buffer_tile_loc) == 4
-    assert sq.rejection_threshold_registered
-    assert sq.rejection_threshold == 2e-8
+    assert sq.threshold_registered
+    assert sq.threshold == 2e-8
 
 
 def test_slanted_init(load_shared: None):
@@ -98,8 +98,8 @@ def test_slanted_init(load_shared: None):
     assert sq.x_tile_count == 2
     assert sq.y_tile_count == 2
     assert len(sq.buffer_tile_loc) == 4
-    assert sq.rejection_threshold_registered
-    assert sq.rejection_threshold == 1e-6
+    assert sq.threshold_registered
+    assert sq.threshold == 1e-6
 
 
 def test_init_oblong_overtiled(load_shared: None):
@@ -686,14 +686,14 @@ def test_new_layer(load_shared: None, sq_stochastic: SquareTiling):
     assert len(sq_stochastic.tiles) == 1
     assert len(sq_stochastic.tiles[0]) == 50
     assert hash(sq_stochastic.tiles[0][22]) == hash((22, 1))
-    assert sq_stochastic.tiles[0][22].rejection_threshold == \
-        sq_stochastic.rejection_threshold
+    assert sq_stochastic.tiles[0][22].threshold == \
+        sq_stochastic.threshold
     sq_stochastic._add_new_layer()
     assert len(sq_stochastic.tiles) == 2
     assert len(sq_stochastic.tiles[1]) == 50
     assert hash(sq_stochastic.tiles[1][22]) == hash((22, 2))
-    assert sq_stochastic.tiles[0][22].rejection_threshold == \
-        sq_stochastic.rejection_threshold
+    assert sq_stochastic.tiles[0][22].threshold == \
+        sq_stochastic.threshold
 
     # Mock next timestep
     SHARED.t += 1
@@ -703,8 +703,8 @@ def test_new_layer(load_shared: None, sq_stochastic: SquareTiling):
     sq_stochastic._add_new_layer()
     assert hash(sq_stochastic.tiles[0][22]) == hash((22, 2))
     assert hash(sq_stochastic.tiles[1][22]) == hash((22, 3))
-    assert sq_stochastic.tiles[0][22].rejection_threshold == \
-        sq_stochastic.rejection_threshold
+    assert sq_stochastic.tiles[0][22].threshold == \
+        sq_stochastic.threshold
 
 
 def test_coord_to_tile(load_shared: None, sq: SquareTiling):

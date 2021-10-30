@@ -47,6 +47,7 @@ class Tiling(Configurable):
                      Tuple[Set[IntersectionLane], int]
                  ]] = None,
                  timeout: bool = False,
+                 tile_type: Type[Tile] = DeterministicTile,
                  misc_spec: Dict[str, Any] = {}
                  ) -> None:
         """Should instantiate a new Tiling.
@@ -66,8 +67,7 @@ class Tiling(Configurable):
         self.outgoing_road_lane_by_coord = outgoing_road_lane_by_coord
         self.lanes = lanes
         self.lanes_by_endpoints = lanes_by_endpoints
-        self.tile_type = DeterministicTile if \
-            (crash_probability_tolerance == 0) else StochasticTile
+        self.tile_type = tile_type
 
         # Initialize reservation dicts.
         self.active_reservations: Dict[Vehicle, Reservation] = {}
@@ -96,8 +96,8 @@ class Tiling(Configurable):
             None
 
         # Initialize rejection threshold. This must be set by child classes.
-        self._rejection_threshold: float = 0
-        self.rejection_threshold_registered: bool = False
+        self._threshold: float = 0
+        self.threshold_registered: bool = False
 
     @staticmethod
     def spec_from_str(spec_str: str) -> Dict[str, Any]:
@@ -133,6 +133,8 @@ class Tiling(Configurable):
             crash_probability_tolerance=spec['crash_probability_tolerance'],
             lanes_by_endpoints=spec['lanes_by_endpoints'],
             cycle=spec.get('cycle'),
+            timeout=spec.get('timeout', False),
+            tile_type=spec.get('tile_type', DeterministicTile),
             misc_spec=spec.get('misc_spec', {})
         )
 
@@ -312,8 +314,9 @@ class Tiling(Configurable):
         new_exit: Optional[ScheduledExit] = \
             incoming_road_lane_original.soonest_exit(counter)
         if new_exit is None:
-            raise RuntimeError("Soonest exit should have returned a "
-                               "ScheduledExit but didn't.")
+            # The leader needs to stop for a while before they can make a
+            # workable reservation.
+            return []
         test_t = new_exit.t
         leader_arrival = new_exit.t  # for timeout calculation
 
@@ -710,12 +713,15 @@ class Tiling(Configurable):
             intersection_lane.trajectory.start_coord))
 
         # Check if its tiles work.
-        tiles_used = self.pos_to_tiles(intersection_lane, test_t,
-                                       clone, reservation,
-                                       mark=mark)
         edge_tiles_used = self.io_tile_buffer(
             intersection_lane, test_t, clone, reservation,
             prepend=True, mark=mark)
+        if edge_tiles_used is not None:
+            tiles_used = self.pos_to_tiles(intersection_lane, test_t,
+                                           clone, reservation,
+                                           mark=mark)
+        else:
+            tiles_used = None
         if (edge_tiles_used is not None) and (tiles_used is not None):
             # Register these edge buffer tiles and regular tiles to the new
             # reservation, which has no tiles used yet.
@@ -938,8 +944,8 @@ class Tiling(Configurable):
         raise NotImplementedError("Must be implemented in child classes.")
 
     @property
-    def rejection_threshold(self) -> float:
-        """Return the rejection threshold per tile."""
-        if not self.rejection_threshold_registered:
-            raise RuntimeError("Rejection threshold not yet registered.")
-        return self._rejection_threshold
+    def threshold(self) -> float:
+        """Return the probability threshold per tile."""
+        if not self.threshold_registered:
+            raise RuntimeError("Probability threshold not yet registered.")
+        return self._threshold

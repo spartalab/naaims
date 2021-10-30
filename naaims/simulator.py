@@ -49,6 +49,7 @@ class Simulator:
                  min_acceleration: float = 3,
                  max_vehicle_length: float = 5.5,
                  length_buffer_factor: float = 0.1,
+                 acceptable_crash_mev: float = 0.,
                  visualize: bool = False) -> None:
         """Create all roads, intersections, and suppport structures.
 
@@ -88,9 +89,20 @@ class Simulator:
                 (separately), as a function of the vehicle's length. The
                 default option, 0.1, makes a vehicle 10% longer in front and
                 10% longer behind than it actually is.
+            acceptable_crash_mev: float = 0.
+                The rate of crashes the user is willing to tolerate per million
+                entering vehicles (MEV), per intersection. Activates stochastic
+                movement and reservation features if greater than 0.
+
+                Internally, this is applied to the total vehicles per minute
+                across all spawners to convert it into a probability of crash
+                incidence per timestep for use in movement calculations.
             visualize: bool = False
                 Whether to visualize the progress of the simulation.
         """
+
+        if acceptable_crash_mev < 0:
+            raise ValueError("acceptable_crash_mev must be non-negative.")
 
         # 0. Load shared settings.
         SHARED.SETTINGS.load(steps_per_second=steps_per_second,
@@ -135,59 +147,8 @@ class Simulator:
 
         #   b. Create intersections, spawners, and removers given the roads.
         #      Connect roads to their intersections, spawners, and removers.
-        self.intersections: Dict[int, Intersection] = {}
-        for spec in intersection_specs:
 
-            # Cache intersection ID
-            iid: int = spec['id']
-
-            # Check that there are roads that lead to this intersection from
-            # both upstream and downstream
-            if (iid not in upstream_intersection_rids
-                    or iid not in downstream_intersection_rids):
-                raise ValueError(
-                    f"Spec has intersection {iid} but no road does.")
-
-            # Put the upstream and downstream roads in this spec
-            spec['incoming_roads'] = []
-            for rid in spec['incoming_road_ids']:
-                # spec['incoming_roads'][rid] = self.roads[rid]
-                spec['incoming_roads'].append(self.roads[rid])
-            spec['outgoing_roads'] = []
-            for rid in spec['outgoing_road_ids']:
-                # spec['outgoing_roads'][rid] = self.roads[rid]
-                spec['outgoing_roads'].append(self.roads[rid])
-
-            # Convert the road IDs in the connectivity matrix into Roads
-            connectivity: List[Tuple[int, int, bool]] = spec['connectivity']
-            connectivity_converted: List[Tuple[Road, Road, bool]] = []
-            for road_in_id, road_out_id, fully_connected in connectivity:
-                connectivity_converted.append((self.roads[road_in_id],
-                                               self.roads[road_out_id],
-                                               fully_connected))
-            spec['connectivity'] = connectivity_converted
-
-            # Create the intersection
-            self.intersections[iid] = Intersection.from_spec(spec)
-
-            # Attach the intersection to the up and downstream roads
-            while len(downstream_intersection_rids[iid]) > 0:
-                rid = downstream_intersection_rids[iid].pop()
-                self.roads[rid].connect_downstream(self.intersections[iid])
-            while len(upstream_intersection_rids[iid]) > 0:
-                rid = upstream_intersection_rids[iid].pop()
-                self.roads[rid].connect_upstream(self.intersections[iid])
-
-            # On road's side, track which intersections we've confirmed exist
-            del upstream_intersection_rids[iid]
-            del downstream_intersection_rids[iid]
-
-        # Check if every road's intersection has been created
-        if ((len(upstream_intersection_rids) > 0) or
-                (len(downstream_intersection_rids) > 0)):
-            raise ValueError(
-                f"Roads have at least one intersection that the spec doesn't.")
-
+        vpm_total: float = 0
         self.spawners: Dict[int, VehicleSpawner] = {}
         for spec in spawner_specs:
 
@@ -217,6 +178,9 @@ class Simulator:
 
             # On the road side, track that we've created this spawner
             del spawner_rids[sid]
+
+            # Calculate the total vehicle arrival (spawn) rate
+            vpm_total += spec['vpm']
 
         # Check if every road's spawner (if it has one) has been created
         if len(spawner_rids) > 0:
@@ -257,6 +221,69 @@ class Simulator:
         if len(remover_rids) > 0:
             raise ValueError(
                 f"Roads have at least one remover that the spec doesn't.")
+
+        # Calculate acceptable crash probability per timestep per intersection.
+        n_intersections = len(intersection_specs)
+        crash_probability_tolerance = Simulator.crash_probability_tolerance(
+            vpm_total, acceptable_crash_mev, SHARED.SETTINGS.steps_per_second
+        )/n_intersections if n_intersections > 0 else 0
+
+        self.intersections: Dict[int, Intersection] = {}
+        for spec in intersection_specs:
+
+            # Cache intersection ID
+            iid: int = spec['id']
+
+            # Check that there are roads that lead to this intersection from
+            # both upstream and downstream
+            if (iid not in upstream_intersection_rids
+                    or iid not in downstream_intersection_rids):
+                raise ValueError(
+                    f"Spec has intersection {iid} but no road does.")
+
+            # Put the upstream and downstream roads in this spec
+            spec['incoming_roads'] = []
+            for rid in spec['incoming_road_ids']:
+                # spec['incoming_roads'][rid] = self.roads[rid]
+                spec['incoming_roads'].append(self.roads[rid])  # type: ignore
+            spec['outgoing_roads'] = []
+            for rid in spec['outgoing_road_ids']:
+                # spec['outgoing_roads'][rid] = self.roads[rid]
+                spec['outgoing_roads'].append(self.roads[rid])  # type: ignore
+
+            # Convert the road IDs in the connectivity matrix into Roads
+            connectivity: List[Tuple[int, int, bool]] = spec['connectivity']
+            connectivity_converted: List[Tuple[Road, Road, bool]] = []
+            for road_in_id, road_out_id, fully_connected in connectivity:
+                connectivity_converted.append((self.roads[road_in_id],
+                                               self.roads[road_out_id],
+                                               fully_connected))
+            spec['connectivity'] = connectivity_converted
+
+            # Add the crash probability tolerance to the spec
+            spec['manager_spec']['tiling_spec']['crash_probability_tolerance'
+                                                ] = crash_probability_tolerance
+
+            # Create the intersection
+            self.intersections[iid] = Intersection.from_spec(spec)
+
+            # Attach the intersection to the up and downstream roads
+            while len(downstream_intersection_rids[iid]) > 0:
+                rid = downstream_intersection_rids[iid].pop()
+                self.roads[rid].connect_downstream(self.intersections[iid])
+            while len(upstream_intersection_rids[iid]) > 0:
+                rid = upstream_intersection_rids[iid].pop()
+                self.roads[rid].connect_upstream(self.intersections[iid])
+
+            # On road's side, track which intersections we've confirmed exist
+            del upstream_intersection_rids[iid]
+            del downstream_intersection_rids[iid]
+
+        # Check if every road's intersection has been created
+        if ((len(upstream_intersection_rids) > 0) or
+                (len(downstream_intersection_rids) > 0)):
+            raise ValueError(
+                f"Roads have at least one intersection that the spec doesn't.")
 
         # 2. Generate a Pathfinder from the specs and share it across modules
         SHARED.SETTINGS.pathfinder = Pathfinder(self.roads.values(),
@@ -393,8 +420,8 @@ class Simulator:
             self.vehicle_patches: List[Polygon] = []
 
             # 6d. Place time on vis.
-            self.time_text = self.ax.text(min_x, min_y, self.strf_t(),
-                                          fontsize=16)
+            self.time_text = self.ax.text(min_x, min_y,  # type: ignore
+                                          self.strf_t(), fontsize=16)
 
     def step(self) -> None:
         """Execute one simulation step."""
@@ -517,7 +544,7 @@ class Simulator:
                         f'{vehicle_log["type"]}\n')
 
     def animate(self, frame_ratio: int = 1, max_timestep: int = 10*60
-                ) -> FuncAnimation:
+                ) -> FuncAnimation:  # type: ignore
         """Animate the simulation run.
 
         Parameters:
@@ -550,7 +577,7 @@ class Simulator:
 
             # Update time
             self.time_text.set_text(self.strf_t())
-            changed.append(self.time_text)
+            changed.append(self.time_text)  # type: ignore
             return changed
 
         def get_next_frame() -> Generator[Set[Vehicle], None, None]:
@@ -561,8 +588,8 @@ class Simulator:
                 if (SHARED.t - t0) % frame_ratio == 0:
                     yield self.vehicles_in_scope
 
-        return FuncAnimation(self.fig, draw, frames=get_next_frame,
-                             interval=frame_ratio *
+        return FuncAnimation(self.fig, draw,  # type: ignore
+                             frames=get_next_frame, interval=frame_ratio *
                              SHARED.SETTINGS.TIMESTEP_LENGTH * 1000,
                              save_count=max_timestep*frame_ratio, blit=True)
 
@@ -572,3 +599,22 @@ class Simulator:
         min = time//60
         sec = time % 60
         return f'{min:02.0f}:{sec:06.3f}'
+
+    @staticmethod
+    def crash_probability_tolerance(vpm: float, crash_mev: float,
+                                    timesteps_per_second: float) -> float:
+        """Find the acceptable crash probability per intersection.
+
+        This is
+          crashes per million vehicles
+              divided by
+          1 million, for crashes per vehicle
+              multiplied by
+          vehicles per minute, for crashes per minute
+              divided by
+          60 seconds per minute, for crashes per second
+              divided by
+          steps per second, for crashes per timestep.
+        This will need to be broken up further for each stochastic tile.
+        """
+        return crash_mev / 1e6 * vpm / 60 / timesteps_per_second

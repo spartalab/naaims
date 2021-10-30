@@ -183,8 +183,8 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
         # has to wait until the lanes, manager, and tiling have all been
         # constructed.)
         for lane in self.lanes:
-            lane.movement_model.register_rejection_threshold(
-                self.manager.tiling.rejection_threshold)
+            lane.movement_model.register_threshold(
+                self.manager.tiling.threshold)
 
         # Init buffer for incoming vehicles
         Downstream.__init__(self)

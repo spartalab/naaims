@@ -1,14 +1,16 @@
 from __future__ import annotations
-from typing import Any, TYPE_CHECKING, Optional, Set, Dict, Tuple, List
+from typing import Any, TYPE_CHECKING, Optional, Set, Dict, Tuple, List, Type
 from math import ceil, floor, isclose
+from warnings import warn
 
 import naaims.shared as SHARED
 from naaims.util import Coord, CollisionError
 from naaims.intersection.tilings.tiling import Tiling
+from naaims.intersection.tilings.tiles import DeterministicTile
 
 if TYPE_CHECKING:
     from naaims.road import RoadLane
-    from naaims.intersection.tilings.tiles import Tile
+    from naaims.intersection.tilings.tiles import Tile, DeterministicTile
     from naaims.vehicles import Vehicle
     from naaims.intersection import IntersectionLane
     from naaims.intersection.reservation import Reservation
@@ -26,6 +28,7 @@ class SquareTiling(Tiling):
                      Tuple[Set[IntersectionLane], int]
                  ]] = None,
                  timeout: bool = False,
+                 tile_type: Type[Tile] = DeterministicTile,
                  misc_spec: Dict[str, Any] = {}
                  ) -> None:
         """Creates a new square (pixelated) tiling."""
@@ -85,19 +88,19 @@ class SquareTiling(Tiling):
         # crash_probability_tolerance over the entire intersection by using a
         # simple approximation where each tile is independently contributing to
         # the total probability of rejection.
-        # total_tiles = self.x_tile_count * self.y_tile_count
+        total_tiles = self.x_tile_count * self.y_tile_count
         # The following two expressions are equivalent for small probabilities,
         # which the crash probability should always be, thanks to the magic of
         # Taylor series expansions.
-        # self._rejection_threshold = 1 - (1-crash_probability_tolerance)**(
+        # self._threshold = 1 - (1-crash_probability_tolerance)**(
         #     1 / total_tiles) if (total_tiles > 0) else 0
-        # self._rejection_threshold = crash_probability_tolerance / \
-        #     total_tiles if (total_tiles > 0) else 0
+        self._threshold = crash_probability_tolerance / \
+            total_tiles if (total_tiles > 0) else 0
         # Above is a stricter calculation of the rejection threshold, but I
         # think this should be fine as the probability of crashes across
         # multiple tiles is highly correlated.
-        self._rejection_threshold = crash_probability_tolerance
-        self.rejection_threshold_registered = True
+        # self._threshold = crash_probability_tolerance
+        self.threshold_registered = True
 
     def check_for_collisions(self) -> None:
         """Check for collisions in the intersection.
@@ -105,8 +108,8 @@ class SquareTiling(Tiling):
         Collisions are only possible when stochastic movement is on, so this
         only runs in that case.
         """
-        if self.rejection_threshold > 0:
-            seen: Set[Tuple[int, int]] = set()
+        if self.threshold > 0:
+            seen: Dict[Tuple[int, int], List[Vehicle]] = {}
             for lane in self.lanes:
                 for vehicle in lane.vehicles:
                     y_min, x_mins, x_maxes = self._outline_to_tile_range(tuple(
@@ -118,12 +121,19 @@ class SquareTiling(Tiling):
                         for i in range((x_maxes[j]+1)-x_mins[j]):
                             x = x_mins[j]+i
                             loc = (x, y)
-                            if loc in seen:
-                                raise CollisionError(
-                                    "Two or more vehicles using the tile at "
-                                    f"{self._tile_loc_to_coord(loc)}.")
+                            if loc not in seen:
+                                seen[loc] = [vehicle]
                             else:
-                                seen.add(loc)
+                                seen[loc].append(vehicle)
+                            if len(seen[loc]) > 1:
+                                info = "Potential collision at tile " + \
+                                    f"{self._tile_loc_to_coord(loc)}."
+                                for veh in seen[loc]:
+                                    info += '\n\t' + str(veh.get_outline())
+                                warn(info)
+                                # raise CollisionError(
+                                #     "Two or more vehicles using the tile at "
+                                #     f"{self._tile_loc_to_coord(loc)}.")
 
     def update_active_reservations(self) -> None:
         """Given vehicle movement in the last step, update their reservations.
@@ -176,7 +186,7 @@ class SquareTiling(Tiling):
         # Call super to extend the tile stack to cover up to t if necessary.
         super().pos_to_tiles(lane, t, clone, reservation, force, mark)
 
-        if self.rejection_threshold == 0:
+        if self.threshold == 0:
             # Fetch the vehicle's outline as provided by the lane's stochastic
             # movement model, normalize it to the grid's internal coordinate
             # system using self.origin and self.tile_width, and find the x and
@@ -210,12 +220,14 @@ class SquareTiling(Tiling):
                 p = lane.movement_model.find_probability_of_usage(
                     clone, lane.vehicle_progress[clone],
                     self._tile_loc_to_coord((x, y)), self.tile_width, t) \
-                    if (self.rejection_threshold > 0) else 1
+                    if (self.threshold > 0) else 1
 
                 if not tile.will_reservation_work(reservation, p):
                     lane.movement_model.clean_up_projection(clone)
                     return None
+
                 tiles_covered[tile] = p
+
         # TODO: (auction) incorporate force and mark
 
         return tiles_covered
@@ -531,6 +543,9 @@ class SquareTiling(Tiling):
         t0 = SHARED.t + 1
         to_return: Dict[int, Dict[Tile, float]] = {}
         if prepend:
+            lane.movement_model.start_projection(clone, reservation.its_exit,
+                                                 lane.speed_limit)
+
             if t == t0:
                 return to_return
 
@@ -617,7 +632,7 @@ class SquareTiling(Tiling):
         new_timestep = SHARED.t + 1 + len(self.tiles)
         self.tiles.append(tuple([
             self.tile_type(self._tile_loc_to_id((x, y)), new_timestep,
-                           rejection_threshold=self.rejection_threshold)
+                           threshold=self.threshold)
             for y in range(self.y_tile_count)
             for x in range(self.x_tile_count)]))
 

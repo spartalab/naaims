@@ -57,11 +57,16 @@ class OneDrawStochasticModel(MovementModel):
         self.mc_complete: Dict[Vehicle, List[bool]] = {}
         self.t_of_mc_cached: Dict[Vehicle, int] = {}
 
-        # Determine if the trajectory is one of either horizontal or vertical
-        self.horizontal_vertical = isclose(
-            self.trajectory.start_coord.x, self.trajectory.end_coord.x) or \
-            isclose(
-            self.trajectory.start_coord.y, self.trajectory.end_coord.y)
+        # Determine if the trajectory is a straight line
+        control_straight = Coord(
+            (self.trajectory.end_coord.x - self.trajectory.start_coord.x) /
+            2 + self.trajectory.start_coord.x,
+            (self.trajectory.end_coord.y - self.trajectory.start_coord.y)/2 +
+            self.trajectory.start_coord.y)
+        self.straight = isclose(control_straight.x,
+                                self.trajectory.reference_coords[0].x) and \
+            isclose(control_straight.y,
+                    self.trajectory.reference_coords[0].y)
 
     # Functions to calculate a vehicle's REALIZED deviation once they're in
     # the intersection.
@@ -71,7 +76,7 @@ class OneDrawStochasticModel(MovementModel):
 
         # Do nothing if this instance is not exhibiting stochastic behavior,
         # i.e., when calculating a reservation request.
-        if self.disable_stochasticity:
+        if self.disable_stochasticity or self.straight:
             return None
 
         # A positive draw from the vehicle's tracking distribution means that
@@ -113,13 +118,18 @@ class OneDrawStochasticModel(MovementModel):
         # new acceleration value.
         t_accel = OneDrawStochasticModel.t_accel(
             v0, v_max, x_to_exit, t_actual_exit)
-        self.a_adjusted[vehicle] = OneDrawStochasticModel.get_a_adjusted(
-            v0, v_max, t_accel, t_actual_exit, x_to_exit)
-        self.p_cutoff[vehicle] = OneDrawStochasticModel.get_p_cutoff(
-            v0, self.a_adjusted[vehicle], t_accel, entrance.distance_left,
-            self.trajectory.length)
-        # TODO: Does a_adjusted being negative break things? At least, things
-        #       other than traffic signals.
+        a_adjusted = OneDrawStochasticModel.get_a_adjusted(
+            v0, v_max, t_accel, t_actual_exit, x_to_exit,
+            SHARED.SETTINGS.min_acceleration)
+        if a_adjusted < 0:
+            # Allowing a_adjusted to go negative breaks the probability model
+            self.a_adjusted[vehicle] = 0
+            self.p_cutoff[vehicle] = 1
+        else:
+            self.a_adjusted[vehicle] = a_adjusted
+            self.p_cutoff[vehicle] = OneDrawStochasticModel.get_p_cutoff(
+                v0, self.a_adjusted[vehicle], t_accel, entrance.distance_left,
+                self.trajectory.length)
 
     @staticmethod
     def t_deterministic_exit(v0: float, a: float, v_max: float,
@@ -140,7 +150,8 @@ class OneDrawStochasticModel(MovementModel):
         accelerate for.
         """
         # See dissertation Appendix B for derivation.
-        t_accel = (x_to_exit - v_max * t_exit) / (v0/2 - v_max/2)
+        t_accel = (x_to_exit - v_max * t_exit) / \
+            (v0/2 - v_max/2) if (v0 < v_max) else 0
         if t_accel < 0:
             # braking necessary
             return t_accel
@@ -152,7 +163,10 @@ class OneDrawStochasticModel(MovementModel):
 
     @staticmethod
     def get_a_adjusted(v0: float, v_max: float, t_accel: float, t_exit: float,
-                       x_to_exit: float) -> float:
+                       x_to_exit: float, a: float) -> float:
+        if t_accel == 0:
+            # default to the original acceleration
+            return a
         if t_accel == t_exit:
             # doesn't reach v_max, feather it
             return (2*x_to_exit - 2*t_accel*v0)/t_accel**2
@@ -168,7 +182,8 @@ class OneDrawStochasticModel(MovementModel):
         """Delete vehicle's saved deviation terms."""
         if self.disable_stochasticity:
             return None
-        del self.max_lateral_deviation[vehicle]
+        if not self.straight:
+            del self.max_lateral_deviation[vehicle]
         del self.a_adjusted[vehicle]
         del self.p_cutoff[vehicle]
 
@@ -180,7 +195,7 @@ class OneDrawStochasticModel(MovementModel):
         of their trajectory (longitudinally), and decrease symmetrically back
         to 0 until their center exits the intersection.
         """
-        if self.disable_stochasticity:
+        if self.disable_stochasticity or self.straight:
             return 0
         if p < 0 or p > 1:
             raise ValueError("Lateral deviation only valid between 0 and 1 p.")
@@ -228,7 +243,7 @@ class OneDrawStochasticModel(MovementModel):
 
         # Multiply by tile size to turn point probability into a probability
         # that the vehicle covers any portion of this tile.
-        p_tile = p_tracking * p_throttle * tile_width**2
+        p_tile = p_tracking * p_throttle
         return p_tile
 
     @staticmethod
@@ -268,7 +283,7 @@ class OneDrawStochasticModel(MovementModel):
         # Find the lateral deviation distribution based on the progress of the
         # center of the vehicle. The mean and stdev terms scale linearly as the
         # vehicle progresses through the intersection lane trajectory.
-        if (vp.center is None) or (self.horizontal_vertical):
+        if (vp.center is None) or self.straight:
             # Assume the vehicle is tracking perfectly before its center
             # section enters or if the trajectory is straight or near-straight.
             scaling = 0.
@@ -304,7 +319,7 @@ class OneDrawStochasticModel(MovementModel):
         # assumed to have perfect accuracy at trajectory tracking, so this
         # reduces to a binary problem of whether the tile sits under the
         # vehicle or not.
-        if self.horizontal_vertical:
+        if self.straight:
             return float(-width/2 <= d <= width/2)
 
         # Recall that the tracking distribution is the deviation relative to
@@ -420,8 +435,8 @@ class OneDrawStochasticModel(MovementModel):
         pos1 = self.trajectory.get_position(1)
         return Coord(pos1.x + x_extension, pos1.y + y_extension)
 
-    def prepend_probabilities(self, vehicle: Vehicle, entrance: ScheduledExit,
-                              v_max: float, n: int = 1000) -> List[float]:
+    def start_projection(self, vehicle: Vehicle, entrance: ScheduledExit,
+                         v_max: float, n: int = 1000) -> None:
 
         # Run an n-sample monte carlo sim of acceleration profiles, for use in
         # finding throttle deviation likelihoods.
@@ -438,7 +453,10 @@ class OneDrawStochasticModel(MovementModel):
             t_accel = self.t_accel(v0, v_max, x_to_exit, t_actual)
             # Calculate the acceleration value from the sampled time
             a_adjusted = self.get_a_adjusted(
-                v0, v_max, t_accel, t_actual, x_to_exit)
+                v0, v_max, t_accel, t_actual, x_to_exit,
+                SHARED.SETTINGS.min_acceleration)
+            if a_adjusted < 0:
+                a_adjusted = 0
             # Create and save a lambda function that uses the acceleration
             # value, speed limit, and so on to find the progress along the
             # trajectory at a given time.
@@ -447,9 +465,6 @@ class OneDrawStochasticModel(MovementModel):
             # runs n times to create a monte carlo distribution, unless the
             # vehicle has 0 standard deviation, in which case just run once.
         self.progress_mc[vehicle] = progress_mc
-
-        # Then do the normal stuff.
-        return super().prepend_probabilities(vehicle, entrance, v_max)
 
     def progress_lambda_factory(self, vehicle: Vehicle,
                                 its_exit: ScheduledExit, a: float,
@@ -470,7 +485,7 @@ class OneDrawStochasticModel(MovementModel):
         def progress(ts: int) -> Tuple[float, bool]:
             t = (ts - ts0)/SHARED.SETTINGS.steps_per_second
             v_a = v0 + a*t
-            if v_a > v_max:
+            if v_a >= v_max:
                 # Vehicle reaches the speed limit before this time.
                 t_a = t_to_v(v0, a, v_max)
                 x_a = x_over_constant_a(v0, a, t_a)
@@ -492,17 +507,25 @@ class OneDrawStochasticModel(MovementModel):
         if (vehicle.throttle_mn == 0) and (vehicle.throttle_sd == 0):
             return default
 
-        self.check_update_mc(vehicle, t)
-        to_return: List[float] = []
+        # Take the probability that this tile was used at this timestep and
+        # extend it timesteps_forward to sort-of mimic the normal behavior
+        # of postpending reservations.
+        _, d_throttle = self.split_distance(vehicle, self.trajectory.end_coord)
+        to_return: List[float] = [
+            self.find_probability_throttle(vehicle, 0, t, d_throttle) for _ in
+            range(timesteps_forward)]
+
+        # Tag on more usage probabilities until every instance in the monte
+        # carlo sim has left the intersection.
         while not all(self.mc_complete[vehicle]):
-            to_return.append(1-mean(self.mc_complete[vehicle]))  # type: ignore
             t += 1
-            self.check_update_mc(vehicle, t)
+            to_return.append(self.find_probability_throttle(vehicle, 0, t,
+                                                            d_throttle))
 
         # Clean up after throttle
         self.clean_up_projection(vehicle)
 
-        if len(to_return) < len(default):
+        if len(to_return) <= len(default):
             # Ensure that no stochastic exiting reservation buffer is more
             # lenient than the default behavior.
             return default
@@ -510,10 +533,14 @@ class OneDrawStochasticModel(MovementModel):
             return to_return
 
     def clean_up_projection(self, vehicle: Vehicle) -> None:
-        del self.progress_mc[vehicle]
-        del self.d_mc[vehicle]
-        del self.mc_complete[vehicle]
-        del self.t_of_mc_cached[vehicle]
+        if vehicle in self.progress_mc:
+            del self.progress_mc[vehicle]
+        if vehicle in self.d_mc:
+            del self.d_mc[vehicle]
+        if vehicle in self.mc_complete:
+            del self.mc_complete[vehicle]
+        if vehicle in self.t_of_mc_cached:
+            del self.t_of_mc_cached[vehicle]
 
     def reset_for_requests(self) -> MovementModel:
         """Returns a reset instance of this model for projections.

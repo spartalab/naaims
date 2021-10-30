@@ -21,8 +21,7 @@ class Tile(ABC):
     # TODO: (sequence) Consider banning the use of stochastic AND sequenced
     #       reservations. It's technically supported but the overhead is a lot.
 
-    @abstractmethod
-    def __init__(self, id: int, time: int, rejection_threshold: float = 0
+    def __init__(self, id: int, time: int, threshold: float = 0
                  ) -> None:
         """Create a new tile, including if it tracks potential requests.
 
@@ -31,17 +30,24 @@ class Tile(ABC):
                 The ID of this tile based on xy position (for hashing).
             time: int
                 The timestep that this tile tracks (for hashing).
-            rejection_threshold: float
-                (Used only for the stochastic tile subclass.) If the
-                probability that confirming the next request makes the
-                likelihood that this tile is used greater than this threshold,
-                reject the request. (Check does not apply to the first
-                reservation on this tile.)
+            threshold: float
+                Benchmark probability.
+
+                For deterministic tiles, probabilities less than this are
+                treated as if the vehicle doesn't use this tile (i.e., p is
+                cast to 0), and those greater are cast to 1.
+
+                For stochastic tiles, if the probability that confirming the
+                next request makes the likelihood that this tile is used
+                greater than this threshold, reject the request. (Does not
+                apply to the first reservation on this tile.)
         """
         self.__hash = hash((id, time))
         self.__potentials: Dict[Reservation, float] = {}
         self.reserved_by: Dict[Optional[int], float] = {}  # by VIN
-        self.rejection_threshold: float = 0  # overridden by StochasticTile
+        if not (0 <= threshold <= 1):
+            raise ValueError("Rejection threshold must be in [0,1].")
+        self.threshold = threshold
 
     # TODO: (sequence) Change all of these tile checks to account for the total
     #       probability that a tile is used by every vehicle in its sequence.
@@ -64,8 +70,7 @@ class Tile(ABC):
         Parameters
             r: Reservation
             p: float
-                The probability that the reservation being requested uses this
-                tile. (Only used for stochastic reservations.)
+                The probability that the request uses this tile.
         """
         if not (0 <= p <= 1):
             raise ValueError("p must be between 0 and 1 (inclusive).")

@@ -41,7 +41,7 @@ def test_stochastic_tile(load_shared: None, vehicle: Vehicle,
                            ScheduledExit(vehicle, VehicleSection.FRONT, 0, 0))
 
     tile = StochasticTile(0, 0, 1e-8)
-    assert tile.rejection_threshold == 1e-8
+    assert tile.threshold == 1e-8
     r1 = res(vehicle, tile, 1)
     r2 = res(vehicle2, tile, 1)
     assert tile.will_reservation_work(r1) is True

@@ -22,20 +22,20 @@ def test_init():
     od = OneDrawStochasticModel(straight_trajectory)
     assert od.disable_stochasticity is False
     assert od.trajectory is straight_trajectory
-    assert od.horizontal_vertical is True
+    assert od.straight is True
 
     with raises(RuntimeError):
-        od.rejection_threshold
-    od.register_rejection_threshold(0.1)
-    assert od.rejection_threshold == 0.1
+        od.threshold
+    od.register_threshold(0.1)
+    assert od.threshold == 0.1
 
-    assert OneDrawStochasticModel(slanted).horizontal_vertical is False
+    assert OneDrawStochasticModel(slanted).straight is False
 
 
 @fixture
 def od():
     model = OneDrawStochasticModel(slanted)
-    model.register_rejection_threshold(1e-8)
+    model.register_threshold(1e-8)
     return model
 
 
@@ -53,7 +53,7 @@ def od():
 @fixture
 def od_disabled():
     model = OneDrawStochasticModel(straight_trajectory)
-    model.register_rejection_threshold(1e-8)
+    model.register_threshold(1e-8)
     model.disable_stochasticity = True
     return model
 
@@ -94,7 +94,7 @@ def test_a_p_calc():
     t_accel = OneDrawStochasticModel.t_accel(
         v0, v_max, x_to_exit, t_actual_exit)
     a_adjusted = OneDrawStochasticModel.get_a_adjusted(
-        v0, v_max, t_accel, t_actual_exit, x_to_exit)
+        v0, v_max, t_accel, t_actual_exit, x_to_exit, 3)
     assert v0*t_accel + 1/2*a_adjusted*t_accel**2 + \
         v_max*(t_actual_exit - t_accel) == x_to_exit
     assert OneDrawStochasticModel.get_p_cutoff(
@@ -114,7 +114,7 @@ def test_a_p_calc():
     t_accel = OneDrawStochasticModel.t_accel(
         v0, v_max, x_to_exit, t_actual_exit)
     a_adjusted = OneDrawStochasticModel.get_a_adjusted(
-        v0, v_max, t_accel, t_actual_exit, x_to_exit)
+        v0, v_max, t_accel, t_actual_exit, x_to_exit, 3)
     assert v0*t_accel + 1/2*a_adjusted*t_accel**2 == x_to_exit
     assert OneDrawStochasticModel.get_p_cutoff(
         v0, a_adjusted, t_accel, .5, 10.5) == (
@@ -136,7 +136,7 @@ def test_init_throttle(od: OneDrawStochasticModel, h_vehicle: Vehicle,
     t_accel = OneDrawStochasticModel.t_accel(v0, v_max, x_to_exit, t_actual)
 
     a_adjusted = OneDrawStochasticModel.get_a_adjusted(
-        v0, v_max, t_accel, t_actual, x_to_exit)
+        v0, v_max, t_accel, t_actual, x_to_exit, 3)
     assert od.a_adjusted.get(h_vehicle) == a_adjusted
     assert od.p_cutoff.get(h_vehicle) == OneDrawStochasticModel.get_p_cutoff(
         v0, a_adjusted, t_accel, .01, od.trajectory.length)
@@ -339,7 +339,7 @@ def test_progress_lambda(od: OneDrawStochasticModel, h_vehicle: Vehicle):
     t_accel = OneDrawStochasticModel.t_accel(
         en.velocity, v_max, od.trajectory.length, t_exit)
     a = OneDrawStochasticModel.get_a_adjusted(
-        en.velocity, v_max, t_accel, t_exit, od.trajectory.length)
+        en.velocity, v_max, t_accel, t_exit, od.trajectory.length, 3)
     p = od.progress_lambda_factory(h_vehicle, en, a, v_max)
     assert p(ts + floor(t_accel) *
              SHARED.SETTINGS.steps_per_second) == approx((1, False))
@@ -355,7 +355,7 @@ def test_progress_lambda(od: OneDrawStochasticModel, h_vehicle: Vehicle):
     t_accel = OneDrawStochasticModel.t_accel(
         en.velocity, v_max, od.trajectory.length, t_exit)
     a = OneDrawStochasticModel.get_a_adjusted(
-        en.velocity, v_max, t_accel, t_exit, od.trajectory.length)
+        en.velocity, v_max, t_accel, t_exit, od.trajectory.length, 3)
     p = od.progress_lambda_factory(h_vehicle, en, a, v_max)
     assert p(ts + floor(t_exit * SHARED.SETTINGS.steps_per_second)
              ) == approx((1, False))
@@ -407,7 +407,7 @@ def test_create_mc_sample(od: OneDrawStochasticModel, h_vehicle: Vehicle):
     t_actual = t_fastest_exit*(1-h_vehicle.throttle_mn)
     t_accel = OneDrawStochasticModel.t_accel(v0, v_max, x_to_exit, t_actual)
     a_mn = OneDrawStochasticModel.get_a_adjusted(v0, v_max, t_accel, t_actual,
-                                                 x_to_exit)
+                                                 x_to_exit, 3)
     assert od.prepend_probabilities(h_vehicle, en, v_max) == [1]
     d, complete = od.create_mc_sample(h_vehicle, ts0 + 10)
     assert not any(complete)
@@ -445,7 +445,7 @@ def test_check_update_mc(od: OneDrawStochasticModel, h_vehicle: Vehicle):
     t_actual = t_fastest_exit*(1-h_vehicle.throttle_mn)
     t_accel = OneDrawStochasticModel.t_accel(v0, v_max, x_to_exit, t_actual)
     a_mn = OneDrawStochasticModel.get_a_adjusted(v0, v_max, t_accel, t_actual,
-                                                 x_to_exit)
+                                                 x_to_exit, 3)
     d, complete = od.create_mc_sample(h_vehicle, ts0 + 10)
     od.check_update_mc(h_vehicle, ts0 + 10)
     assert od.d_mc[h_vehicle] == d

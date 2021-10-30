@@ -137,8 +137,8 @@ def test_init_3_lane(load_shared: None):
                       OneDrawStochasticModel)
     assert isinstance(intersection.lanes[2].movement_model,
                       OneDrawStochasticModel)
-    assert intersection.manager.tiling.rejection_threshold == \
-        intersection.lanes[1].movement_model.rejection_threshold == 1e-8
+    assert intersection.manager.tiling.threshold == \
+        intersection.lanes[1].movement_model.threshold == 1e-8
 
 
 def test_init_right_turn(load_shared: None):

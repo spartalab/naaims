@@ -11,17 +11,17 @@ from test.test_lane import straight_trajectory
 @fixture
 def model(p: float = 1e-8):
     model = DeterministicModel(straight_trajectory)
-    model.register_rejection_threshold(p)
+    model.register_threshold(p)
     return model
 
 
 def test_init():
     m = DeterministicModel(straight_trajectory)
     with raises(RuntimeError):
-        m.rejection_threshold
+        m.threshold
 
-    m.register_rejection_threshold(0.1)
-    assert m.rejection_threshold == 0.1
+    m.register_threshold(0.1)
+    assert m.threshold == 0.1
 
 
 def test_deterministic(model: DeterministicModel, vehicle: Vehicle):

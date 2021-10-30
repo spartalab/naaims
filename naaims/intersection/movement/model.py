@@ -22,27 +22,27 @@ class MovementModel(ABC):
         This will define how the IntersectionLane will handle stochastic
         vehicle movement.
         """
-        self.__rejection_threshold: float = 0.
-        self.rejection_threshold_registered = False
+        self.__threshold: float = 0.
+        self.threshold_registered = False
 
-    def register_rejection_threshold(self, rejection_threshold: float) -> None:
-        """Register rejection threshold with the movement model.
+    def register_threshold(self, threshold: float) -> None:
+        """Register probability threshold with the movement model.
 
         In the intersection constructor, lanes get made first which means that
         the movement model is instantiated before the tiling is, but the
         rejection threshold is dependent on the number of tiles, so it needs to
         be registered outside of the constructor.
         """
-        if self.rejection_threshold_registered:
+        if self.threshold_registered:
             raise RuntimeError("Rejection threshold already registered.")
-        self.__rejection_threshold = rejection_threshold
-        self.rejection_threshold_registered = True
+        self.__threshold = threshold
+        self.threshold_registered = True
 
     @property
-    def rejection_threshold(self) -> float:
-        if not self.rejection_threshold_registered:
-            raise RuntimeError("Rejection threshold not yet registered.")
-        return self.__rejection_threshold
+    def threshold(self) -> float:
+        if not self.threshold_registered:
+            raise RuntimeError("Probability threshold not yet registered.")
+        return self.__threshold
 
     def init_lateral_deviation(self, vehicle: Vehicle) -> None:
         """Register vehicle's laterals with the stochastic model."""
@@ -78,6 +78,11 @@ class MovementModel(ABC):
         # TODO: (tiling) The use of tile_width makes this only usable for
         #       SquareTilings. Adjust for alternative tilings.
         return 1
+
+    def start_projection(self, vehicle: Vehicle, entrance: ScheduledExit,
+                         v_max: float) -> None:
+        """Starts the projection for this vehicle."""
+        pass
 
     def prepend_probabilities(self, vehicle: Vehicle, entrance: ScheduledExit,
                               v_max: float) -> List[float]:
