@@ -40,7 +40,7 @@ def main(time: int = 2*60, vpm: float = 15,
         See the documentation for Symmetrical4Way for more information on the
         other parameters.
     """
-    timesteps = time*60
+    timesteps = time*steps_per_second
     if mp4_filename is not None:
         visualize = True
     sim = Symmetrical4Way(length=50, manager_type=FCFSManager,
