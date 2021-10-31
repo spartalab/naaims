@@ -40,7 +40,8 @@ class SquareTiling(Tiling):
             crash_probability_tolerance=crash_probability_tolerance,
             lanes_by_endpoints=lanes_by_endpoints,
             cycle=cycle,
-            timeout=timeout
+            timeout=timeout,
+            tile_type=tile_type
         )
 
         tile_width = misc_spec.get('tile_width')  # in meters
