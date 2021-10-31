@@ -319,14 +319,6 @@ class Vehicle(ABC):
         return hash(self.vin)
 
 
-# class HumanDrivenVehicle(Vehicle):
-#     """
-#     Like an (automated) vehicle, but with more properties, like how accurate
-#     they are at following directions.
-#     """
-#     raise NotImplementedError("TODO")
-
-
 # class SimpleCCVehicle(Vehicle):
 #     """
 #     A connected vehicle with simple (fixed speed) cruise control.

@@ -6,7 +6,8 @@ priority policies.
 
 from __future__ import annotations
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Dict, Tuple, Type, Any, TypeVar
+from typing import (TYPE_CHECKING, Dict, Optional, Tuple, Type, Any, TypeVar,
+                    List)
 
 from naaims.archetypes import Configurable
 from naaims.util import Coord
@@ -102,15 +103,23 @@ class IntersectionManager(Configurable):
 
     # Begin simulation cycle methods
 
-    def update_schedule(self) -> None:
-        """Update tiling, reservations, and poll for new requests to accept."""
+    def update_schedule(self, visualize: bool = False
+                        ) -> Optional[List[Tuple[List[Coord], float, int]]]:
+        """Update tiling, reservations, and poll for new requests to accept.
+
+        Can return a list of (outline, float, int) tuples, where an outline is
+        defined as a list of Coords, the float determines the shape's
+        transparency, and the int determines its color."""
 
         # First update the tiling for the new timestep.
-        self.tiling.handle_new_timestep()
+        shapes = self.tiling.handle_new_timestep(visualize)
 
         # Then decide whether to poll for new reservation requests and, if so,
         # which ones to accept.
         self.process_requests()
+
+        # Return visualize
+        return shapes
 
     @abstractmethod
     def process_requests(self) -> None:

@@ -19,6 +19,7 @@ def main(time: int = 2*60, vpm: float = 15,
          vehicle_type: Type[Vehicle] = AutomatedVehicle,
          acceptable_crash_mev: float = 0.,
          visualize: bool = False,
+         visualize_tiles: bool = False,
          mp4_filename: Optional[str] = None,
          log_filename: Optional[str] = None,
          steps_per_second: int = 60):
@@ -29,6 +30,8 @@ def main(time: int = 2*60, vpm: float = 15,
             How much simulation time to run it for, in seconds.
         visualize: bool = False
             Render the simulator graphics. (Does not show.)
+        visualize_tiles: bool = False
+            Render the tile reservation status.
         mp4_filename: Optional[str] = None
             Save the simulation animation as an mp4 with this filename if
             provided. Overrides visualize.
@@ -45,7 +48,7 @@ def main(time: int = 2*60, vpm: float = 15,
                           vpm=vpm, movement_model=movement_model,
                           vehicle_type=vehicle_type,
                           acceptable_crash_mev=acceptable_crash_mev,
-                          visualize=visualize,
+                          visualize=visualize, visualize_tiles=visualize_tiles,
                           steps_per_second=steps_per_second)
     if mp4_filename is not None:
         sim.animate(max_timestep=timesteps).save(  # type: ignore
@@ -107,6 +110,18 @@ if __name__ == "__main__":
     #      mp4_filename='fcfs_4_stochastic')
 
     # reload(SHARED)
+    # # Render quick diagnostic videos for stochastic movement
+    # main(30, movement_model='one draw', tile_type=StochasticTile,
+    #      vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
+    #      mp4_filename='fcfs_stochastic_soft', steps_per_second=15,
+    #      visualize_tiles=True)
+    # reload(SHARED)
+    # main(30, movement_model='one draw', tile_type=DeterministicTile,
+    #      vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
+    #      mp4_filename='fcfs_stochastic_hard', steps_per_second=15,
+    #      visualize_tiles=True)
+
+    # reload(SHARED)
     # Test if stochastic movement works and doesn't error.
     # main(30, movement_model='one draw', tile_type=DeterministicTile,
     #      steps_per_second=4)
@@ -133,12 +148,6 @@ if __name__ == "__main__":
     #        movement_model='one draw', tile_type=DeterministicTile,
     #        vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
     #        log_name='hard_small')
-
-    # reload(SHARED)
-    # # Render a quick video for stochastic movement
-    # main(30, movement_model='one draw', tile_type=StochasticTile,
-    #      vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
-    #      mp4_filename='fcfs_4_stochastic', steps_per_second=15)
 
     # reload(SHARED)
     # # Run medium experiments.

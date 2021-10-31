@@ -651,3 +651,28 @@ class SquareTiling(Tiling):
         if y == self.y_tile_count:
             y -= 1
         return self._tile_loc_to_id((x, y))
+
+    def _tile_id_to_loc(self, id: int) -> Tuple[int, int]:
+        x = id % self.x_tile_count
+        y = id // self.x_tile_count
+        return (x, y)
+
+    def tile_layer_to_shape(self, layer: Tuple[Tile, ...]
+                            ) -> List[Tuple[List[Coord], float, int]]:
+        """Convert layer into a list of Coord outlines and color values."""
+        shapes: List[Tuple[List[Coord], float, int]] = []
+        for i, tile in enumerate(layer):
+            p_usage = sum(tile.reserved_by.values())
+            if p_usage > 0:
+                n_usage = len(tile.reserved_by)
+                bl = self._tile_loc_to_coord(self._tile_id_to_loc(i))
+                bottom = bl.y
+                upper = bl.y + self.tile_width
+                left = bl.x
+                right = bl.x + self.tile_width
+                ul = Coord(left, upper)
+                ur = Coord(right, upper)
+                br = Coord(right, bottom)
+                outline = [bl, ul, ur, br]
+                shapes.append((outline, p_usage, n_usage))
+        return shapes

@@ -10,6 +10,8 @@ from naaims.trajectories import BezierTrajectory
 from naaims.road import RoadLane
 from naaims.intersection import IntersectionLane
 from naaims.intersection.tilings import SquareTiling
+from naaims.intersection.tilings.tiles import (Tile, DeterministicTile,
+                                               StochasticTile)
 from naaims.vehicles import Vehicle
 from naaims.intersection.reservation import Reservation
 from naaims.lane import ScheduledExit, VehicleProgress
@@ -143,6 +145,7 @@ def test_init_oblong_overtiled(load_shared: None):
 def square_tiling_polygon(x_min: float, x_max: float, y_min: float,
                           y_max: float, tile_width: float,
                           speed_limit: int = 1, p_crash_total: float = 0,
+                          tile_type: Type[Tile] = DeterministicTile,
                           movement_model: Type[MovementModel
                                                ] = DeterministicModel
                           ) -> SquareTiling:
@@ -167,6 +170,7 @@ def square_tiling_polygon(x_min: float, x_max: float, y_min: float,
                         {(top_right, bot_left): il_down,
                          (bot_right, top_left): il_up},
                         p_crash_total,
+                        tile_type=tile_type,
                         misc_spec={'tile_width': tile_width})
 
 
@@ -178,6 +182,7 @@ def sq():
 @fixture
 def sq_stochastic():
     return square_tiling_polygon(0, 5, 0, 10, 1, p_crash_total=2e-8,
+                                 tile_type=StochasticTile,
                                  movement_model=OneDrawStochasticModel)
 
 
@@ -714,6 +719,34 @@ def test_coord_to_tile(load_shared: None, sq: SquareTiling):
     assert sq._io_coord_to_tile_id(Coord(100, 11.5)) == 1_199
     assert sq._io_coord_to_tile_id(Coord(67.7, 0)) == 67
     assert sq._io_coord_to_tile_id(Coord(67.7, 200)) == 19_967
+
+
+def test_layer_to_shape(load_shared: None, sq_stochastic: SquareTiling,
+                        vehicle: Vehicle, vehicle2: Vehicle):
+    sq_stochastic._add_new_layer()
+    assert len(sq_stochastic.tile_layer_to_shape(sq_stochastic.tiles[0])) == 0
+
+    res = Reservation(vehicle, Coord(0, 0), {}, sq_stochastic.lanes[0], ScheduledExit(
+        vehicle, VehicleSection.FRONT, 0, 0))
+    res2 = Reservation(vehicle2, Coord(0, 0), {}, sq_stochastic.lanes[0], ScheduledExit(
+        vehicle2, VehicleSection.FRONT, 0, 0))
+    sq_stochastic.tiles[0][18].confirm_reservation(res)
+    sq_stochastic.tiles[0][44].confirm_reservation(res2)
+    tiles_0 = sq_stochastic.tile_layer_to_shape(sq_stochastic.tiles[0])
+    assert len(tiles_0) == 2
+    assert tiles_0[0][0][2] == Coord(4, 4)
+    assert tiles_0[1][0][2] == Coord(5, 9)
+    assert tiles_0[0][1] == 1
+    assert tiles_0[0][2] == 1
+
+    sq_stochastic._add_new_layer()
+    sq_stochastic.tiles[1][11].confirm_reservation(res, .24)
+    sq_stochastic.tiles[1][11].confirm_reservation(res2, .4, force=True)
+    tiles_1 = sq_stochastic.tile_layer_to_shape(sq_stochastic.tiles[1])
+    assert len(tiles_1) == 1
+    assert tiles_1[0][0][2] == Coord(2, 3)
+    assert tiles_1[0][1] == .64
+    assert tiles_1[0][2] == 2
 
 
 def test_io_stochastic(load_shared_clean: None, sq_stochastic: SquareTiling,

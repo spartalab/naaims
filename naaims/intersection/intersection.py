@@ -186,6 +186,10 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
             lane.movement_model.register_threshold(
                 self.manager.tiling.threshold)
 
+        # Init last tile object visualization stash
+        self.tiles_to_visualize: Optional[List[Tuple[List[Coord],
+                                                     float, int]]] = None
+
         # Init buffer for incoming vehicles
         Downstream.__init__(self)
 
@@ -297,9 +301,13 @@ class Intersection(Configurable, Facility, Upstream, Downstream):
             lane.enter_vehicle_section(transfer)
         super().process_transfers()  # just makes sure the list is empty after
 
-    def update_schedule(self) -> None:
-        """Have the manager update reservations and poll for new requests."""
-        self.manager.update_schedule()
+    def update_schedule(self, visualize: bool = False) -> None:
+        """Have the manager update reservations and poll for new requests.
+
+        Can return a list of (outline, float, int) tuples, where an outline is
+        defined as a list of Coords, the float determines the shape's
+        transparency, and the int determines its color."""
+        self.tiles_to_visualize = self.manager.update_schedule(visualize)
 
     # Begin helper methods
 

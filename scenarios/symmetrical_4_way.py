@@ -12,7 +12,8 @@ from naaims.intersection.tilings.tiles import Tile, DeterministicTile
 
 class Symmetrical4Way(Simulator):
 
-    def __init__(self, visualize: bool = True, length: float = 100,
+    def __init__(self, visualize: bool = True, visualize_tiles: bool = False,
+                 length: float = 100,
                  num_lanes: int = 3, speed_limit: float = 15,
                  turn_ratios: Tuple[float, float, float] = (.1, .8, .1),
                  manager_type: Type[IntersectionManager] = StopSignManager,
@@ -239,5 +240,5 @@ class Symmetrical4Way(Simulator):
         super().__init__(road_specs, [intersection_spec], spawner_specs,
                          remover_specs, od_pair,
                          acceptable_crash_mev=acceptable_crash_mev,
-                         visualize=visualize,
+                         visualize=visualize, visualize_tiles=visualize_tiles,
                          steps_per_second=steps_per_second)

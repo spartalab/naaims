@@ -50,7 +50,8 @@ class Simulator:
                  max_vehicle_length: float = 5.5,
                  length_buffer_factor: float = 0.1,
                  acceptable_crash_mev: float = 0.,
-                 visualize: bool = False) -> None:
+                 visualize: bool = False,
+                 visualize_tiles: bool = False) -> None:
         """Create all roads, intersections, and suppport structures.
 
         Parameters
@@ -99,6 +100,8 @@ class Simulator:
                 incidence per timestep for use in movement calculations.
             visualize: bool = False
                 Whether to visualize the progress of the simulation.
+            visualize_tiles: bool = False
+                Show reservation status of tiles in intersections.
         """
 
         if acceptable_crash_mev < 0:
@@ -311,6 +314,7 @@ class Simulator:
         # 5. If the visualize flag is enabled, draw the basemap image of
         #    roads and intersections for use later.
         self.visualize = visualize
+        self.visualize_tiles = visualize_tiles
         if self.visualize:
             # Some configurable values
             figsize = (10, 10)
@@ -321,6 +325,11 @@ class Simulator:
             self.vehicle_color = '.9'  # '#ffffff'  # 'g'
             self.reserved_color = '#FF00FF'
             self.permitted_color = '#EFFD5F'
+            self.tile_color = {
+                1: '#FCF483',
+                2: '#F9E29C',
+                3: '#FFF200'
+            }
 
             self.fig, self.ax = subplots(figsize=figsize)
             # TODO: Variable figsize.
@@ -416,8 +425,8 @@ class Simulator:
                                             int_max_y-int_min_y,
                                             facecolor=road_color))
 
-            # 6c. Ready a list for all vehicles being plotted.
-            self.vehicle_patches: List[Polygon] = []
+            # 6c. Ready a list for all changing objects being plotted.
+            self.patches: List[Polygon] = []
 
             # 6d. Place time on vis.
             self.time_text = self.ax.text(min_x, min_y,  # type: ignore
@@ -497,7 +506,7 @@ class Simulator:
         # 4. Have facility managers handle their special internal logic (e.g.,
         #    lane changes and reservations).
         for f in self.facilities:
-            f.update_schedule()
+            f.update_schedule(self.visualize_tiles)
 
         # 5. Update shared time step and (TODO: (low)) shortest path values
         SHARED.t += 1
@@ -555,11 +564,19 @@ class Simulator:
 
         t0 = SHARED.t
 
-        def draw(vehicles: Set[Vehicle]) -> List[Polygon]:
-            changed = self.vehicle_patches.copy()
-            for patch in self.vehicle_patches:
+        def draw(packet: Tuple[Set[Vehicle], Tuple[Intersection, ...]]
+                 ) -> List[Polygon]:
+
+            vehicles: Set[Vehicle] = packet[0]
+            intersections: Tuple[Intersection, ...] = packet[1]
+
+            # Prepare to remove last timestep's patches.
+            changed = self.patches.copy()
+            for patch in self.patches:
                 patch.remove()
-            self.vehicle_patches = []
+            self.patches = []
+
+            # Prepare new vehicle patches
             for vehicle in vehicles:
                 vehicle_color: str
                 if vehicle.has_reservation:
@@ -568,25 +585,39 @@ class Simulator:
                     vehicle_color = self.permitted_color
                 else:
                     vehicle_color = self.vehicle_color
-                vehicle_patch = Polygon(vehicle.get_outline(),
-                                        facecolor=vehicle_color, alpha=1,
-                                        edgecolor=None, zorder=5)
-                self.ax.add_patch(vehicle_patch)
-                self.vehicle_patches.append(vehicle_patch)
-                changed.append(vehicle_patch)
+                patch = Polygon(vehicle.get_outline(),
+                                facecolor=vehicle_color, alpha=1,
+                                edgecolor=None, zorder=5)
+                self.ax.add_patch(patch)
+                self.patches.append(patch)
+                changed.append(patch)
+
+            # Prepare new tile patches
+            for intersection in intersections:
+                if intersection.tiles_to_visualize is not None:
+                    for outline, p, n in intersection.tiles_to_visualize:
+                        n = 3 if (n > 3) else n
+                        patch = Polygon(
+                            outline, facecolor=self.tile_color[n],
+                            alpha=(p**.2)/2, edgecolor=None, zorder=4)
+                        self.ax.add_patch(patch)
+                        self.patches.append(patch)
+                        changed.append(patch)
 
             # Update time
             self.time_text.set_text(self.strf_t())
             changed.append(self.time_text)  # type: ignore
             return changed
 
-        def get_next_frame() -> Generator[Set[Vehicle], None, None]:
+        def get_next_frame() -> Generator[
+                Tuple[Set[Vehicle], Tuple[Intersection, ...]], None, None]:
             while (SHARED.t - t0) < max_timestep:
                 self.step()
                 if len(self.vehicles_in_scope) > 0:
                     assert len(self.vehicles_in_scope) > 0
                 if (SHARED.t - t0) % frame_ratio == 0:
-                    yield self.vehicles_in_scope
+                    yield self.vehicles_in_scope, tuple(
+                        self.intersections.values())
 
         return FuncAnimation(self.fig, draw,  # type: ignore
                              frames=get_next_frame, interval=frame_ratio *

@@ -311,7 +311,7 @@ class Road(Configurable, Facility, Upstream, Downstream):
             self.lanes_by_start[transfer.pos].enter_vehicle_section(transfer)
         super().process_transfers()  # just makes sure the list is empty after
 
-    def update_schedule(self) -> None:
+    def update_schedule(self, visualize: bool = False) -> None:
         """Tell LaneChangeManager to schedule the next set of lane changes."""
 
         # TODO: (platoon) Make or break vehicle chains here.

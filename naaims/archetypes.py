@@ -49,8 +49,13 @@ class Facility(ABC):
         raise NotImplementedError("Must be implemented in child classes.")
 
     @abstractmethod
-    def update_schedule(self) -> None:
-        """Should handle all the class-unique stuff like scheduling."""
+    def update_schedule(self, visualize: bool = False) -> None:
+        """Should handle all the class-unique stuff like scheduling.
+
+        If visualize flag is on, creates a list of (outline, float, int)
+        tuples, where an outline is defined as a list of Coords, the float
+        determines the shape's transparency, and the int determines its color.
+        """
         raise NotImplementedError('Must be implemented in child classes.')
 
 

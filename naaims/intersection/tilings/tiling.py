@@ -158,21 +158,34 @@ class Tiling(Configurable):
 
     # Handle logic support methods
 
-    def handle_new_timestep(self) -> None:
-        """Check for crashes. Update tile stack and existing reservations."""
+    def handle_new_timestep(self, visualize: bool = False
+                            ) -> Optional[List[Tuple[List[Coord],
+                                                     float, int]]]:
+        """Check for crashes. Update tile stack and existing reservations.
+
+        Can return a list of (outline, float, int) tuples, where an outline is
+        defined as a list of Coords, the float determines the shape's
+        transparency, and the int determines its color.
+        """
+        layer: Optional[Tuple[Tile, ...]] = None
 
         # 1. Check for collisions
         self.check_for_collisions()
 
         # 2. Update tiling for the new timestep
         if len(self.tiles) > 0:
-            self.tiles.pop(0)
+            layer = self.tiles.pop(0)
 
         # 3. Update the traffic signal cycle
         self.update_cycle()
 
         # 4. Update existing reservations
         self.update_active_reservations()
+
+        if visualize and (layer is not None):
+            return self.tile_layer_to_shape(layer)
+        else:
+            return None
 
     @abstractmethod
     def check_for_collisions(self) -> None:
@@ -949,3 +962,14 @@ class Tiling(Configurable):
         if not self.threshold_registered:
             raise RuntimeError("Probability threshold not yet registered.")
         return self._threshold
+
+    @abstractmethod
+    def tile_layer_to_shape(self, layer: Tuple[Tile, ...]
+                            ) -> List[Tuple[List[Coord], float, int]]:
+        """Convert a tile layer to plottable Coords.
+
+        Returns a list of (outline, float, int) tuples, where an outline is
+        defined as a list of Coords, the float determines the shape's
+        transparency, and the int determines its color.
+        """
+        raise NotImplementedError("Must be implemented in child classes.")
