@@ -22,14 +22,11 @@ def test_init():
     od = OneDrawStochasticModel(straight_trajectory)
     assert od.disable_stochasticity is False
     assert od.trajectory is straight_trajectory
-    assert od.straight is True
 
     with raises(RuntimeError):
         od.threshold
     od.register_threshold(0.1)
     assert od.threshold == 0.1
-
-    assert OneDrawStochasticModel(slanted).straight is False
 
 
 @fixture

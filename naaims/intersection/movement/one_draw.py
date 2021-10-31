@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
 from random import gauss
-from math import atan, pi, sin, cos, isclose
+from math import atan, pi, sin, cos
 from statistics import mean, stdev
 from copy import copy
 
@@ -57,17 +57,6 @@ class OneDrawStochasticModel(MovementModel):
         self.mc_complete: Dict[Vehicle, List[bool]] = {}
         self.t_of_mc_cached: Dict[Vehicle, int] = {}
 
-        # Determine if the trajectory is a straight line
-        control_straight = Coord(
-            (self.trajectory.end_coord.x - self.trajectory.start_coord.x) /
-            2 + self.trajectory.start_coord.x,
-            (self.trajectory.end_coord.y - self.trajectory.start_coord.y)/2 +
-            self.trajectory.start_coord.y)
-        self.straight = isclose(control_straight.x,
-                                self.trajectory.reference_coords[0].x) and \
-            isclose(control_straight.y,
-                    self.trajectory.reference_coords[0].y)
-
     # Functions to calculate a vehicle's REALIZED deviation once they're in
     # the intersection.
 
@@ -76,7 +65,7 @@ class OneDrawStochasticModel(MovementModel):
 
         # Do nothing if this instance is not exhibiting stochastic behavior,
         # i.e., when calculating a reservation request.
-        if self.disable_stochasticity or self.straight:
+        if self.disable_stochasticity or self.trajectory.straight:
             return None
 
         # A positive draw from the vehicle's tracking distribution means that
@@ -182,7 +171,7 @@ class OneDrawStochasticModel(MovementModel):
         """Delete vehicle's saved deviation terms."""
         if self.disable_stochasticity:
             return None
-        if not self.straight:
+        if not self.trajectory.straight:
             del self.max_lateral_deviation[vehicle]
         del self.a_adjusted[vehicle]
         del self.p_cutoff[vehicle]
@@ -195,7 +184,7 @@ class OneDrawStochasticModel(MovementModel):
         of their trajectory (longitudinally), and decrease symmetrically back
         to 0 until their center exits the intersection.
         """
-        if self.disable_stochasticity or self.straight:
+        if self.disable_stochasticity or self.trajectory.straight:
             return 0
         if p < 0 or p > 1:
             raise ValueError("Lateral deviation only valid between 0 and 1 p.")
@@ -283,7 +272,7 @@ class OneDrawStochasticModel(MovementModel):
         # Find the lateral deviation distribution based on the progress of the
         # center of the vehicle. The mean and stdev terms scale linearly as the
         # vehicle progresses through the intersection lane trajectory.
-        if (vp.center is None) or self.straight:
+        if (vp.center is None) or self.trajectory.straight:
             # Assume the vehicle is tracking perfectly before its center
             # section enters or if the trajectory is straight or near-straight.
             scaling = 0.
@@ -319,7 +308,7 @@ class OneDrawStochasticModel(MovementModel):
         # assumed to have perfect accuracy at trajectory tracking, so this
         # reduces to a binary problem of whether the tile sits under the
         # vehicle or not.
-        if self.straight:
+        if self.trajectory.straight:
             return float(-width/2 <= d <= width/2)
 
         # Recall that the tracking distribution is the deviation relative to

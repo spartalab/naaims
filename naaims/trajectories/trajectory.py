@@ -8,8 +8,8 @@ The `trajectories` module implements several different ways of doing so.
 """
 
 from __future__ import annotations
-from abc import abstractmethod
-from math import atan2, pi, sqrt
+from abc import abstractmethod, abstractproperty
+from math import atan2, pi
 from typing import List, Dict, Any
 
 from naaims.archetypes import Configurable
@@ -107,6 +107,11 @@ class Trajectory(Configurable):
         if angle < 0:
             angle += 2*pi
         return angle
+
+    @abstractproperty
+    def straight(self) -> bool:
+        """Returns whether this is a straight line trajectory or not."""
+        raise NotImplementedError("Must be implemented in child classes.")
 
     def effective_speed_limit(self, proportion: float) -> float:
         """Would use traversibility_factors to find an effective speed limit.

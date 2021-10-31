@@ -1,10 +1,6 @@
 from __future__ import annotations
-from math import pi, sqrt, tan, ceil
-from typing import List
-
-# import bezier
-# import numpy as np
-# import scipy.optimize
+from math import isclose, pi, sqrt, tan, ceil
+from typing import List, Optional
 
 from naaims.util import Coord
 from naaims.trajectories import Trajectory
@@ -35,6 +31,7 @@ class BezierTrajectory(Trajectory):
         self.control_coord: Coord = reference_coords[0]
 
         self._length: float = self.__find_length()
+        self._straight: Optional[bool] = None
 
     @classmethod
     def as_intersection_connector(cls,
@@ -118,3 +115,28 @@ class BezierTrajectory(Trajectory):
                                     self.control_coord.y,
                                     self.end_coord.y)
         )
+
+    @property
+    def straight(self) -> bool:
+
+        # TODO: (low) adapt for general bezier curves.
+        if self._straight is None:
+            dy = self.end_coord.y - self.start_coord.y
+            dyc = self.reference_coords[0].y - self.start_coord.y
+
+            dy_is_0 = isclose(dy, 0, abs_tol=1e-8)
+            dyc_is_0 = isclose(dyc, 0, abs_tol=1e-8)
+            if dy_is_0 and dyc_is_0:
+                self._straight = True
+            elif dy_is_0 ^ dyc_is_0:  # XOR
+                self._straight = False
+            else:
+                dx = self.end_coord.x - self.start_coord.x
+                dxc = self.reference_coords[0].x - self.start_coord.x
+
+                m = dx/dy
+                mc = dxc/dyc
+
+                self._straight = isclose(m, mc, abs_tol=1e-8)
+
+        return self._straight

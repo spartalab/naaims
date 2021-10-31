@@ -62,3 +62,16 @@ def test_clone():
     assert b.reference_coords == [Coord(1.5, 1)]
     assert b.end_coord == Coord(2, 1)
     assert b.control_coord == Coord(1.5, 1)
+
+
+def test_straight():
+    assert BezierTrajectory(
+        Coord(x=32.0, y=26.0),
+        Coord(x=-4.898587196589413e-16, y=26.0),
+        [Coord(x=2.7576594341012595e-05, y=26.000000000000004)]).straight
+    assert BezierTrajectory(
+        Coord(y=32.0, x=26.0),
+        Coord(y=-4.898587196589413e-16, x=26.0),
+        [Coord(y=2.7576594341012595e-05, x=26.000000000000004)]).straight
+    assert not BezierTrajectory(Coord(x=32.0, y=26.0), Coord(x=-26.0, y=4.89),
+                                [Coord(x=2.75, y=26.0)]).straight
