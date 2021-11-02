@@ -327,8 +327,8 @@ class Simulator:
             self.permitted_color = '#EFFD5F'
             self.tile_color = {
                 1: '#FCF483',
-                2: '#F9E29C',
-                3: '#FFF200'
+                2: '#FF9D5C',
+                3: '#F3ACAC'
             }
 
             self.fig, self.ax = subplots(figsize=figsize)

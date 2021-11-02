@@ -96,29 +96,26 @@ class OneDrawStochasticModel(MovementModel):
         a = SHARED.SETTINGS.min_acceleration
         assert entrance.distance_left is not None
         x_to_exit = self.trajectory.length - entrance.distance_left + \
-            vehicle.length*(1 + 2*SHARED.SETTINGS.length_buffer_factor)
-        t_fastest_exit = self.t_deterministic_exit(
+            vehicle.length_buffered
+        t_fastest_exit = OneDrawStochasticModel.t_deterministic_exit(
             v0, a, v_max, x_to_exit)
         t_actual_exit = t_fastest_exit * (1-gauss(vehicle.throttle_mn,
                                                   vehicle.throttle_sd))
 
-        # Given t_actual, find the adjusted acceleration value as well as the
+        # Given t_actual_exit, find the adjusted acceleration value as well as
         # the time and proportion of the trajectory the vehicle spends at that
         # new acceleration value.
         t_accel = OneDrawStochasticModel.t_accel(
             v0, v_max, x_to_exit, t_actual_exit)
         a_adjusted = OneDrawStochasticModel.get_a_adjusted(
-            v0, v_max, t_accel, t_actual_exit, x_to_exit,
-            SHARED.SETTINGS.min_acceleration)
+            v0, v_max, t_accel, t_actual_exit, x_to_exit, a)
         if a_adjusted < 0:
             # Allowing a_adjusted to go negative breaks the probability model
-            self.a_adjusted[vehicle] = 0
-            self.p_cutoff[vehicle] = 1
-        else:
-            self.a_adjusted[vehicle] = a_adjusted
-            self.p_cutoff[vehicle] = OneDrawStochasticModel.get_p_cutoff(
-                v0, self.a_adjusted[vehicle], t_accel, entrance.distance_left,
-                self.trajectory.length)
+            a_adjusted = 0
+        self.a_adjusted[vehicle] = a_adjusted
+        self.p_cutoff[vehicle] = OneDrawStochasticModel.get_p_cutoff(
+            v0, a_adjusted, t_accel, entrance.distance_left,
+            self.trajectory.length)
 
     @staticmethod
     def t_deterministic_exit(v0: float, a: float, v_max: float,
@@ -146,6 +143,7 @@ class OneDrawStochasticModel(MovementModel):
             return t_accel
         elif t_accel > t_exit:
             # can't reach v_max before exit, so just accelerate the entire time
+            # TODO: Leads to a stdev of 0.
             return t_exit
         else:
             return t_accel
@@ -159,13 +157,18 @@ class OneDrawStochasticModel(MovementModel):
         if t_accel == t_exit:
             # doesn't reach v_max, feather it
             return (2*x_to_exit - 2*t_accel*v0)/t_accel**2
-        return (v_max - v0)/t_accel
+        a_adjusted = (v_max - v0)/t_accel
+        if a_adjusted < 0:
+            # Allowing a_adjusted to go negative breaks the probability model
+            a_adjusted = 0
+        return a_adjusted
 
     @staticmethod
     def get_p_cutoff(v0: float, a_adjusted: float, t_accel: float,
                      distance_left: float, traj_length: float) -> float:
         return (x_over_constant_a(v0, a_adjusted, t_accel) +
-                distance_left)/traj_length
+                distance_left)/traj_length if (a_adjusted >= 0) else \
+            float('inf')
 
     def remove_vehicle(self, vehicle: Vehicle) -> None:
         """Delete vehicle's saved deviation terms."""
@@ -197,10 +200,10 @@ class OneDrawStochasticModel(MovementModel):
         return (1-2*abs(.5-p))
 
     def fetch_throttle_deviation(self, vehicle: Vehicle,
-                                 section: VehicleSection, p: float) -> float:
-        """Should return the vehicle's next throttle deviation."""
+                                 section: VehicleSection, p: float
+                                 ) -> Optional[float]:
         if self.disable_stochasticity:
-            return 0
+            return super().fetch_throttle_deviation(vehicle, section, p)
         if section is not VehicleSection.FRONT:
             # Front has already exited. Approximate its proportional progress
             # by setting p to 1.
@@ -232,8 +235,7 @@ class OneDrawStochasticModel(MovementModel):
 
         # Multiply by tile size to turn point probability into a probability
         # that the vehicle covers any portion of this tile.
-        p_tile = p_tracking * p_throttle
-        return p_tile
+        return p_tracking * p_throttle
 
     @staticmethod
     def find_tile_center(tile_pos: Coord, tile_width: float) -> Coord:
@@ -343,7 +345,6 @@ class OneDrawStochasticModel(MovementModel):
 
         # Use the monte carlo sim to find the sample mean and variance to use
         # as estimates of the population distribution.
-        # p_mc = [progress_mc(t) for progress_mc in self.progress_mc[vehicle]]
         throttle_mn = mean(d_mc)
         throttle_sd = stdev(d_mc) if (len(d_mc) > 1) else 0
 
@@ -425,24 +426,25 @@ class OneDrawStochasticModel(MovementModel):
         return Coord(pos1.x + x_extension, pos1.y + y_extension)
 
     def start_projection(self, vehicle: Vehicle, entrance: ScheduledExit,
-                         v_max: float, n: int = 1000) -> None:
+                         v_max: float, n: int = 30) -> None:
 
         # Run an n-sample monte carlo sim of acceleration profiles, for use in
         # finding throttle deviation likelihoods.
         v0 = entrance.velocity
-        x_to_exit = self.trajectory.length + \
-            vehicle.length * (1 + 2*SHARED.SETTINGS.length_buffer_factor)
+        x_to_exit = self.trajectory.length + vehicle.length_buffered
         t_fastest_exit = OneDrawStochasticModel.t_deterministic_exit(
             v0, SHARED.SETTINGS.min_acceleration, v_max, x_to_exit)
         progress_mc: List[Callable[[int], Tuple[float, bool]]] = []
-        for _ in range(n if vehicle.throttle_sd != 0 else 1):
+        for _ in range(n if ((vehicle.throttle_sd != 0) or
+                             (entrance.velocity == v_max)) else 1):
             # Sample a traversal time from the vehicle's throttle distribution
-            t_actual = t_fastest_exit * (1-gauss(vehicle.throttle_mn,
-                                                 vehicle.throttle_sd))
-            t_accel = self.t_accel(v0, v_max, x_to_exit, t_actual)
+            t_actual_exit = t_fastest_exit * (1-gauss(vehicle.throttle_mn,
+                                                      vehicle.throttle_sd))
+            t_accel = OneDrawStochasticModel.t_accel(
+                v0, v_max, x_to_exit, t_actual_exit)
             # Calculate the acceleration value from the sampled time
-            a_adjusted = self.get_a_adjusted(
-                v0, v_max, t_accel, t_actual, x_to_exit,
+            a_adjusted = OneDrawStochasticModel.get_a_adjusted(
+                v0, v_max, t_accel, t_actual_exit, x_to_exit,
                 SHARED.SETTINGS.min_acceleration)
             if a_adjusted < 0:
                 a_adjusted = 0
@@ -450,42 +452,27 @@ class OneDrawStochasticModel(MovementModel):
             # value, speed limit, and so on to find the progress along the
             # trajectory at a given time.
             progress_mc.append(self.progress_lambda_factory(
-                vehicle, entrance, a_adjusted, v_max))
+                v0, entrance.t, a_adjusted, v_max, x_to_exit, t_accel))
             # runs n times to create a monte carlo distribution, unless the
             # vehicle has 0 standard deviation, in which case just run once.
         self.progress_mc[vehicle] = progress_mc
 
-    def progress_lambda_factory(self, vehicle: Vehicle,
-                                its_exit: ScheduledExit, a: float,
-                                v_max: float) -> Callable[[int],
-                                                          Tuple[float, bool]]:
+    def progress_lambda_factory(self, v0: float, ts0: int, a: float,
+                                v_max: float, x_to_exit: float, t_accel: float
+                                ) -> Callable[[int], Tuple[float, bool]]:
         """(Progress, complete) function at p given an acceleration profile.
 
-        Note that x_exit is not the same as the trajectory length, so the
+        Note that x_to_exit is not the same as the trajectory length, so the
         second return bool provides additional context about when the REAR of
         the vehicle leaves the intersection in addition to the front, which can
         be found from the progress returned and the trajectory length.
         """
-        v0 = its_exit.velocity
-        ts0 = its_exit.t
-        x_exit = self.trajectory.length + vehicle.length * \
-            (1 + 2*SHARED.SETTINGS.length_buffer_factor)
-
         def progress(ts: int) -> Tuple[float, bool]:
             t = (ts - ts0)/SHARED.SETTINGS.steps_per_second
-            v_a = v0 + a*t
-            if v_a >= v_max:
-                # Vehicle reaches the speed limit before this time.
-                t_a = t_to_v(v0, a, v_max)
-                x_a = x_over_constant_a(v0, a, t_a)
-                x_vmax = x_over_constant_a(v_max, 0, t-t_a)
-                x = x_a + x_vmax
-            else:
-                # Vehicle hasn't reached the speed limit yet.
-                x = x_over_constant_a(v0, a, t)
-
-            return x/self.trajectory.length, (x > x_exit)
-
+            x = (x_over_constant_a(v0, a, t_accel) +
+                 x_over_constant_a(v_max, 0, t-t_accel)
+                 ) if (t > t_accel) else x_over_constant_a(v0, a, t)
+            return x/self.trajectory.length, (x > x_to_exit)
         return progress
 
     def postpend_probabilities(self, vehicle: Vehicle, timesteps_forward: int,

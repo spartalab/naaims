@@ -104,6 +104,10 @@ class Vehicle(ABC):
         self.__max_acceleration = max_accel
         self.__max_braking = max_braking
         self.__length = length
+        self.__length_buffered = length * \
+            (1 + 2*SHARED.SETTINGS.length_buffer_factor)
+        self.__length_half_buffered = length * \
+            (.5 + SHARED.SETTINGS.length_buffer_factor)
         self.__width = width
         self.__throttle_mn = throttle_mn
         self.__throttle_sd = throttle_sd
@@ -175,6 +179,14 @@ class Vehicle(ABC):
     @property
     def length(self) -> float:
         return self.__length
+
+    @property
+    def length_buffered(self) -> float:
+        return self.__length_buffered
+
+    @property
+    def length_half_buffered(self) -> float:
+        return self.__length_half_buffered
 
     @property
     def width(self) -> float:

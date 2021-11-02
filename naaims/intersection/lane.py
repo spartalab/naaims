@@ -115,9 +115,11 @@ class IntersectionLane(Lane):
         #       chains before they start results in vehicles simply following
         #       normal reservation behavior with chained accelerations.
 
-        if (vehicle.throttle_mn > 0) or (vehicle.throttle_sd > 0):
-            return self.movement_model.fetch_throttle_deviation(
+        if (vehicle.throttle_mn != 0) or (vehicle.throttle_sd > 0):
+            a = self.movement_model.fetch_throttle_deviation(
                 vehicle, section, p)
+            if a is not None:
+                return a
         return super().accel_update_uncontested(vehicle, p)
 
         # TODO: (stochasticity+) Change so speed and acceleration can be

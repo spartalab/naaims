@@ -63,9 +63,16 @@ class MovementModel(ABC):
         return 0
 
     def fetch_throttle_deviation(self, vehicle: Vehicle,
-                                 section: VehicleSection, p: float) -> float:
-        """Returns the vehicle's next throttle deviation (defaults to 0)."""
-        return 0
+                                 section: VehicleSection, p: float
+                                 ) -> Optional[float]:
+        """Returns the vehicle's next acceleration, if deviating.
+
+        Overrides the accelerate/brake/constant speed pattern established in
+        the update_speeds logic with an aberrant acceleration value, if the
+        model supports it. Otherwise, return None and default to normal
+        behavior.
+        """
+        return None
 
     def find_probability_of_usage(self, vehicle: Vehicle, vp: VehicleProgress,
                                   tile_pos: Coord, tile_width: float, t: int
