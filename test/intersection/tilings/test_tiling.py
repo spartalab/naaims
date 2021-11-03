@@ -1269,7 +1269,7 @@ def test_check_req_spawn_block(clean_request: Tuple[
         break
 
     cycle_res = sq.check_request(irl_og)
-    assert cycle_res == []
+    assert cycle_res is None
 
     # Clean up
     tile._clear_all_reservations()
@@ -1288,7 +1288,7 @@ def test_check_req_in_block(clean_request: Tuple[
         break
 
     cycle_res = sq.check_request(irl_og)
-    assert cycle_res == []
+    assert cycle_res is None
 
     # Clean up
     tile._clear_all_reservations()
@@ -1306,7 +1306,7 @@ def test_check_req_out_block(clean_request: Tuple[
         break
 
     cycle_res = sq.check_request(irl_og)
-    assert cycle_res == []
+    assert cycle_res is None
 
     # Clean up
     tile._clear_all_reservations()
@@ -1316,7 +1316,7 @@ def test_check_req_ok(clean_request: Tuple[Tiling, RoadLane, List[Reservation],
                                            Reservation]):
     sq, irl_og, valid_reservations, _ = clean_request
     cycle_res = sq.check_request(irl_og)
-    assert cycle_res == valid_reservations
+    assert cycle_res == valid_reservations[0]
 
 
 def request_timeout_option(timeout: bool, p_back: float = .9):
@@ -1414,7 +1414,7 @@ def timeout_test_pattern(request_packet: Tuple[
     # Ensure the vehicle's reservation request fails and its timeout is logged
     # if timeout is on.
     cycle_res = sq.check_request(irl_og)
-    assert cycle_res == []
+    assert cycle_res is None
     if timeout:
         assert sq.timeout_until is not None
         assert sq.timeout_until[vehicle] == approx(t_timeout)
@@ -1429,11 +1429,11 @@ def timeout_test_pattern(request_packet: Tuple[
     # on, and passes if not.
     cycle_res = sq.check_request(irl_og)
     if timeout:
-        assert cycle_res == []
+        assert cycle_res is None
         assert sq.timeout_until is not None
         assert sq.timeout_until[vehicle] == approx(t_timeout)
     else:
-        assert len(cycle_res) > 0
+        assert cycle_res is not None
         assert sq.timeout_until is None
 
 

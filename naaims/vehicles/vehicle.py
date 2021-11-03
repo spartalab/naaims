@@ -99,6 +99,9 @@ class Vehicle(ABC):
         self.permission_to_enter_intersection = False
         self.has_reservation = False
 
+        # collect vehicle payments through intersection (auctions only)
+        self.payment: float = 0.
+
         # save vehicle characteristics
         self.__destination = destination
         self.__max_acceleration = max_accel
@@ -234,7 +237,7 @@ class Vehicle(ABC):
     def has_reservation(self, has_reservation: bool) -> None:
         self._has_reservation = has_reservation
 
-    # TODO: (sequencing) Add chain_forward and chain_backward properties.
+    # TODO: (sequence) Add chain_forward and chain_backward properties.
     #       Allow the chaining action to temporarily override a vehicle's max
     #       acceleration with the slowest acceleration in the chain.
 

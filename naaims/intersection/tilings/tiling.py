@@ -258,15 +258,18 @@ class Tiling(Configurable):
 
     def check_request(self, incoming_road_lane_original: RoadLane,
                       mark: bool = False, sequence: bool = False
-                      ) -> List[Reservation]:
+                      ) -> Optional[Reservation]:
         """If a lane's request(s) work, return the potential Reservation(s).
 
         Check if a lane's reservation (plural if the sequence flag is True)
-        can work. If so, return the workable reservation(s). If the mark flag
-        is True, mark the tiles used by each potential reservation with the
-        probability that the reservation will use the tile (for later checking
-        of permissible combinations of reservations from different incoming
-        road lanes).
+        can work. If so, return the workable reservation of the first vehicle
+        in the reservation sequence, which itself contains a symbolic link to
+        the reservations of trailing vehicles.
+
+        If the mark flag is True, mark the tiles used by each potential
+        reservation with the probability that the reservation will use the tile
+        (for later checking of permissible combinations of reservations from
+        different incoming road lanes).
 
         The test is run by projecting the simulator forward assuming that the
         first vehicle in the sequence accelerates uncontested down the
@@ -302,7 +305,7 @@ class Tiling(Configurable):
             sequence=sequence)
         if indices is None:
             # There are no requesting vehicles in this lane, so return.
-            return []
+            return None
         else:
             counter = indices[0]
             end_at = indices[1]
@@ -320,7 +323,7 @@ class Tiling(Configurable):
             else:
                 # Timeout still active. Skip checking the request of this
                 # vehicle.
-                return []
+                return None
 
         # Fetch the projected entrance of the first vehicle in the request
         # sequence and set its time as the start of the reservation test.
@@ -329,7 +332,7 @@ class Tiling(Configurable):
         if new_exit is None:
             # The leader needs to stop for a while before they can make a
             # workable reservation.
-            return []
+            return None
         test_t = new_exit.t
         leader_arrival = new_exit.t  # for timeout calculation
 
@@ -374,7 +377,7 @@ class Tiling(Configurable):
                 round(min(.5*SHARED.SETTINGS.steps_per_second,
                           (leader_arrival - SHARED.t)/2))
 
-        return valid_reservations
+        return valid_reservations[0] if (len(valid_reservations) > 0) else None
 
     def _mock_step(self, counter: int, end_at: int, test_t: int,
                    new_exit: Optional[ScheduledExit],
@@ -747,11 +750,11 @@ class Tiling(Configurable):
                 # The last reservation hasn't been confirmed as valid yet, so
                 # look in test_reservations.
                 test_reservations[intersection_lane.vehicles[-1]
-                                  ].dependency = original
+                                  ].dependency = reservation
             elif len(valid_reservations) > 0:
                 # The last reservation has been confirmed as valid, so look in
                 # valid_reservations.
-                valid_reservations[-1].dependency = original
+                valid_reservations[-1].dependency = reservation
             # Otherwise, this is the first reservation, so there's no prior
             # reservation for it to be dependent on.
 

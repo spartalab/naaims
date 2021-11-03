@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, NamedTuple, Optional, Tuple
 from math import sqrt, erf
 
 if TYPE_CHECKING:
-    from .vehicles import Vehicle
+    from naaims.vehicles import Vehicle
 
 
 class Coord(NamedTuple):

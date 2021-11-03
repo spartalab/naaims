@@ -26,7 +26,8 @@ class StopSignManager(IntersectionManager):
                  lanes_by_endpoints: Dict[Tuple[Coord, Coord],
                                           IntersectionLane],
                  tiling_type: Type[Tiling],
-                 tiling_spec: Dict[str, Any]
+                 tiling_spec: Dict[str, Any],
+                 misc_spec: Dict[str, Any] = {}
                  ) -> None:
         """Create a new stop sign intersection manager."""
         super().__init__(incoming_road_lane_by_coord,

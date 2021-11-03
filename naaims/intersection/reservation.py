@@ -42,10 +42,9 @@ class Reservation:
             The set of vehicles whose reservations this vehicle's reservation
             is dependent on, i.e., the vehicles preceding it in a sequenced
             reservation.
-        dependency: Optional[Vehicle]
-            The first vehicle dependent on this vehicle's reservation, i.e.,
-            the vehicle immediately following this one in a sequenced
-            reservation.
+        dependency: Optional[Reservation]
+            The reservation of the first vehicle immediately following this
+            vehicle in a sequenced reservation, if any.
     """
     vehicle: Vehicle
     res_pos: Coord
@@ -53,7 +52,7 @@ class Reservation:
     lane: IntersectionLane
     its_exit: ScheduledExit
     dependent_on: Tuple[Vehicle, ...] = ()
-    dependency: Optional[Vehicle] = None
+    dependency: Optional[Reservation] = None
 
     def __hash__(self) -> int:
         return hash(self.vehicle)

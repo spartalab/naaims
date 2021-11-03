@@ -110,16 +110,15 @@ class IntersectionLane(Lane):
         acceleration profile.
         """
 
-        # TODO: (platoon) Insert vehicle chain override here.
-        #       May not be necessary if the emergent behavior of breaking
-        #       chains before they start results in vehicles simply following
-        #       normal reservation behavior with chained accelerations.
-
         if (vehicle.throttle_mn != 0) or (vehicle.throttle_sd > 0):
             a = self.movement_model.fetch_throttle_deviation(
                 vehicle, section, p)
             if a is not None:
                 return a
+        # # TODO: (sequence) Implement vehicle chain override here.
+        # elif vehicle.trailing:
+        #     # Trailing vehicles in a sequence observe following behavior.
+        #     return super().accel_update(vehicle, p)
         return super().accel_update_uncontested(vehicle, p)
 
         # TODO: (stochasticity+) Change so speed and acceleration can be
