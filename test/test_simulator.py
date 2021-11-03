@@ -64,7 +64,7 @@ def test_single_intersection_fcfs(clean_shared: None) -> Simulator:
     return sim
 
 
-def test_crash_init(clean_shared: None) -> Simulator:
+def test_crash_init(clean_shared: None):
     sim = Symmetrical4Way(
         length=30, manager_type=FCFSManager, acceptable_crash_mev=12,
         movement_model='one draw')
@@ -73,8 +73,7 @@ def test_crash_init(clean_shared: None) -> Simulator:
     assert isinstance(
         sim.intersections[0].lanes[0].movement_model, OneDrawStochasticModel)
     assert sim.intersections[0].lanes[0].movement_model.threshold \
-        == reject
-    return sim
+        == reject/64
 
 
 def test_visualizer(clean_shared: None):

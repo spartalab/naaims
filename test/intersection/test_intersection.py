@@ -7,7 +7,8 @@ from naaims.trajectories import BezierTrajectory
 from naaims.intersection.managers import StopSignManager
 from naaims.intersection.tilings import SquareTiling
 from naaims.intersection.tilings.tiles import DeterministicTile
-from naaims.intersection.movement import DeterministicModel, OneDrawStochasticModel
+from naaims.intersection.movement import (DeterministicModel,
+                                          OneDrawStochasticModel)
 from naaims.vehicles import AutomatedVehicle
 
 import naaims.shared as SHARED
@@ -138,7 +139,9 @@ def test_init_3_lane(load_shared: None):
     assert isinstance(intersection.lanes[2].movement_model,
                       OneDrawStochasticModel)
     assert intersection.manager.tiling.threshold == \
-        intersection.lanes[1].movement_model.threshold == 1e-8
+        intersection.lanes[1].movement_model.threshold == 1e-8 / (
+            intersection.manager.tiling.x_tile_count *  # type: ignore
+            intersection.manager.tiling.y_tile_count)  # type: ignore
 
 
 def test_init_right_turn(load_shared: None):

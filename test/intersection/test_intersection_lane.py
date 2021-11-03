@@ -159,7 +159,6 @@ def test_section_enter_exit(il: IntersectionLane, vehicle: Vehicle,
         vehicle, VehicleSection.CENTER, 0, Coord(0, 0))
     il.enter_vehicle_section(t1c)
     il_stochastic.enter_vehicle_section(t1c)
-    assert vehicle in il_stochastic.movement_model.max_lateral_deviation
     assert vehicle in il_stochastic.movement_model.p_cutoff
 
     t2f = VehicleTransfer(vehicle2, VehicleSection.FRONT, 0, Coord(0, 0))
@@ -178,7 +177,6 @@ def test_section_enter_exit(il: IntersectionLane, vehicle: Vehicle,
     assert vehicle not in il_stochastic.movement_model.p_cutoff
     assert vehicle2 in il_stochastic.movement_model.p_cutoff
     assert vehicle not in il_stochastic.movement_model.max_lateral_deviation
-    assert vehicle2 in il_stochastic.movement_model.max_lateral_deviation
 
 
 def test_lateral(il: IntersectionLane, vehicle: Vehicle,

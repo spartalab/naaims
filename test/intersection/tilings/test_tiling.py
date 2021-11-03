@@ -57,8 +57,8 @@ def sq_timeouts(speed_limit: int = 30):
 
 def test_init(load_shared: None):
     sq = square_tiling(0, 100, 0, 200, 1, 30, 1e-6)
-    assert sq.threshold == 1e-6
-    assert sq.tile_type is StochasticTile
+    assert sq.threshold == 1e-6 / (sq.x_tile_count * sq.y_tile_count)
+    assert sq.tile_type is DeterministicTile
     assert square_tiling(0, 100, 0, 200, 1,
                          30).tile_type is DeterministicTile
 

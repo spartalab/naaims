@@ -31,7 +31,7 @@ def test_deterministic(model: DeterministicModel, vehicle: Vehicle):
     model.remove_vehicle(vehicle)
     assert model.fetch_lateral_deviation(vehicle, .5) == 0
     assert model.fetch_throttle_deviation(
-        vehicle, VehicleSection.FRONT, .5) == 0
+        vehicle, VehicleSection.FRONT, .5) is None
     assert model.find_probability_of_usage(
         vehicle, VehicleProgress(.1, .2, .3), Coord(0, 0), 5, 2) == 1
     its_exit = ScheduledExit(vehicle, VehicleSection.FRONT, 2, 5.0)
