@@ -544,14 +544,14 @@ class SquareTiling(Tiling):
         t0 = SHARED.t + 1
         to_return: Dict[int, Dict[Tile, float]] = {}
         if prepend:
-            lane.movement_model.start_projection(clone, reservation.its_exit,
-                                                 lane.speed_limit)
+            lane.movement_model.start_projection(
+                clone, reservation.entrance_front, lane.speed_limit)
 
             if t == t0:
                 return to_return
 
             p_prepend = lane.movement_model.prepend_probabilities(
-                clone, reservation.its_exit, lane.speed_limit)
+                clone, reservation.entrance_front, lane.speed_limit)
             if t - len(p_prepend) < t0:
                 p_prepend = p_prepend[len(p_prepend) - (t - t0):]
                 t_prepend = t0

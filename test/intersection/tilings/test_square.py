@@ -514,7 +514,7 @@ def test_pos_to_tile(load_shared: None, sq: SquareTiling,
         assert sq.pos_to_tiles(i_lane0, 1, vehicle, res)
 
     # Prepending a reservation for the timestep just after the current one
-    res.its_exit = ScheduledExit(vehicle, VehicleSection.FRONT, 0, 10)
+    res.entrance_front = ScheduledExit(vehicle, VehicleSection.FRONT, 0, 10)
     tiles = sq.pos_to_tiles(i_lane0, 6, vehicle, res)
     assert tiles is not None
     assert len(tiles) == 6
@@ -605,7 +605,7 @@ def test_pos_to_tiles_stochastic(load_shared: None,
     SHARED.t = 3
     ts = 100
     vf = 10
-    res.its_exit = ScheduledExit(vehicle, VehicleSection.FRONT, ts, vf)
+    res.entrance_front = ScheduledExit(vehicle, VehicleSection.FRONT, ts, vf)
 
     # Diagonal heading, inside
     vehicle.pos = Coord(2.6, 5.1)
@@ -639,7 +639,7 @@ def test_io_buffer(load_shared: None, sq: SquareTiling,
         assert sq.io_tile_buffer(i_lane0, 0, vehicle, res, True)
 
     # Prepending a reservation for the timestep just after the current one
-    res.its_exit = ScheduledExit(vehicle, VehicleSection.FRONT, 1, 10)
+    res.entrance_front = ScheduledExit(vehicle, VehicleSection.FRONT, 1, 10)
     assert sq.io_tile_buffer(i_lane0, 1, vehicle, res, True) == {}
 
     # Normal case accepted future prepend reservation
@@ -727,10 +727,10 @@ def test_layer_to_shape(load_shared: None, sq_stochastic: SquareTiling,
     sq_stochastic._add_new_layer()
     assert len(sq_stochastic.tile_layer_to_shape(sq_stochastic.tiles[0])) == 0
 
-    res = Reservation(vehicle, Coord(0, 0), {}, sq_stochastic.lanes[0], ScheduledExit(
-        vehicle, VehicleSection.FRONT, 0, 0))
-    res2 = Reservation(vehicle2, Coord(0, 0), {}, sq_stochastic.lanes[0], ScheduledExit(
-        vehicle2, VehicleSection.FRONT, 0, 0))
+    res = Reservation(vehicle, Coord(0, 0), {}, sq_stochastic.lanes[0],
+                      ScheduledExit(vehicle, VehicleSection.FRONT, 0, 0))
+    res2 = Reservation(vehicle2, Coord(0, 0), {}, sq_stochastic.lanes[0],
+                       ScheduledExit(vehicle2, VehicleSection.FRONT, 0, 0))
     sq_stochastic.tiles[0][18].confirm_reservation(res)
     sq_stochastic.tiles[0][44].confirm_reservation(res2)
     tiles_0 = sq_stochastic.tile_layer_to_shape(sq_stochastic.tiles[0])
@@ -762,7 +762,7 @@ def test_io_stochastic(load_shared_clean: None, sq_stochastic: SquareTiling,
         i_lane0.trajectory.end_coord]
     res = Reservation(h_vehicle, coord0, {}, i_lane0, ScheduledExit(
         h_vehicle, VehicleSection.FRONT, 0, 10))
-    res.its_exit = ScheduledExit(h_vehicle, VehicleSection.FRONT, 1, 10)
+    res.entrance_front = ScheduledExit(h_vehicle, VehicleSection.FRONT, 1, 10)
 
     sq = sq_stochastic
     vehicle = h_vehicle
@@ -771,7 +771,7 @@ def test_io_stochastic(load_shared_clean: None, sq_stochastic: SquareTiling,
         assert sq.io_tile_buffer(i_lane0, 0, vehicle, res, True)
 
     # Prepending a reservation for the timestep just after the current one
-    res.its_exit = ScheduledExit(vehicle, VehicleSection.FRONT, 1, 10)
+    res.entrance_front = ScheduledExit(vehicle, VehicleSection.FRONT, 1, 10)
     assert sq.io_tile_buffer(i_lane0, 1, vehicle, res, True) == {}
 
     # Normal case accepted future prepend reservation
@@ -793,11 +793,11 @@ def test_io_stochastic(load_shared_clean: None, sq_stochastic: SquareTiling,
     SHARED.t = 169
     ts = 170
     vf = 10
-    res.its_exit = ScheduledExit(vehicle, VehicleSection.FRONT, ts, vf)
+    res.entrance_front = ScheduledExit(vehicle, VehicleSection.FRONT, ts, vf)
 
     # Normal case accepted future postpend reservation
     vehicle.velocity = 15.
-    i_lane0.movement_model.start_projection(vehicle, res.its_exit, 15)
+    i_lane0.movement_model.start_projection(vehicle, res.entrance_front, 15)
     postpended = sq.io_tile_buffer(i_lane0, ts, vehicle, res, False)
     assert postpended is not None
     steps_forward = ceil(.3 * SHARED.SETTINGS.steps_per_second)

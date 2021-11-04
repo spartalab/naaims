@@ -31,18 +31,20 @@ class Reservation:
             A dict with timesteps keyed to to the tiles used at that timestep
             and the proportion at which they're used.
         lane: IntersectionLane
-        its_exit: ScheduledExit
-            The scheduled time and speed of the vehicle's exit from road into
-            intersection. (Initialized as the scheduled exit of the front
-            section of the vehicle as when the reservation is created that's
-            the only information available. This is replaced by the test
-            observed time of exit when that is found.)
+        entrance: ScheduledExit
+            The scheduled time and speed of this vehicle's front section's
+            entrance from road into the intersection.
             (Note: This is NOT the scheduled exit out of the intersection.)
-        dependent_on: Set[Vehicle]
-            The set of vehicles whose reservations this vehicle's reservation
-            is dependent on, i.e., the vehicles preceding it in a sequenced
+        exit: Optional[ScheduledExit] = None
+            The scheduled time and speed of this vehicle's rear section's
+            entrance from road into the intersection. Initialized as None and
+            filled in when the reservation reaches the rear section entrance.
+            (Note: This is NOT the scheduled exit out of the intersection.)
+        dependent_on: Tuple[Vehicle, ...] = ()
+            The vehicles whose reservations this vehicle's reservation is
+            dependent on, i.e., the vehicles preceding it in a sequenced
             reservation.
-        dependency: Optional[Reservation]
+        dependency: Optional[Reservation] = None
             The reservation of the first vehicle immediately following this
             vehicle in a sequenced reservation, if any.
     """
@@ -50,7 +52,8 @@ class Reservation:
     res_pos: Coord
     tiles: Dict[int, Dict[Tile, float]]
     lane: IntersectionLane
-    its_exit: ScheduledExit
+    entrance_front: ScheduledExit
+    entrance_rear: Optional[ScheduledExit] = None
     dependent_on: Tuple[Vehicle, ...] = ()
     dependency: Optional[Reservation] = None
 

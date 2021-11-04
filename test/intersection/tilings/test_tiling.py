@@ -95,7 +95,7 @@ def test_res_acceptance(load_shared: None, sq: SquareTiling, vehicle: Vehicle):
     # During the check request process, if a vehicle's reservation request is
     # confirmed, its front exit is replaced with its rear exit.
     rear_exit = ScheduledExit(vehicle, VehicleSection.REAR, 1, 2)
-    reservation.its_exit = rear_exit
+    reservation.entrance_rear = rear_exit
 
     # Confirm the reservation and check its outcomes
     sq.confirm_reservation(reservation, r_lane)
@@ -565,7 +565,7 @@ def test_mock_incoming_step_complete(load_shared: None, sq: SquareTiling,
     assert len(test_reservations) == 1
     assert vehicle in test_reservations
     assert test_reservations[vehicle].vehicle is vehicle
-    assert test_reservations[vehicle].its_exit == supposed_new_exit
+    assert test_reservations[vehicle].entrance_rear == supposed_new_exit
 
     # Check that the incoming road lane is now empty
     assert len(irl.vehicles) == 0
@@ -708,7 +708,7 @@ def test_clone_spawn(load_shared: None, sq: SquareTiling, vehicle: Vehicle):
     tiles_used[test_t] = tiles_on
     assert test_reservations[clone] == Reservation(
         vehicle, il.trajectory.start_coord, tiles_used, il_original, next_exit,
-        (), None)
+        None, (), None)
 
 
 def test_clone_spawn_io_fail(load_shared: None, sq: SquareTiling,
@@ -861,7 +861,7 @@ def test_mock_step_spawn(load_shared: None, sq: SquareTiling,
     tiles_used[test_t] = tiles_on
     assert test_reservations[clone] == Reservation(
         vehicle, il.trajectory.start_coord, tiles_used, il_original, new_exit,
-        (), None)
+        None, (), None)
 
 
 def test_mock_step_cant_spawn(load_shared: None, sq: SquareTiling,
@@ -939,8 +939,8 @@ def test_mock_step_spawn_exit(load_shared: None, sq: SquareTiling,
     assert len(test_reservations[clone].tiles) == 1
     assert test_reservations[clone].tiles[test_t] == sq.pos_to_tiles(
         il, test_t, clone, test_reservations[clone])
-    assert last_exit_new == test_reservations[clone].its_exit == ScheduledExit(
-        vehicle, VehicleSection.REAR, test_t, clone.velocity)
+    assert last_exit_new == test_reservations[clone].entrance_rear == \
+        ScheduledExit(vehicle, VehicleSection.REAR, test_t, clone.velocity)
     assert new_exit_new is None
 
 
@@ -1032,12 +1032,12 @@ def test_mock_step_exiting(load_shared: None, sq: SquareTiling,
     complete, counter_new, test_t_new, last_exit_new, new_exit_new = \
         sq._mock_step(counter, end_at, test_t, None, irl, il, orl,
                       clone_to_original, test_reservations, valid_reservations,
-                      test_reservations[clone].its_exit, originals,
+                      test_reservations[clone].entrance_front, originals,
                       irl_original, il_original)
     assert not complete
     assert counter_new == counter
     assert test_t_new == test_t + 1
-    assert last_exit_new is test_reservations[clone].its_exit
+    assert last_exit_new is test_reservations[clone].entrance_front
     assert new_exit_new is None
     distance = (1 + a*timestep)*timestep + a*timestep**2
     p_new = .95 + distance / il.trajectory.length
@@ -1218,11 +1218,13 @@ def clean_request(load_shared: None):
     vehicle2.pos = irl_og.trajectory.get_position(1-p_v2)
     vehicle2.heading = irl_og.trajectory.get_heading(1-p_v2)
     t_accel = ceil((2*dist_v2/SHARED.SETTINGS.min_acceleration)**.5)
+    veh2_rear_entrance = ScheduledExit(
+        vehicle2, VehicleSection.REAR, t_accel,
+        t_accel*SHARED.SETTINGS.min_acceleration)
     veh2res = Reservation(vehicle2, il.trajectory.start_coord, {}, il_og,
-                          ScheduledExit(
-                              vehicle2, VehicleSection.REAR, t_accel,
-        t_accel*SHARED.SETTINGS.min_acceleration))
-    sq.issue_permission(vehicle2, irl_og, veh2res.its_exit)
+                          ScheduledExit(vehicle2, VehicleSection.FRONT, 0, 0),
+                          veh2_rear_entrance)
+    sq.issue_permission(vehicle2, irl_og, veh2_rear_entrance)
     vehicle.velocity = 1
     vehicle.acceleration = SHARED.SETTINGS.min_acceleration
     vehicle.pos = il.trajectory.get_position(.9 - p_v2)

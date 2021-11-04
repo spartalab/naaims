@@ -583,7 +583,7 @@ class Tiling(Configurable):
                 last_exit = ScheduledExit(vehicle=clone_to_original[clone],
                                           section=VehicleSection.REAR,
                                           t=test_t, velocity=clone.velocity)
-                test_reservations[clone].its_exit = last_exit
+                test_reservations[clone].entrance_rear = last_exit
         return last_exit
 
     def _all_pos_to_tile(self, intersection_lane: IntersectionLane,
@@ -696,7 +696,7 @@ class Tiling(Configurable):
             res_pos=intersection_lane.trajectory.start_coord,
             tiles={},
             lane=intersection_lane_original,
-            its_exit=new_exit,
+            entrance_front=new_exit,
             dependent_on=tuple(originals[counter+1:]),
             dependency=None
         )
@@ -911,7 +911,8 @@ class Tiling(Configurable):
         vehicle: Vehicle = reservation.vehicle
         vehicle.has_reservation = True
         self.queued_reservations[vehicle] = reservation
-        self.issue_permission(vehicle, lane, reservation.its_exit)
+        assert reservation.entrance_rear is not None
+        self.issue_permission(vehicle, lane, reservation.entrance_rear)
 
     @abstractmethod
     def find_best_batch(self, requests: Dict[RoadLane, List[Reservation]]
