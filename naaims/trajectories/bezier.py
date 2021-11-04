@@ -51,7 +51,7 @@ class BezierTrajectory(Trajectory):
         # Find the intersection of the two headings.
         # First, check the special cases for if either heading is vertical.
         control_coord: Coord
-        if start_heading == end_heading:
+        if isclose(start_heading, end_heading, abs_tol=1e-8):
             control_coord = Coord(
                 start_coord.x + (end_coord.x - start_coord.x)/2,
                 start_coord.y + (end_coord.y - start_coord.y)/2)
