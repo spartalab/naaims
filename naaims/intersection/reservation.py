@@ -31,15 +31,17 @@ class Reservation:
             A dict with timesteps keyed to to the tiles used at that timestep
             and the proportion at which they're used.
         lane: IntersectionLane
-        entrance: ScheduledExit
+        entrance_front: ScheduledExit
             The scheduled time and speed of this vehicle's front section's
             entrance from road into the intersection.
-            (Note: This is NOT the scheduled exit out of the intersection.)
-        exit: Optional[ScheduledExit] = None
+        entrance_rear: Optional[ScheduledExit] = None
             The scheduled time and speed of this vehicle's rear section's
             entrance from road into the intersection. Initialized as None and
             filled in when the reservation reaches the rear section entrance.
-            (Note: This is NOT the scheduled exit out of the intersection.)
+        entrance_rear: Optional[ScheduledExit] = None
+            The scheduled time and speed of this vehicle's rear section's
+            exit from intersection onto the downstream road. Initialized as
+            None and filled in when the reservation completes.
         dependent_on: Tuple[Vehicle, ...] = ()
             The vehicles whose reservations this vehicle's reservation is
             dependent on, i.e., the vehicles preceding it in a sequenced
@@ -54,6 +56,7 @@ class Reservation:
     lane: IntersectionLane
     entrance_front: ScheduledExit
     entrance_rear: Optional[ScheduledExit] = None
+    exit_rear: Optional[ScheduledExit] = None
     dependent_on: Tuple[Vehicle, ...] = ()
     dependency: Optional[Reservation] = None
 

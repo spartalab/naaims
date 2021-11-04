@@ -636,15 +636,14 @@ def test_all_pos_block(load_shared: None, sq: SquareTiling, vehicle: Vehicle,
     vehicle2.heading = il.trajectory.get_heading(.5)
 
     # Form reservations for each vehicle
-    test_reservations = {
-        vehicle2: Reservation(vehicle2, il.trajectory.start_coord, {}, il,
-                              ScheduledExit(vehicle, VehicleSection.REAR, 0, 0)
-                              )
-    }
+    res2 = Reservation(vehicle2, il.trajectory.start_coord, {}, il,
+                       ScheduledExit(vehicle, VehicleSection.REAR, 0, 0)
+                       )
+    test_reservations = {vehicle2: res2}
     valid_reservations: List[Reservation] = [
         Reservation(vehicle, il.trajectory.start_coord, {}, il,
                     ScheduledExit(vehicle, VehicleSection.REAR, 0, 0),
-                    dependency=vehicle2)]
+                    dependency=res2)]
     test_t = 4
     counter = 1
     end_at = 1
@@ -707,8 +706,7 @@ def test_clone_spawn(load_shared: None, sq: SquareTiling, vehicle: Vehicle):
     assert tiles_on is not None
     tiles_used[test_t] = tiles_on
     assert test_reservations[clone] == Reservation(
-        vehicle, il.trajectory.start_coord, tiles_used, il_original, next_exit,
-        None, (), None)
+        vehicle, il.trajectory.start_coord, tiles_used, il_original, next_exit)
 
 
 def test_clone_spawn_io_fail(load_shared: None, sq: SquareTiling,
@@ -731,7 +729,7 @@ def test_clone_spawn_io_fail(load_shared: None, sq: SquareTiling,
     vehicle.pos = irl.trajectory.get_position(p)
     vehicle.heading = irl.trajectory.get_heading(p)
     res_compare = Reservation(
-        vehicle, il.trajectory.start_coord, {}, il, next_exit, (), None)
+        vehicle, il.trajectory.start_coord, {}, il, next_exit)
     tiles_used = sq.io_tile_buffer(
         il, test_t, vehicle, res_compare, True)
     assert tiles_used is not None
@@ -770,8 +768,8 @@ def test_clone_spawn_tile_fail(load_shared: None, sq: SquareTiling,
         / irl.trajectory.length
     vehicle.pos = irl.trajectory.get_position(p)
     vehicle.heading = irl.trajectory.get_heading(p)
-    res_compare = Reservation(
-        vehicle, il.trajectory.start_coord, {}, il, next_exit, (), None)
+    res_compare = Reservation(vehicle, il.trajectory.start_coord, {}, il,
+                              next_exit)
     tiles_used = sq.io_tile_buffer(
         il, test_t, vehicle, res_compare, True)
     assert tiles_used is not None
@@ -860,8 +858,7 @@ def test_mock_step_spawn(load_shared: None, sq: SquareTiling,
     assert tiles_on is not None
     tiles_used[test_t] = tiles_on
     assert test_reservations[clone] == Reservation(
-        vehicle, il.trajectory.start_coord, tiles_used, il_original, new_exit,
-        None, (), None)
+        vehicle, il.trajectory.start_coord, tiles_used, il_original, new_exit)
 
 
 def test_mock_step_cant_spawn(load_shared: None, sq: SquareTiling,

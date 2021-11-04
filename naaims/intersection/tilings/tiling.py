@@ -555,6 +555,9 @@ class Tiling(Configurable):
                     # downstream road lane now that it's exited the
                     # intersection.
                     reservation.tiles.update(edge_buffer_tiles)
+                    reservation.exit_rear = ScheduledExit(
+                        reservation.entrance_front.vehicle,
+                        VehicleSection.REAR, test_t, clone.velocity)
                     valid_reservations.append(test_reservations[clone])
                     del test_reservations[clone]
                     outgoing_road_lane.vehicles = []
