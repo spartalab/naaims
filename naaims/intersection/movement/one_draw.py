@@ -97,10 +97,10 @@ class OneDrawStochasticModel(MovementModel):
         assert entrance.distance_left is not None
         x_to_exit = self.trajectory.length - entrance.distance_left + \
             vehicle.length_buffered
-        t_fastest_exit = OneDrawStochasticModel.t_deterministic_exit(
+        t_deterministic_exit = OneDrawStochasticModel.t_deterministic_exit(
             v0, a, v_max, x_to_exit)
-        t_actual_exit = t_fastest_exit * (1-gauss(vehicle.throttle_mn,
-                                                  vehicle.throttle_sd))
+        t_actual_exit = OneDrawStochasticModel.t_exit_sample(
+            t_deterministic_exit, vehicle.throttle_mn, vehicle.throttle_sd)
 
         # Given t_actual_exit, find the adjusted acceleration value as well as
         # the time and proportion of the trajectory the vehicle spends at that
@@ -127,6 +127,12 @@ class OneDrawStochasticModel(MovementModel):
         return t_fastest_exit
 
     @staticmethod
+    def t_exit_sample(t_deterministic_exit: float, throttle_mn: float,
+                      throttle_sd: float) -> float:
+        return max(0, t_deterministic_exit * (1-gauss(throttle_mn,
+                                                      throttle_sd)))
+
+    @staticmethod
     def t_accel(v0: float, v_max: float, x_to_exit: float,
                 t_exit: float) -> float:
         """Find how long the vehicle will accelerate for.
@@ -137,10 +143,10 @@ class OneDrawStochasticModel(MovementModel):
         """
         # See dissertation Appendix B for derivation.
         t_accel = (x_to_exit - v_max * t_exit) / \
-            (v0/2 - v_max/2) if (v0 < v_max) else 0
+            (v0/2 - v_max/2) if (v0 < v_max) else 0.
         if t_accel < 0:
             # braking necessary
-            return t_accel
+            return 0.
         elif t_accel > t_exit:
             # can't reach v_max before exit, so just accelerate the entire time
             # TODO: Leads to a stdev of 0.
@@ -432,14 +438,14 @@ class OneDrawStochasticModel(MovementModel):
         # finding throttle deviation likelihoods.
         v0 = entrance.velocity
         x_to_exit = self.trajectory.length + vehicle.length_buffered
-        t_fastest_exit = OneDrawStochasticModel.t_deterministic_exit(
+        t_deterministic_exit = OneDrawStochasticModel.t_deterministic_exit(
             v0, SHARED.SETTINGS.min_acceleration, v_max, x_to_exit)
         progress_mc: List[Callable[[int], Tuple[float, bool]]] = []
         for _ in range(n if ((vehicle.throttle_sd != 0) or
                              (entrance.velocity == v_max)) else 1):
             # Sample a traversal time from the vehicle's throttle distribution
-            t_actual_exit = t_fastest_exit * (1-gauss(vehicle.throttle_mn,
-                                                      vehicle.throttle_sd))
+            t_actual_exit = OneDrawStochasticModel.t_exit_sample(
+                t_deterministic_exit, vehicle.throttle_mn, vehicle.throttle_sd)
             t_accel = OneDrawStochasticModel.t_accel(
                 v0, v_max, x_to_exit, t_actual_exit)
             # Calculate the acceleration value from the sampled time
