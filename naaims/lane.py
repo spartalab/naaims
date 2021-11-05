@@ -511,9 +511,8 @@ class Lane(ABC):
                     # section is still None that means that it's the first
                     # vehicle in the lane and already halfway into the next
                     # object. This shouldn't be possible.
-                    raise RuntimeError("The front section of the second "
-                                       "Vehicle should not have started "
-                                       "exiting already.")
+                    warn("The front section of the second Vehicle should not "
+                         "have started exiting already.")
                 elif VehicleSection(i) is VehicleSection.CENTER:
                     # The front of this vehicle is in the lane but this
                     # center section and the rear section are still in the

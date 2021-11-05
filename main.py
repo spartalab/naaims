@@ -1,6 +1,7 @@
 from typing import List, Optional, Type
 from importlib import reload
 from statistics import mean
+from os.path import exists
 
 from matplotlib.animation import FFMpegFileWriter
 from pandas import read_csv
@@ -74,6 +75,9 @@ def trials(time: int = 10*60, vpm: float = 15,
     See main for parameter descriptions.
     """
     for i in range(n_trials):
+        logname = f'output/logs/{log_name}_{i}.csv'
+        if exists(logname):
+            continue
         sim = Symmetrical4Way(length=50, manager_type=FCFSManager,
                               tile_type=tile_type, tile_width=4,
                               vpm=vpm, movement_model=movement_model,
@@ -82,7 +86,7 @@ def trials(time: int = 10*60, vpm: float = 15,
                               steps_per_second=steps_per_second)
         for _ in range(time*steps_per_second):
             sim.step()
-        sim.save_log(f'output/logs/{log_name}_{i}.csv')
+        sim.save_log(logname)
         reload(SHARED)
     with open(f'output/logs/trials_{log_name}.txt', 'w') as f:
         means: List[float] = []
@@ -100,69 +104,16 @@ def trials(time: int = 10*60, vpm: float = 15,
 
 
 if __name__ == "__main__":
-    # Render video for single intersection FCFS with deterministic movement.
+    # Render video for single intersection FCFS with different settings.
     main(2*60, vpm=30, mp4_filename='single_fcfs_4')
-
     # reload(SHARED)
-    # # Render video for single intersection FCFS with stochastic movement.
     # main(2*60, movement_model='one draw', tile_type=StochasticTile,
     #      vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
-    #      mp4_filename='fcfs_4_stochastic')
-
+    #      mp4_filename='fcfs_stochastic_soft', visualize_tiles=True)
     # reload(SHARED)
-    # # Render quick diagnostic videos for stochastic movement
-    # main(30, movement_model='one draw', tile_type=StochasticTile,
+    # main(2*60, movement_model='one draw', tile_type=DeterministicTile,
     #      vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
-    #      mp4_filename='fcfs_stochastic_soft', steps_per_second=15,
-    #      visualize_tiles=True)
-    # reload(SHARED)
-    # main(30, movement_model='one draw', tile_type=DeterministicTile,
-    #      vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
-    #      mp4_filename='fcfs_stochastic_hard', steps_per_second=15,
-    #      visualize_tiles=True)
-
-    # reload(SHARED)
-    # Test if stochastic movement works and doesn't error.
-    # main(30, movement_model='one draw', tile_type=DeterministicTile,
-    #      steps_per_second=4)
-    # reload(SHARED)
-    # main(30, movement_model='one draw', tile_type=StochasticTile,
-    #      vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
-    #      steps_per_second=4)
-    # reload(SHARED)
-    # main(30, movement_model='one draw', tile_type=DeterministicTile,
-    #      vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
-    #      steps_per_second=4)
-
-    # # reload(SHARED)
-    # # Run small experiments.
-    # trials(60, n_trials=1, steps_per_second=4,
-    #        log_name='deterministic_small')
-    # reload(SHARED)
-    # trials(60, n_trials=1, steps_per_second=4,
-    #        movement_model='one draw', tile_type=StochasticTile,
-    #        vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
-    #        log_name='soft_small')
-    # reload(SHARED)
-    # trials(60, n_trials=1, steps_per_second=4,
-    #        movement_model='one draw', tile_type=DeterministicTile,
-    #        vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
-    #        log_name='hard_small')
-
-    # reload(SHARED)
-    # # Run medium experiments.
-    # trials(60, n_trials=5, steps_per_second=4,
-    #        log_name='deterministic_medium')
-    # reload(SHARED)
-    # trials(60, n_trials=5, steps_per_second=4,
-    #        movement_model='one draw', tile_type=StochasticTile,
-    #        vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
-    #        log_name='soft_medium')
-    # reload(SHARED)
-    # trials(60, n_trials=5, steps_per_second=4,
-    #        movement_model='one draw', tile_type=DeterministicTile,
-    #        vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
-    #        log_name='hard_medium')
+    #      mp4_filename='fcfs_stochastic_hard', visualize_tiles=True)
 
     # reload(SHARED)
     # # Run large experiments.
