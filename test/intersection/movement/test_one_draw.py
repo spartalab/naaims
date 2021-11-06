@@ -384,7 +384,8 @@ def test_probability_tracking(od: OneDrawStochasticModel, h_vehicle: Vehicle,
 
 def test_project_past_end(od: OneDrawStochasticModel, h_vehicle: Vehicle):
     pos_end = od.trajectory.get_position(1)
-    assert od.project_pos_past_end(1) == pos_end
+    assert od.project_pos_past_end(-.1) == approx(
+        Coord(pos_end.x*-.1, pos_end.y*-.1))
     assert od.project_pos_past_end(2) == approx(
         Coord(pos_end.x*2, pos_end.y*2))
     assert od.project_pos_past_end(1.1) == approx(

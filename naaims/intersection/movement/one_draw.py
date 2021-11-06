@@ -355,8 +355,8 @@ class OneDrawStochasticModel(MovementModel):
         throttle_sd = stdev(d_mc) if (len(d_mc) > 1) else 0
 
         if throttle_sd != 0:
-            d_max = (d_throttle + vehicle.length/2)
-            d_min = (d_throttle - vehicle.length/2)
+            d_max = (d_throttle + (vehicle.length/2 + static_buffer))
+            d_min = (d_throttle - (vehicle.length/2 + static_buffer))
             return phi_mu_sigma(d_max, throttle_mn, throttle_sd) - \
                 phi_mu_sigma(d_min, throttle_mn, throttle_sd)
         else:
@@ -403,8 +403,10 @@ class OneDrawStochasticModel(MovementModel):
             pos_mc: Coord
             # If the vehicle has progressed past the trajectory's endpoint,
             # project its position based on the end of the trajectory.
-            pos_mc = self.project_pos_past_end(p_mc) if (p_mc > 1) \
-                else self.trajectory.get_position(p_mc)
+            if (p_mc > 1) or (p_mc < 0):
+                pos_mc = self.project_pos_past_end(p_mc)
+            else:
+                pos_mc = self.trajectory.get_position(p_mc)
 
             # Find the difference of the real position from where the vehicle
             # should be at this point by splitting up the observed difference
@@ -420,15 +422,25 @@ class OneDrawStochasticModel(MovementModel):
     def project_pos_past_end(self, p: float) -> Coord:
         """Return the projected coordinate of the progress value.
 
-        This monte carlo trial vehicle's front section has exited. Approximate
-        its distance by drawing a straight line out from the end of the
-        trajectory.
+        This monte carlo trial vehicle's center section hasn't entered or has
+        already exited. Approximate its distance by drawing a straight line out
+        from the end of the trajectory.
         """
-        heading = self.trajectory.get_heading(1)
-        extend = (p - 1) * self.trajectory.length
+        if p > 1:
+            p = p - 1
+            p_bounded = 1
+            angular_correction = 0.
+        elif p < 0:
+            p = -p
+            p_bounded = 0
+            angular_correction = pi
+        else:
+            raise ValueError("No need for projection.")
+        heading = self.trajectory.get_heading(p_bounded) + angular_correction
+        extend = p * self.trajectory.length
         x_extension = cos(heading) * extend
         y_extension = sin(heading) * extend
-        pos1 = self.trajectory.get_position(1)
+        pos1 = self.trajectory.get_position(p_bounded)
         return Coord(pos1.x + x_extension, pos1.y + y_extension)
 
     def start_projection(self, vehicle: Vehicle, entrance: ScheduledExit,
@@ -458,15 +470,22 @@ class OneDrawStochasticModel(MovementModel):
             # value, speed limit, and so on to find the progress along the
             # trajectory at a given time.
             progress_mc.append(self.progress_lambda_factory(
-                v0, entrance.t, a_adjusted, v_max, x_to_exit, t_accel))
+                v0, entrance.t, a_adjusted, v_max, x_to_exit, t_accel,
+                vehicle.length/2))
             # runs n times to create a monte carlo distribution, unless the
             # vehicle has 0 standard deviation, in which case just run once.
         self.progress_mc[vehicle] = progress_mc
 
     def progress_lambda_factory(self, v0: float, ts0: int, a: float,
-                                v_max: float, x_to_exit: float, t_accel: float
+                                v_max: float, x_to_exit: float, t_accel: float,
+                                correction: float
                                 ) -> Callable[[int], Tuple[float, bool]]:
-        """(Progress, complete) function at p given an acceleration profile.
+        """(Progress, complete) function at t given an acceleration profile.
+
+        The parameters given are for the entrance of the FRONT section of the
+        vehicle (because that's when the intersection takes control), but this
+        should return the progress of the CENTER section of the vehicle, as
+        that's what's used to calculate its throttle deviation.
 
         Note that x_to_exit is not the same as the trajectory length, so the
         second return bool provides additional context about when the REAR of
@@ -478,7 +497,7 @@ class OneDrawStochasticModel(MovementModel):
             x = (x_over_constant_a(v0, a, t_accel) +
                  x_over_constant_a(v_max, 0, t-t_accel)
                  ) if (t > t_accel) else x_over_constant_a(v0, a, t)
-            return x/self.trajectory.length, (x > x_to_exit)
+            return (x - correction)/self.trajectory.length, (x > x_to_exit)
         return progress
 
     def postpend_probabilities(self, vehicle: Vehicle, timesteps_forward: int,
