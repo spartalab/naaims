@@ -15,7 +15,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from math import ceil
 from typing import (TYPE_CHECKING, Optional, List, Set, Dict, Tuple, Type,
-                    TypeVar, Any)
+                    TypeVar, Any, OrderedDict)
 
 import naaims.shared as SHARED
 from naaims.archetypes import Configurable
@@ -258,8 +258,8 @@ class Tiling(Configurable):
 
     def check_request(self, incoming_road_lane_original: RoadLane,
                       mark: bool = False, sequence: bool = False
-                      ) -> Optional[Reservation]:
-        """If a lane's request(s) work, return the potential Reservation(s).
+                      ) -> Optional[Tuple[Reservation, int]]:
+        """If a lane's request(s) work, return its first reservation and index.
 
         Check if a lane's reservation (plural if the sequence flag is True)
         can work. If so, return the workable reservation of the first vehicle
@@ -307,7 +307,7 @@ class Tiling(Configurable):
             # There are no requesting vehicles in this lane, so return.
             return None
         else:
-            counter = indices[0]
+            counter = start = indices[0]
             end_at = indices[1]
             originals = incoming_road_lane_original.vehicles[counter:end_at]
 
@@ -350,7 +350,7 @@ class Tiling(Configurable):
         # Initialize data structures used for reservations.
         clone_to_original: Dict[Vehicle, Vehicle] = {}
         test_reservations: Dict[Vehicle, Reservation] = {}
-        valid_reservations: List[Reservation] = []
+        valid_reservations: OrderedDict[Vehicle, Reservation] = OrderedDict()
         last_exit: Optional[ScheduledExit] = None
 
         # Mock the simulation loop until all vehicles in the test sequence
@@ -377,7 +377,8 @@ class Tiling(Configurable):
                 round(min(.5*SHARED.SETTINGS.steps_per_second,
                           (leader_arrival - SHARED.t)/2))
 
-        return valid_reservations[0] if (len(valid_reservations) > 0) else None
+        return (next(iter(valid_reservations.values())), start) if \
+            (len(valid_reservations) > 0) else None
 
     def _mock_step(self, counter: int, end_at: int, test_t: int,
                    new_exit: Optional[ScheduledExit],
@@ -386,7 +387,7 @@ class Tiling(Configurable):
                    outgoing_road_lane: RoadLane,
                    clone_to_original: Dict[Vehicle, Vehicle],
                    test_reservations: Dict[Vehicle, Reservation],
-                   valid_reservations: List[Reservation],
+                   valid_reservations: OrderedDict[Vehicle, Reservation],
                    last_exit: Optional[ScheduledExit],
                    originals: List[Vehicle],
                    incoming_road_lane_original: RoadLane,
@@ -509,7 +510,8 @@ class Tiling(Configurable):
                                          outgoing_road_lane: RoadLane,
                                          test_reservations: Dict[Vehicle,
                                                                  Reservation],
-                                         valid_reservations: List[Reservation],
+                                         valid_reservations: OrderedDict[
+                                             Vehicle, Reservation],
                                          test_t: int, mark: bool) -> bool:
         """Handle progression on intersection lane, including transfers.
 
@@ -540,8 +542,8 @@ class Tiling(Configurable):
                     # terminate the test here and return the valid list after
                     # removing the last reservation's reference to this invalid
                     # request.
-                    if len(valid_reservations) > 0:
-                        valid_reservations[-1].dependency = None
+                    if reservation.dependent_on is not None:
+                        reservation.dependent_on.dependency = None
                     # Remove tile markings associated with invalid
                     # test_reservations if they had any.
                     if mark:
@@ -558,10 +560,11 @@ class Tiling(Configurable):
                     reservation.exit_rear = ScheduledExit(
                         reservation.entrance_front.vehicle,
                         VehicleSection.REAR, test_t, clone.velocity)
-                    valid_reservations.append(test_reservations[clone])
+                    res = test_reservations[clone]
+                    valid_reservations[res.vehicle] = res
                     del test_reservations[clone]
                     outgoing_road_lane.vehicles = []
-                    del outgoing_road_lane.vehicle_progress[clone], clone
+                    del outgoing_road_lane.vehicle_progress[clone], clone, res
             else:
                 outgoing_road_lane.enter_vehicle_section(transfer)
         return False
@@ -594,7 +597,7 @@ class Tiling(Configurable):
                          clone_to_original: Dict[Vehicle, Vehicle],
                          test_reservations: Dict[Vehicle,
                                                  Reservation],
-                         valid_reservations: List[Reservation],
+                         valid_reservations: OrderedDict[Vehicle, Reservation],
                          counter: int, end_at: int,
                          test_t: int, mark: bool) -> int:
         """Log the tiles used by all clones at this test_t.
@@ -609,12 +612,11 @@ class Tiling(Configurable):
         """
         to_remove: List[Vehicle] = []
         for i, clone in enumerate(intersection_lane.vehicles):
+            reservation = test_reservations[clone]
             tiles_used = self.pos_to_tiles(intersection_lane, test_t,
-                                           clone,
-                                           test_reservations[clone],
-                                           mark=mark)
+                                           clone, reservation, mark=mark)
             if tiles_used is not None:
-                test_reservations[clone].tiles[test_t] = tiles_used
+                reservation.tiles[test_t] = tiles_used
             else:
                 # Scrap all test_reservations after this one and stop spawning
                 # new ones.
@@ -623,9 +625,9 @@ class Tiling(Configurable):
                 # simply terminate the test here since no clone still in the
                 # intersection can have a valid reservation.
                 if i == 0:
-                    if len(valid_reservations) > 0:
+                    if reservation.dependent_on is not None:
                         # Need to decouple from the last confirmed res.
-                        valid_reservations[-1].dependency = None
+                        reservation.dependent_on.dependency = None
 
                     # Remove tile markings associated with all invalid test
                     # reservations if there were any.
@@ -677,7 +679,8 @@ class Tiling(Configurable):
                           clone_to_original: Dict[Vehicle, Vehicle],
                           test_reservations: Dict[Vehicle,
                                                   Reservation],
-                          valid_reservations: List[Reservation],
+                          valid_reservations: OrderedDict[Vehicle,
+                                                          Reservation],
                           new_exit: ScheduledExit,
                           counter: int, end_at: int,
                           test_t: int,
@@ -694,16 +697,21 @@ class Tiling(Configurable):
         original: Vehicle = new_exit.vehicle
         clone = original.clone_for_request()
         clone.velocity = new_exit.velocity
+        preceding_vehicle = originals[counter-1] if (counter-1 >= 0) else None
+        preceding_res: Optional[Reservation] = None
+        if preceding_vehicle is not None:
+            preceding_res = test_reservations.get(preceding_vehicle)
+            if preceding_res is None:
+                preceding_res = valid_reservations.get(preceding_vehicle)
         reservation = Reservation(
             vehicle=original,
             res_pos=intersection_lane.trajectory.start_coord,
             tiles={},
             lane=intersection_lane_original,
             entrance_front=new_exit,
-            dependent_on=tuple(originals[counter+1:]),
+            dependent_on=preceding_res,
             dependency=None
         )
-        # TODO (sequence): Check dependent_on
 
         # At this time, the front of the vehicle should just be entering the
         # intersection lane, and the rest of the vehicle should still be
@@ -749,17 +757,8 @@ class Tiling(Configurable):
 
             # Register this vehicle's reservation as dependent on its preceding
             # clone's reservation, if there is one.
-            if len(intersection_lane.vehicles) > 1:
-                # The last reservation hasn't been confirmed as valid yet, so
-                # look in test_reservations.
-                test_reservations[intersection_lane.vehicles[-1]
-                                  ].dependency = reservation
-            elif len(valid_reservations) > 0:
-                # The last reservation has been confirmed as valid, so look in
-                # valid_reservations.
-                valid_reservations[-1].dependency = reservation
-            # Otherwise, this is the first reservation, so there's no prior
-            # reservation for it to be dependent on.
+            if reservation.dependent_on is not None:
+                reservation.dependent_on.dependency = reservation
 
             # Add the new clone to the test data structures.
             clone_to_original[clone] = original

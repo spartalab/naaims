@@ -41,7 +41,7 @@ class FCFSManager(IntersectionManager):
                     request = self.tiling.check_request(lane)
                     if request is not None:
                         # It works, so confirm that reservation.
-                        self.tiling.confirm_reservation(request, lane)
+                        self.tiling.confirm_reservation(request[0], lane)
                     else:
                         # There is no request or if there is it doesn't work.
                         # Unflag this lane so it's not polled again.

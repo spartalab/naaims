@@ -38,14 +38,13 @@ class Reservation:
             The scheduled time and speed of this vehicle's rear section's
             entrance from road into the intersection. Initialized as None and
             filled in when the reservation reaches the rear section entrance.
-        entrance_rear: Optional[ScheduledExit] = None
+        exit_rear: Optional[ScheduledExit] = None
             The scheduled time and speed of this vehicle's rear section's
             exit from intersection onto the downstream road. Initialized as
             None and filled in when the reservation completes.
-        dependent_on: Tuple[Vehicle, ...] = ()
-            The vehicles whose reservations this vehicle's reservation is
-            dependent on, i.e., the vehicles preceding it in a sequenced
-            reservation.
+        dependent_on: Optional[Reservation] = None
+            The reservation of the first vehicle immediately preceding this
+            vehicle in a sequenced reservation, if any.
         dependency: Optional[Reservation] = None
             The reservation of the first vehicle immediately following this
             vehicle in a sequenced reservation, if any.
@@ -57,7 +56,7 @@ class Reservation:
     entrance_front: ScheduledExit
     entrance_rear: Optional[ScheduledExit] = None
     exit_rear: Optional[ScheduledExit] = None
-    dependent_on: Tuple[Vehicle, ...] = ()
+    dependent_on: Optional[Reservation] = None
     dependency: Optional[Reservation] = None
 
     def __hash__(self) -> int:
