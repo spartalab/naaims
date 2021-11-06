@@ -2,6 +2,7 @@ from typing import List, Optional, Type
 from importlib import reload
 from statistics import mean
 from os.path import exists
+from warnings import warn
 
 from matplotlib.animation import FFMpegFileWriter
 from pandas import read_csv
@@ -69,7 +70,8 @@ def trials(time: int = 10*60, vpm: float = 15,
            acceptable_crash_mev: float = 0.,
            n_trials: int = 30,
            log_name: str = 'vanilla',
-           steps_per_second: int = 15):
+           steps_per_second: int = 15,
+           retry_attempts: int = 10):
     """Run several trials, record their output, and return average delay.
 
     See main for parameter descriptions.
@@ -78,16 +80,25 @@ def trials(time: int = 10*60, vpm: float = 15,
         logname = f'output/logs/{log_name}_{i}.csv'
         if exists(logname):
             continue
-        sim = Symmetrical4Way(length=50, manager_type=FCFSManager,
-                              tile_type=tile_type, tile_width=4,
-                              vpm=vpm, movement_model=movement_model,
-                              vehicle_type=vehicle_type,
-                              acceptable_crash_mev=acceptable_crash_mev,
-                              steps_per_second=steps_per_second)
-        for _ in range(time*steps_per_second):
-            sim.step()
-        sim.save_log(logname)
-        reload(SHARED)
+        for _ in range(retry_attempts):
+            try:
+                sim = Symmetrical4Way(
+                    length=50, manager_type=FCFSManager, tile_type=tile_type,
+                    tile_width=4, vpm=vpm, movement_model=movement_model,
+                    vehicle_type=vehicle_type,
+                    acceptable_crash_mev=acceptable_crash_mev,
+                    steps_per_second=steps_per_second)
+                for _ in range(time*steps_per_second):
+                    sim.step()
+            except RuntimeError:
+                warn(f"Encountered runtime error in this trial, attempt {i}")
+            else:
+                sim.save_log(logname)
+                break
+            finally:
+                reload(SHARED)
+        else:
+            raise RuntimeError(f"Trial retry attempts exhausted.")
     with open(f'output/logs/trials_{log_name}.txt', 'w') as f:
         means: List[float] = []
         for i in range(n_trials):
