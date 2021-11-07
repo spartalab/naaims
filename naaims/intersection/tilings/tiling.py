@@ -357,7 +357,7 @@ class Tiling(Configurable):
         # have spawned, progressed, and exited the intersection lane.
         while (len(intersection_lane.vehicles) > 0) or (counter < end_at):
             test_complete, counter, test_t, last_exit, new_exit = \
-                self._mock_step(counter, end_at, test_t, new_exit,
+                self._mock_step(start, counter, end_at, test_t, new_exit,
                                 incoming_road_lane, intersection_lane,
                                 outgoing_road_lane, clone_to_original,
                                 test_reservations, valid_reservations,
@@ -377,10 +377,12 @@ class Tiling(Configurable):
                 round(min(.5*SHARED.SETTINGS.steps_per_second,
                           (leader_arrival - SHARED.t)/2))
 
+        # Return the reservation in the sequence and its vehicle's index in the
+        # incoming road lane, if there are any valid reservations.
         return (next(iter(valid_reservations.values())), start) if \
             (len(valid_reservations) > 0) else None
 
-    def _mock_step(self, counter: int, end_at: int, test_t: int,
+    def _mock_step(self, start: int, counter: int, end_at: int, test_t: int,
                    new_exit: Optional[ScheduledExit],
                    incoming_road_lane: RoadLane,
                    intersection_lane: IntersectionLane,
@@ -469,8 +471,8 @@ class Tiling(Configurable):
                 test_complete, counter = self._spawn_next_clone(
                     intersection_lane, incoming_road_lane, originals,
                     clone_to_original, test_reservations,
-                    valid_reservations, new_exit, counter, end_at, test_t,
-                    intersection_lane_original, mark)
+                    valid_reservations, new_exit, start, counter, end_at,
+                    test_t, intersection_lane_original, mark)
                 new_exit = None
                 if test_complete:
                     return True, -1, -1, None, None
@@ -682,7 +684,7 @@ class Tiling(Configurable):
                           valid_reservations: OrderedDict[Vehicle,
                                                           Reservation],
                           new_exit: ScheduledExit,
-                          counter: int, end_at: int,
+                          start: int, counter: int, end_at: int,
                           test_t: int,
                           intersection_lane_original: IntersectionLane,
                           mark: bool
@@ -697,7 +699,8 @@ class Tiling(Configurable):
         original: Vehicle = new_exit.vehicle
         clone = original.clone_for_request()
         clone.velocity = new_exit.velocity
-        preceding_vehicle = originals[counter-1] if (counter-1 >= 0) else None
+        idx = counter - start - 1
+        preceding_vehicle = originals[idx] if (idx >= 0) else None
         preceding_res: Optional[Reservation] = None
         if preceding_vehicle is not None:
             preceding_res = test_reservations.get(preceding_vehicle)
@@ -784,7 +787,7 @@ class Tiling(Configurable):
             return False, counter
 
     @abstractmethod
-    def pos_to_tiles(self, lane: IntersectionLane, t: int,
+    def pos_to_tiles(self, lane: IntersectionLane, t: int,  # type: ignore
                      clone: Vehicle, reservation: Reservation,
                      force: bool = False, mark: bool = False
                      ) -> Optional[Dict[Tile, float]]:
@@ -840,7 +843,7 @@ class Tiling(Configurable):
         #       reservation. Tweak tile implementation to account for this.
 
     @abstractmethod
-    def io_tile_buffer(self, lane: IntersectionLane, t: int,
+    def io_tile_buffer(self, lane: IntersectionLane, t: int,  # type: ignore
                        clone: Vehicle, reservation: Reservation,
                        prepend: bool, force: bool = False, mark: bool = False
                        ) -> Optional[Dict[int, Dict[Tile, float]]]:

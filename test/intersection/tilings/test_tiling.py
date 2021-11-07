@@ -64,15 +64,15 @@ def test_init(load_shared: None):
 
 
 def test_timesteps_forward(load_shared: None):
-    assert Tiling._exit_res_timesteps_forward(0) == 18
-    assert Tiling._exit_res_timesteps_forward(15) == 18
-    assert Tiling._exit_res_timesteps_forward(15.1) == 20
+    assert Tiling._exit_res_timesteps_forward(0) == 18  # type: ignore
+    assert Tiling._exit_res_timesteps_forward(15) == 18  # type: ignore
+    assert Tiling._exit_res_timesteps_forward(15.1) == 20  # type: ignore
 
 
 def test_res_acceptance(load_shared: None, sq: SquareTiling, vehicle: Vehicle):
     SHARED.t = 0
     for _ in range(9):
-        sq._add_new_layer()
+        sq._add_new_layer()  # type: ignore
     i_lane = sq.lanes[0]
     i_coord = i_lane.trajectory.start_coord
     r_lane = sq.incoming_road_lane_by_coord[i_coord]
@@ -126,7 +126,7 @@ def test_new_timestep(load_shared: None, sq: SquareTiling, vehicle: Vehicle,
                       vehicle2: Vehicle):
     SHARED.t = 0
     for _ in range(3):
-        sq._add_new_layer()
+        sq._add_new_layer()  # type: ignore
     res1 = Reservation(vehicle, Coord(0, 0), {}, sq.lanes[0],
                        ScheduledExit(vehicle, VehicleSection.FRONT, 0, 0))
     sq.tiles[1][2].confirm_reservation(res1)
@@ -156,7 +156,7 @@ def test_mock_speed_update(load_shared: None, sq: SquareTiling,
     }
 
     # Get their speeds in the next timestep
-    sq._mock_update_speeds(il)
+    sq._mock_update_speeds(il)  # type: ignore
     assert len(il.vehicles) == 3
     for veh in il.vehicles:
         assert veh.velocity == SHARED.SETTINGS.TIMESTEP_LENGTH *\
@@ -165,7 +165,7 @@ def test_mock_speed_update(load_shared: None, sq: SquareTiling,
 
     # First two vehicles near speed limit
     vehicle.velocity = vehicle2.velocity = 30 - .05
-    sq._mock_update_speeds(il)
+    sq._mock_update_speeds(il)  # type: ignore
     assert len(il.vehicles) == 3
     for veh in [vehicle, vehicle2]:
         assert vehicle2.velocity == 30
@@ -186,7 +186,7 @@ def test_mock_outgoing_step(load_shared: None, sq: SquareTiling,
     vehicle.velocity = vehicle2.velocity = 1
     vehicle.acceleration = vehicle2.acceleration = \
         SHARED.SETTINGS.min_acceleration
-    sq._mock_outgoing_step_vehicles(orl)
+    sq._mock_outgoing_step_vehicles(orl)  # type: ignore
     distance_covered = vehicle.velocity * SHARED.SETTINGS.TIMESTEP_LENGTH + \
         vehicle.acceleration * SHARED.SETTINGS.TIMESTEP_LENGTH**2
     p_covered = distance_covered / orl.trajectory.length
@@ -206,7 +206,7 @@ def test_mock_outgoing_step(load_shared: None, sq: SquareTiling,
     # Test vehicle exit intentional error
     orl.vehicle_progress[vehicle] = VehicleProgress(1, 1, .5)
     with raises(RuntimeError):
-        sq._mock_outgoing_step_vehicles(orl)
+        sq._mock_outgoing_step_vehicles(orl)  # type: ignore
 
 
 def test_mock_intersection_step_transfer(load_shared: None, sq: SquareTiling,
@@ -236,7 +236,7 @@ def test_mock_intersection_step_transfer(load_shared: None, sq: SquareTiling,
                               ScheduledExit(vehicle, VehicleSection.REAR, 0, 0)
                               )
     }
-    valid_reservations: List[Reservation] = []
+    valid_reservations: OrderedDict[Vehicle, Reservation] = OrderedDict()
     test_t = 4
 
     # Set vehicles to be moving
@@ -245,9 +245,8 @@ def test_mock_intersection_step_transfer(load_shared: None, sq: SquareTiling,
         veh.acceleration = 1
 
     # Step intersection
-    assert not sq._mock_intersection_step_vehicles(il, orl, test_reservations,
-                                                   valid_reservations, test_t,
-                                                   False)
+    assert not sq._mock_intersection_step_vehicles(  # type: ignore
+        il, orl, test_reservations, valid_reservations, test_t, False)
 
     # Check if the vehicle with center in intersection is in is new position
     new_p = .5 + vehicle2.velocity*SHARED.SETTINGS.TIMESTEP_LENGTH + \
@@ -257,7 +256,7 @@ def test_mock_intersection_step_transfer(load_shared: None, sq: SquareTiling,
 
     # Check if the exiting vehicle's reservation updated properly
     assert vehicle in test_reservations
-    assert valid_reservations == []
+    assert valid_reservations == OrderedDict()
     assert vehicle in il.vehicles
     assert vehicle in il.vehicle_progress
     dist_covered = vehicle.velocity*SHARED.SETTINGS.TIMESTEP_LENGTH + \
@@ -682,7 +681,7 @@ def test_clone_spawn(load_shared: None, sq: SquareTiling, vehicle: Vehicle):
 
     complete, counter = sq._spawn_next_clone(  # type: ignore
         il, irl, originals, clone_to_original, test_reservations,
-        valid_reservations, next_exit, 0, 1, test_t, il_original, False)
+        valid_reservations, next_exit, 0, 0, 1, test_t, il_original, False)
     assert not complete
     assert counter == 1
     assert len(clone_to_original) == 1
@@ -744,7 +743,8 @@ def test_clone_spawn_io_fail(load_shared: None, sq: SquareTiling,
 
     complete, counter = sq._spawn_next_clone(  # type: ignore
         il, irl, originals, clone_to_original, test_reservations,
-        valid_reservations, next_exit, 0, end_at, test_t, il_original, False)
+        valid_reservations, next_exit, 0, 0, end_at, test_t, il_original,
+        False)
     assert complete
     assert counter == end_at
     assert valid_reservations == OrderedDict()
@@ -784,7 +784,8 @@ def test_clone_spawn_tile_fail(load_shared: None, sq: SquareTiling,
 
     complete, counter = sq._spawn_next_clone(  # type: ignore
         il, irl, originals, clone_to_original, test_reservations,
-        valid_reservations, next_exit, 0, end_at, test_t, il_original, False)
+        valid_reservations, next_exit, 0, 0, end_at, test_t, il_original,
+        False)
     assert complete
     assert counter == end_at
     assert valid_reservations == OrderedDict()
@@ -825,9 +826,9 @@ def test_mock_step_spawn(load_shared: None, sq: SquareTiling,
 
     complete, counter_new, test_t_new, last_exit_new, new_exit_new = \
         sq._mock_step(  # type: ignore
-            counter, end_at, test_t, new_exit, irl, il, orl, clone_to_original,
-            test_reservations, valid_reservations, last_exit, originals,
-            irl_original, il_original)
+            counter, counter, end_at, test_t, new_exit, irl, il, orl,
+            clone_to_original, test_reservations, valid_reservations,
+            last_exit, originals, irl_original, il_original)
     assert not complete
     assert counter_new == end_at
     assert test_t_new == test_t + 1
@@ -880,9 +881,9 @@ def test_mock_step_cant_spawn(load_shared: None, sq: SquareTiling,
                     ScheduledExit(vehicle2, VehicleSection.REAR, 0, 0)))
 
     complete, _, _, _, _ = sq._mock_step(  # type: ignore
-        counter, end_at, test_t, new_exit, irl, il, orl, clone_to_original,
-        test_reservations, valid_reservations, last_exit, originals,
-        irl_original, il_original)
+        counter, counter, end_at, test_t, new_exit, irl, il, orl,
+        clone_to_original, test_reservations, valid_reservations, last_exit,
+        originals, irl_original, il_original)
     assert complete
 
 
@@ -922,9 +923,9 @@ def test_mock_step_spawn_exit(load_shared: None, sq: SquareTiling,
 
     complete, counter_new, test_t_new, last_exit_new, new_exit_new = \
         sq._mock_step(  # type: ignore
-            counter, end_at, test_t, None, irl, il, orl, clone_to_original,
-            test_reservations, valid_reservations, None, originals,
-            irl_original, il_original)
+            counter, counter, end_at, test_t, None, irl, il, orl,
+            clone_to_original, test_reservations, valid_reservations, None,
+            originals, irl_original, il_original)
     assert not complete
     assert counter_new == counter
     assert test_t_new == test_t + 1
@@ -977,9 +978,9 @@ def test_mock_step_continue(load_shared: None, sq: SquareTiling,
 
     complete, counter_new, test_t_new, last_exit_new, new_exit_new = \
         sq._mock_step(  # type: ignore
-            counter, end_at, test_t, None, irl, il, orl, clone_to_original,
-            test_reservations, valid_reservations, None, originals,
-            irl_original, il_original)
+            counter, counter, end_at, test_t, None, irl, il, orl,
+            clone_to_original, test_reservations, valid_reservations, None,
+            originals, irl_original, il_original)
     assert not complete
     assert counter_new == counter
     assert test_t_new == test_t + 1
@@ -1031,8 +1032,8 @@ def test_mock_step_exiting(load_shared: None, sq: SquareTiling,
 
     complete, counter_new, test_t_new, last_exit_new, new_exit_new = \
         sq._mock_step(  # type: ignore
-            counter, end_at, test_t, None, irl, il, orl, clone_to_original,
-            test_reservations, valid_reservations,
+            counter, counter, end_at, test_t, None, irl, il, orl,
+            clone_to_original, test_reservations, valid_reservations,
             test_reservations[clone].entrance_front, originals, irl_original,
             il_original)
     assert not complete
@@ -1107,9 +1108,9 @@ def test_mock_step_outgoing(load_shared: None, sq: SquareTiling,
 
     complete, counter_new, test_t_new, last_exit_new, new_exit_new = \
         sq._mock_step(  # type: ignore
-            counter, end_at, test_t, None, irl, il, orl, clone_to_original,
-            test_reservations, valid_reservations, last_exit, originals,
-            irl_og, il_og)
+            counter, counter, end_at, test_t, None, irl, il, orl,
+            clone_to_original, test_reservations, valid_reservations,
+            last_exit, originals, irl_og, il_og)
     assert not complete
     assert counter_new == counter
     assert test_t_new == test_t + 1
@@ -1144,9 +1145,9 @@ def test_mock_step_exited(load_shared: None, sq: SquareTiling,
 
     complete, counter_new, test_t_new, last_exit_new, new_exit_new = \
         sq._mock_step(  # type: ignore
-            counter, end_at, test_t, None, irl, il, orl, clone_to_original,
-            test_reservations, valid_reservations, last_exit, originals,
-            irl_og, il_og)
+            counter, counter, end_at, test_t, None, irl, il, orl,
+            clone_to_original, test_reservations, valid_reservations,
+            last_exit, originals, irl_og, il_og)
     assert not complete
     assert counter_new == counter
     assert test_t_new == test_t + 1
@@ -1190,9 +1191,9 @@ def test_mock_step_invalid(load_shared: None, sq: SquareTiling,
 
     complete, _, _, _, _ = \
         sq._mock_step(  # type: ignore
-            counter, end_at, test_t, None, irl, il, orl, clone_to_original,
-            test_reservations, valid_reservations, last_exit, originals,
-            irl_og, il_og)
+            counter, counter, end_at, test_t, None, irl, il, orl,
+            clone_to_original, test_reservations, valid_reservations,
+            last_exit, originals, irl_og, il_og)
     assert complete
 
 
@@ -1255,7 +1256,7 @@ def clean_request(load_shared: None) -> Tuple[
     while (len(il.vehicles) > 0) or (counter < end_at):
         test_complete, counter, test_t, last_exit, new_exit = \
             sq._mock_step(  # type: ignore
-                counter, end_at, test_t, new_exit, irl, il, orl,
+                counter, counter, end_at, test_t, new_exit, irl, il, orl,
                 clone_to_original, test_reservations, valid_reservations,
                 last_exit, originals, irl_og, il_og, False)
         if test_complete:
@@ -1370,7 +1371,7 @@ def request_timeout_option(timeout: bool, p_back: float = .9) -> Tuple[
     while (len(il.vehicles) > 0) or (counter < end_at):
         test_complete, counter, test_t, last_exit, new_exit = \
             sq._mock_step(  # type: ignore
-                counter, end_at, test_t, new_exit, irl, il, orl,
+                counter, counter, end_at, test_t, new_exit, irl, il, orl,
                 clone_to_original, test_reservations, valid_reservations,
                 last_exit, originals, irl_og, il_og, False)
         if test_complete:
