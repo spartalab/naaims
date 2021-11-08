@@ -83,17 +83,18 @@ class IntersectionLane(Lane):
             raise RuntimeError("Vehicle exited lane already.")
         return True, center, VehicleSection.CENTER
 
-    def effective_speed_limit(self, p: float, vehicle: Vehicle) -> float:
-        """Return the effective speed limit at the given progression."""
-        return super().effective_speed_limit(p, vehicle)
+    def effective_speed_limit(self, p: float, vehicle: Vehicle,
+                              get_property: bool = False) -> float:
+        """Return the effective speed limit at the given progression.
 
-        # TODO: (stochasticity+) Consider making the effective speed limit a
-        #       function of a vehicle's ability to follow instructions
-        #       precisely (to account for it over-accelerating) and its
-        #       deviation from the lane's centerline to allow it to hit the
-        #       actual speed limit if it cuts the corner.
-        #
-        #       See the get_new_speeds todo for more information.
+        get_property instructs this function to return the speed limit at this
+        proportional progress p ignoring any special instructions from the
+        movement model.
+        """
+        if (not get_property) and \
+                self.movement_model.ignore_speed_limit(vehicle):
+            return float('inf')
+        return super().effective_speed_limit(p, vehicle)
 
     def accel_update(self, vehicle: Vehicle, section: VehicleSection, p: float,
                      preceding: Optional[Vehicle]) -> float:
@@ -161,6 +162,7 @@ class IntersectionLane(Lane):
         if transfer.section is VehicleSection.FRONT:
             self.movement_model.init_throttle_deviation(
                 transfer.vehicle, transfer, self.speed_limit)
+            # TODO: Change to use self.effective_speed_limit.
         elif transfer.section is VehicleSection.CENTER:
             self.movement_model.init_lateral_deviation(transfer.vehicle)
         return super().enter_vehicle_section(transfer)

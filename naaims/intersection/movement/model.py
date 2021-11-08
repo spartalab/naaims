@@ -89,6 +89,8 @@ class MovementModel(ABC):
     def start_projection(self, vehicle: Vehicle, entrance: ScheduledExit,
                          v_max: float) -> None:
         """Starts the projection for this vehicle."""
+        # TODO: (low) Change v_max to accept a speed limit function instead of
+        #       a fixed value.
         pass
 
     def prepend_probabilities(self, vehicle: Vehicle, entrance: ScheduledExit,
@@ -124,3 +126,7 @@ class MovementModel(ABC):
     def reset_for_requests(self) -> MovementModel:
         """Returns a reset instance of this MovementModel."""
         raise NotImplementedError("Should be implemented in child classes.")
+
+    def ignore_speed_limit(self, vehicle: Vehicle) -> bool:
+        """Returns if the speed limit should be ignored for this vehicle."""
+        return False

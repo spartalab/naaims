@@ -158,14 +158,15 @@ class OneDrawStochasticModel(MovementModel):
     def get_a_adjusted(v0: float, v_max: float, t_accel: float, t_exit: float,
                        x_to_exit: float, a: float) -> float:
         if t_accel == 0:
-            # default to the original acceleration
+            # Default to the original acceleration.
             return a
         if t_accel == t_exit:
-            # doesn't reach v_max, feather it
-            return (2*x_to_exit - 2*t_accel*v0)/t_accel**2
+            # Can't make the exit time without breaking the speed limit, so
+            # ignore v_max and hit the throttle.
+            return 2*(x_to_exit - v0*t_exit)/t_exit**2
         a_adjusted = (v_max - v0)/t_accel
         if a_adjusted < 0:
-            # Allowing a_adjusted to go negative breaks the probability model
+            # Allowing a_adjusted to go negative breaks the probability model.
             a_adjusted = 0
         return a_adjusted
 
@@ -567,3 +568,7 @@ class OneDrawStochasticModel(MovementModel):
         clone.disable_stochasticity = True
 
         return clone
+
+    def ignore_speed_limit(self, vehicle: Vehicle) -> bool:
+        """Returns if the speed limit should be ignored for this vehicle."""
+        return (vehicle in self.progress_mc) or (vehicle in self.a_adjusted)
