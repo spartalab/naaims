@@ -24,7 +24,7 @@ def test_deterministic_tile(load_shared: None, vehicle: Vehicle,
     assert tile.will_reservation_work(r1) is True
     assert tile.will_reservation_work(r2) is False
     tile.confirm_reservation(r1, .5)
-    assert tile.reserved_by[vehicle.vin] == 1
+    assert tile.reserved_by[r1] == 1
 
 
 def test_stochastic_tile(load_shared: None, vehicle: Vehicle,
@@ -63,8 +63,43 @@ def test_stochastic_tile(load_shared: None, vehicle: Vehicle,
     r39 = res(vehicle3, tile, 9e-3)
     assert tile.will_reservation_work(r39, 9e-3) is True
 
-    assert tile.reserved_by[vehicle.vin] == 1e-7
+    assert tile.reserved_by[r7] == 1e-7
     tile.confirm_reservation(r7, 1e-11)
-    assert tile.reserved_by[vehicle.vin] == 1e-7
+    assert tile.reserved_by[r7] == 1e-7
     tile.confirm_reservation(r7, 1)
-    assert tile.reserved_by[vehicle.vin] == 1
+    assert tile.reserved_by[r7] == 1
+
+
+def test_potential_reservation(load_shared: None, vehicle: Vehicle,
+                               vehicle2: Vehicle, vehicle3: Vehicle,
+                               il: IntersectionLane):
+
+    tile = DeterministicTile(0, 0)
+    res1 = Reservation(vehicle, Coord(0, 0), {}, il,
+                       ScheduledExit(vehicle, VehicleSection.FRONT, 0, 0))
+    res2 = Reservation(vehicle2, Coord(0, 0), {}, il,
+                       ScheduledExit(vehicle, VehicleSection.FRONT, 0, 0),
+                       dependent_on=res1, predecessors=frozenset([res1]))
+    res1.dependency = res2
+    res3 = Reservation(vehicle3, Coord(0, 0), {}, il,
+                       ScheduledExit(vehicle, VehicleSection.FRONT, 0, 0))
+
+    tile_stochastic = StochasticTile(0, 0, 1e-8)
+    with raises(ValueError):
+        tile_stochastic.mark(res1, 1)
+
+    tile.mark(res1)
+    assert res1 in tile.potentials
+    tile.mark(res2)
+    assert res2 not in tile.potentials
+    tile.mark(res3)
+    assert res3 in tile.potentials
+
+    tile.confirm(res1)
+    assert res1 in tile.reserved_by
+    assert tile.will_reservation_work(res2)
+    tile.confirm(res2)
+    assert res2 not in tile.reserved_by
+    assert tile.will_reservation_work(res2)
+    tile.confirm(res3)
+    assert res3 in tile.reserved_by

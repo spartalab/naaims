@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, FrozenSet, Optional
 
 if TYPE_CHECKING:
     from naaims.intersection.tilings.tiles import Tile
@@ -48,6 +48,9 @@ class Reservation:
         dependency: Optional[Reservation] = None
             The reservation of the first vehicle immediately following this
             vehicle in a sequenced reservation, if any.
+        predecessors: FrozenSet[Reservation] = frozenset()
+            The set of all reservations this reservation is dependent on, i.e.,
+            dependent_on and dependent_on's predecessors.
     """
     vehicle: Vehicle
     res_pos: Coord
@@ -58,6 +61,7 @@ class Reservation:
     exit_rear: Optional[ScheduledExit] = None
     dependent_on: Optional[Reservation] = None
     dependency: Optional[Reservation] = None
+    predecessors: FrozenSet[Reservation] = frozenset()
 
     def __hash__(self) -> int:
         return hash(self.vehicle)

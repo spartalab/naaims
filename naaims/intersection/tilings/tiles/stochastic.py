@@ -26,6 +26,9 @@ class StochasticTile(Tile):
                 p_one += ps[i] * p_none_except_i
             return 1 - p_none - p_one <= self.threshold
 
+    def mark(self, r: Reservation, p: float = 1) -> None:
+        raise ValueError("StochasticTile doesn't support potential "
+                         "reservations.")
+
     def confirm(self, r: Reservation, p: float = 1) -> None:
-        vin = r.vehicle.vin if r is not None else None
-        self.reserved_by[vin] = max(p, self.reserved_by.get(vin, 0))
+        self.reserved_by[r] = max(p, self.reserved_by.get(r, 0))

@@ -6,8 +6,9 @@ two more more vehicles use the same tile, causing a collision, while still
 maximizing intersection throughput.
 """
 
-from typing import Optional, Dict
+from typing import Dict, Set, Tuple
 from abc import ABC, abstractmethod
+from itertools import combinations
 
 from naaims.intersection.reservation import Reservation
 
@@ -17,9 +18,6 @@ class Tile(ABC):
     This default tile is stochastic because it demands more input parameters
     than a deterministic tile.
     """
-
-    # TODO: (sequence) Consider banning the use of stochastic AND sequenced
-    #       reservations. It's technically supported but the overhead is a lot.
 
     def __init__(self, id: int, time: int, threshold: float = 0
                  ) -> None:
@@ -43,8 +41,8 @@ class Tile(ABC):
                 apply to the first reservation on this tile.)
         """
         self.__hash = hash((id, time))
-        self.__potentials: Dict[Reservation, float] = {}
-        self.reserved_by: Dict[Optional[int], float] = {}  # by VIN
+        self.potentials: Dict[Reservation, float] = {}
+        self.reserved_by: Dict[Reservation, float] = {}
         if not (0 <= threshold <= 1):
             raise ValueError("Rejection threshold must be in [0,1].")
         self.threshold = threshold
@@ -75,22 +73,23 @@ class Tile(ABC):
         if not (0 <= p <= 1):
             raise ValueError("p must be between 0 and 1 (inclusive).")
         return ((len(self.reserved_by) == 0) or
-                (r.vehicle.vin in self.reserved_by)) if (p > 0) else True
+                (r in self.reserved_by)) if (p > 0) else True
 
+    @abstractmethod
     def mark(self, r: Reservation, p: float = 1) -> None:
-        """Log a potential reservation onto a tile."""
-        self.__potentials[r] = p
+        """Should log a potential reservation onto a tile."""
+        raise NotImplementedError("Must be implemented in child classes.")
 
     def remove_mark(self, r: Reservation) -> None:
         """Clear the marking for this reservation if it exists."""
-        if r in self.__potentials:
-            del self.__potentials[r]
+        if r in self.potentials:
+            del self.potentials[r]
 
     def confirm_reservation(self, r: Reservation, p: float = 1,
                             force: bool = False) -> None:
         """Confirm that a reservation will use this tile.
 
-        Parameters:
+        Parameters
             r: Reservation
             p: float
                 The probability that the reservation being requested uses this
@@ -115,7 +114,7 @@ class Tile(ABC):
 
     def remove_all_marks(self) -> None:
         """Clear all markings on this tile."""
-        self.__potentials = {}
+        self.potentials = {}
 
     def __hash__(self) -> int:
         """Return this tile's unique hash based on its spacetime position."""
@@ -123,5 +122,13 @@ class Tile(ABC):
 
     def _clear_all_reservations(self):
         """Self-explanatory. Only for debugging and automated cleanup."""
-        self.__potentials: Dict[Reservation, float] = {}
-        self.reserved_by: Dict[Optional[int], float] = {}  # by VIN
+        self.potentials = {}
+        self.reserved_by = {}
+
+    def incompatible_pairs(self) -> Set[Tuple[Reservation, Reservation]]:
+        """Return pairs of reservations that are mutually exclusive."""
+
+        # TODO: (stochastic auctions) Account for probability of usage, e.g.,
+        #       two reservations may be compatible but if you add a third
+        #       they're incompatible.
+        return set(combinations(self.potentials.keys(), 2))

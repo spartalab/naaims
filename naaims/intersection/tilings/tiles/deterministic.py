@@ -14,9 +14,21 @@ class DeterministicTile(Tile):
     #       change reserved_by to a single vehicle instead of a dict.
 
     def will_reservation_work(self, r: Reservation, p: float = 1) -> bool:
-        return super().will_reservation_work(r, p) or \
-            (p < self.threshold)
+        return (p < self.threshold) or \
+            (not r.predecessors.isdisjoint(self.reserved_by)) or \
+            super().will_reservation_work(r, p)
+
+    def mark(self, r: Reservation, p: float = 1) -> None:
+        """Log a potential reservation onto a tile.
+
+        Only records if the reservation request has no predecessors already
+        marked on the current tiling.
+        """
+        if (p >= self.threshold) and \
+                r.predecessors.isdisjoint(self.potentials):
+            self.potentials[r] = 1
 
     def confirm(self, r: Reservation, p: float = 1) -> None:
-        if p >= self.threshold:
-            self.reserved_by[r.vehicle.vin if r is not None else None] = 1
+        if (p >= self.threshold) and \
+                r.predecessors.isdisjoint(self.reserved_by):
+            self.reserved_by[r] = 1

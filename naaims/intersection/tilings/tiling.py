@@ -702,10 +702,14 @@ class Tiling(Configurable):
         idx = counter - start - 1
         preceding_vehicle = originals[idx] if (idx >= 0) else None
         preceding_res: Optional[Reservation] = None
+        predecessors: Set[Reservation] = set()
         if preceding_vehicle is not None:
             preceding_res = test_reservations.get(preceding_vehicle)
             if preceding_res is None:
                 preceding_res = valid_reservations.get(preceding_vehicle)
+            assert preceding_res is not None
+            predecessors = set(preceding_res.predecessors)
+            predecessors.add(preceding_res)
         reservation = Reservation(
             vehicle=original,
             res_pos=intersection_lane.trajectory.start_coord,
@@ -713,7 +717,8 @@ class Tiling(Configurable):
             lane=intersection_lane_original,
             entrance_front=new_exit,
             dependent_on=preceding_res,
-            dependency=None
+            dependency=None,
+            predecessors=frozenset(predecessors)
         )
 
         # At this time, the front of the vehicle should just be entering the
