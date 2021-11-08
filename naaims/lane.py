@@ -203,17 +203,24 @@ class Lane(ABC):
                 available_stopping_distance = downstream_stopping_distance
         else:
             if section is not VehicleSection.FRONT:
-                raise ValueError("Not given vehicle's front progress even "
-                                 "though there is a preceding vehicle.")
+                # raise ValueError("Not given vehicle's front progress even "
+                #                  "though there is a preceding vehicle.")
+                warn("Not given vehicle's front progress even "
+                     "though there is a preceding vehicle.")
 
             # Prepare to lane-follow the preceding vehicle in this lane.
             preceding_vehicle_progress = self.vehicle_progress[preceding].rear
             if preceding_vehicle_progress is None:
-                raise ValueError("Preceding vehicle not in lane.")
-            else:
-                available_stopping_distance = self.available_stopping_distance(
-                    preceding_vehicle_progress, p,
-                    preceding.stopping_distance())
+                # raise ValueError("Preceding vehicle not in lane.")
+                warn("Preceding vehicle not in lane.")
+                preceding_vehicle_progress = 1.1
+            # else:
+            #     available_stopping_distance = self.available_stopping_distance(
+            #         preceding_vehicle_progress, p,
+            #         preceding.stopping_distance())
+            available_stopping_distance = self.available_stopping_distance(
+                preceding_vehicle_progress, p,
+                preceding.stopping_distance())
         return self.accel_update_following(
             vehicle, p, available_stopping_distance=available_stopping_distance
         )
@@ -545,6 +552,7 @@ class Lane(ABC):
                     new_vehicle_progress[i] = progress
                     continue
             elif progress > preceding_section_progress:
+                # raise CollisionError("Vehicles overlap in-lane.")
                 warn("Vehicles overlap in-lane. This may be a collision.")
 
             # Update relative position.
