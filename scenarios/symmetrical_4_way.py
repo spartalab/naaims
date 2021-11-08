@@ -12,7 +12,7 @@ from naaims.intersection.tilings.tiles import Tile, DeterministicTile
 
 class Symmetrical4Way(Simulator):
 
-    def __init__(self, visualize: bool = True, visualize_tiles: bool = False,
+    def __init__(self, visualize: bool = False, visualize_tiles: bool = False,
                  length: float = 100,
                  num_lanes: int = 3, speed_limit: float = 15,
                  turn_ratios: Tuple[float, float, float] = (.1, .8, .1),
