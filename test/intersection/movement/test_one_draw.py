@@ -95,7 +95,7 @@ def test_a_p_calc():
     assert v0*t_accel + 1/2*a_adjusted*t_accel**2 + \
         v_max*(t_actual_exit - t_accel) == x_to_exit
     assert OneDrawStochasticModel.get_p_cutoff(
-        v0, a_adjusted, t_accel, .5, 100.5) == (
+        v0, a_adjusted, t_accel, .5, 100.5, 0) == (
         100.5-v_max*(t_actual_exit-t_accel))/100.5
 
     # Doesn't reach the speed limit
@@ -114,7 +114,7 @@ def test_a_p_calc():
         v0, v_max, t_accel, t_actual_exit, x_to_exit, 3)
     assert v0*t_accel + 1/2*a_adjusted*t_accel**2 == x_to_exit
     assert OneDrawStochasticModel.get_p_cutoff(
-        v0, a_adjusted, t_accel, .5, 10.5) == (
+        v0, a_adjusted, t_accel, .5, 10.5, 0) == (
         10.5-v_max*(t_actual_exit-t_accel))/10.5
 
 
@@ -136,7 +136,8 @@ def test_init_throttle(od: OneDrawStochasticModel, h_vehicle: Vehicle,
         v0, v_max, t_accel, t_actual, x_to_exit, 3)
     assert od.a_adjusted.get(h_vehicle) == a_adjusted
     assert od.p_cutoff.get(h_vehicle) == OneDrawStochasticModel.get_p_cutoff(
-        v0, a_adjusted, t_accel, .01, od.trajectory.length)
+        v0, a_adjusted, t_accel, .01, od.trajectory.length,
+        h_vehicle.length_half_buffered)
 
     od_disabled.init_throttle_deviation(h_vehicle, entrance, v_max)
     assert h_vehicle not in od_disabled.a_adjusted

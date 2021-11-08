@@ -115,7 +115,7 @@ class OneDrawStochasticModel(MovementModel):
         self.a_adjusted[vehicle] = a_adjusted
         self.p_cutoff[vehicle] = OneDrawStochasticModel.get_p_cutoff(
             v0, a_adjusted, t_accel, entrance.distance_left,
-            self.trajectory.length)
+            self.trajectory.length, vehicle.length_half_buffered)
 
     @staticmethod
     def t_deterministic_exit(v0: float, a: float, v_max: float,
@@ -171,9 +171,10 @@ class OneDrawStochasticModel(MovementModel):
 
     @staticmethod
     def get_p_cutoff(v0: float, a_adjusted: float, t_accel: float,
-                     distance_left: float, traj_length: float) -> float:
-        return (x_over_constant_a(v0, a_adjusted, t_accel) +
-                distance_left)/traj_length if (a_adjusted >= 0) else \
+                     distance_left: float, traj_length: float,
+                     correction: float) -> float:
+        return (x_over_constant_a(v0, a_adjusted, t_accel) + distance_left -
+                correction)/traj_length if (a_adjusted >= 0) else \
             float('inf')
 
     def remove_vehicle(self, vehicle: Vehicle) -> None:
@@ -471,7 +472,7 @@ class OneDrawStochasticModel(MovementModel):
             # trajectory at a given time.
             progress_mc.append(self.progress_lambda_factory(
                 v0, entrance.t, a_adjusted, v_max, x_to_exit, t_accel,
-                vehicle.length/2))
+                vehicle.length_half_buffered))
             # runs n times to create a monte carlo distribution, unless the
             # vehicle has 0 standard deviation, in which case just run once.
         self.progress_mc[vehicle] = progress_mc
