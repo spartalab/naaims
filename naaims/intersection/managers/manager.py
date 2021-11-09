@@ -150,3 +150,5 @@ class IntersectionManager(Configurable):
         if vehicle.has_reservation:
             self.tiling.clear_reservation(vehicle)
             vehicle.has_reservation = False
+        if vehicle.trailing:
+            vehicle.trailing = False

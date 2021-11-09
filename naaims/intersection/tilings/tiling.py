@@ -146,6 +146,10 @@ class Tiling(Configurable):
             reservation: Reservation = self.queued_reservations[vehicle]
             del self.queued_reservations[vehicle]
             self.active_reservations[vehicle] = reservation
+            if reservation.dependent_on is not None:
+                # This vehicle is dependent on a preceding vehicle's
+                # reservation, so enable following behavior.
+                vehicle.trailing = True
             return reservation.lane
         else:
             raise ValueError("No record of a reservation for this vehicle.")
@@ -699,6 +703,10 @@ class Tiling(Configurable):
         original: Vehicle = new_exit.vehicle
         clone = original.clone_for_request()
         clone.velocity = new_exit.velocity
+        if counter > start:
+            # This vehicle needs to follow the clone spawned ahead of it in the
+            # intersection lane.
+            clone.trailing = True
         idx = counter - start - 1
         preceding_vehicle = originals[idx] if (idx >= 0) else None
         preceding_res: Optional[Reservation] = None

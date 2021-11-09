@@ -115,10 +115,9 @@ class IntersectionLane(Lane):
                 vehicle, section, p)
             if a is not None:
                 return a
-        # # TODO: (sequence) Implement vehicle chain override here.
-        # elif vehicle.trailing:
-        #     # Trailing vehicles in a sequence observe following behavior.
-        #     return super().accel_update(vehicle, p)
+        if vehicle.trailing:
+            # Trailing vehicles in a sequence observe following behavior.
+            return super().accel_update(vehicle, section, p, preceding)
         return super().accel_update_uncontested(vehicle, p)
 
         # TODO: (stochasticity+) Change so speed and acceleration can be

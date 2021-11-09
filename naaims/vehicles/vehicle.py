@@ -98,6 +98,7 @@ class Vehicle(ABC):
         self.heading = 0.0
         self.permission_to_enter_intersection = False
         self.has_reservation = False
+        self.trailing = False
 
         # collect vehicle payments through intersection (auctions only)
         self.payment: float = 0.
@@ -236,6 +237,15 @@ class Vehicle(ABC):
     @has_reservation.setter
     def has_reservation(self, has_reservation: bool) -> None:
         self._has_reservation = has_reservation
+
+    @property
+    def trailing(self) -> bool:
+        """Whether this vehicle is a trailing vehicle in a sequence."""
+        return self._trailing
+
+    @trailing.setter
+    def trailing(self, trailing: bool) -> None:
+        self._trailing = trailing
 
     # TODO: (sequence) Add chain_forward and chain_backward properties.
     #       Allow the chaining action to temporarily override a vehicle's max

@@ -116,7 +116,7 @@ def trials(time: int = 10*60, vpm: float = 15,
 
 if __name__ == "__main__":
     # Render video for single intersection FCFS with different settings.
-    main(2*60, vpm=30, mp4_filename='single_fcfs_4')
+    main(2*60, vpm=30, mp4_filename='fcfs_deterministic')
     # reload(SHARED)
     # main(2*60, movement_model='one draw', tile_type=StochasticTile,
     #      vehicle_type=HumanGuidedVehicle, acceptable_crash_mev=.05,
