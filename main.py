@@ -1,6 +1,6 @@
 from typing import List, Optional, Type
 from importlib import reload
-from statistics import mean
+from statistics import mean, stdev
 from os.path import exists
 from warnings import warn
 
@@ -99,19 +99,21 @@ def trials(time: int = 10*60, vpm: float = 15,
                 reload(SHARED)
         else:
             raise RuntimeError(f"Trial retry attempts exhausted.")
+    traversal_time_means: List[float] = []
+    for i in range(n_trials):
+        df = read_csv(f'output/logs/{log_name}_{i}.csv', header=0)
+
+        # Drop vehicles that have yet to exit.
+        df.drop(df.index[df['t_exit'] < 0], axis=0,   # type: ignore
+                inplace=True)
+
+        traversal_time_means.append(
+            (df['t_exit'] - df['t_spawn']).mean())  # type: ignore
+    sample_mean = mean(traversal_time_means)
+    sample_sd = stdev(traversal_time_means)
     with open(f'output/logs/trials_{log_name}.txt', 'w') as f:
-        means: List[float] = []
-        for i in range(n_trials):
-            df = read_csv(f'output/logs/{log_name}_{i}.csv', header=0)
-
-            # Drop vehicles that have yet to exit.
-            df.drop(df.index[df['t_exit'] < 0], axis=0,   # type: ignore
-                    inplace=True)
-
-            means.append((df['t_exit'] - df['t_spawn']).mean())  # type: ignore
-        res = mean(means)
-        f.write(str(res))
-    return mean(means)
+        f.write(f'{sample_mean}\n{sample_sd}')
+    return sample_mean, sample_sd
 
 
 if __name__ == "__main__":

@@ -212,3 +212,10 @@ def test_accel_update(il: IntersectionLane, vehicle: Vehicle,
     assert il_stochastic.accel_update(
         h_vehicle, VehicleSection.FRONT, .5, None
     ) < il.accel_update_uncontested(h_vehicle, .5)
+
+    vehicle.velocity = 10
+    assert il.accel_update(vehicle, VehicleSection.FRONT, .5, h_vehicle) == 3
+    vehicle.trailing = True
+    il.vehicle_progress[h_vehicle] = VehicleProgress(.53, .52, .51)
+    assert il.accel_update(vehicle, VehicleSection.FRONT, .5, h_vehicle) == \
+        -2.6

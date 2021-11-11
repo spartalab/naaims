@@ -99,7 +99,8 @@ class IntersectionManager(Configurable):
             lanes=spec['lanes'],
             lanes_by_endpoints=spec['lanes_by_endpoints'],
             tiling_type=spec['tiling_type'],
-            tiling_spec=spec['tiling_spec']
+            tiling_spec=spec['tiling_spec'],
+            misc_spec=spec.get('misc_spec', {})
         )
 
     # Begin simulation cycle methods

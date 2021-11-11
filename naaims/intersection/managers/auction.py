@@ -60,7 +60,7 @@ class AuctionManager(IntersectionManager):
                                       "yet supported.")
 
         # The mechanism decides how participants bid and how much they pay.
-        mechanism: str = misc_spec.get('payment_formula', 'first').lower()
+        mechanism: str = misc_spec.get('mechanism', 'first').lower()
         self.mechanism: Mechanism
         if mechanism in {'2nd', 'second', 'second price', '2nd price'}:
             self.mechanism = Mechanism.SECOND_PRICE
@@ -77,7 +77,7 @@ class AuctionManager(IntersectionManager):
         #   average VOT per vehicle per lane
         vpm_mean = misc_spec.get('vpm_mean', DefaultDict(lambda: 0.))
         self.vps_mean: Dict[RoadLane, float] = {veh: vpm/60 for (veh, vpm) in
-                                                vpm_mean}
+                                                vpm_mean.items()}
         self.vot_mean: Dict[RoadLane, float] = misc_spec.get(
             'vot_mean', DefaultDict(lambda: 0.))
 
