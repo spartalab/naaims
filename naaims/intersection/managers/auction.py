@@ -123,9 +123,10 @@ class AuctionManager(IntersectionManager):
                 first_losing_vot, self.mechanism)
         elif self.mechanism is Mechanism.EXTERNALITY:
             payments = AuctionManager.payment_externality(
-                winning_rls, winning_vot, first_losing_rls, first_losing_vot,
+                winning_rls, winning_vot, first_losing_vot,
+                frozenset(self.incoming_road_lane_by_coord.values()),
                 rl_to_leading_request, all_set_vot, start_idx, sum_vot,
-                self.vps_mean, self.vot_mean, self.multiple)
+                self.vps_mean, self.vot_mean)
         else:
             raise ValueError("Invalid payment mechanism.")
 
@@ -496,114 +497,134 @@ class AuctionManager(IntersectionManager):
         personal VOT by the ratio the first losing bid over the winning total
         bid, which their personal bid contributed to.
         """
-        if mechanism is mechanism.SECOND_PRICE:
+        if mechanism is mechanism.FIRST_PRICE:
             return 1
         return first_losing_vot / winning_vot
 
     @staticmethod
     def payment_externality(winning_rls: FrozenSet[RoadLane],
-                            winning_vot: float,
-                            first_losing_rls: FrozenSet[RoadLane],
-                            first_losing_vot: float,
+                            winning_vot: float, first_losing_vot: float,
+                            all_rls: FrozenSet[RoadLane],
                             rl_to_leading_request: Dict[RoadLane, Reservation],
                             all_set_vot: Dict[FrozenSet[RoadLane], float],
                             start_idx: Dict[RoadLane, int],
                             sum_vot: Dict[RoadLane, float],
                             vps_mean: Dict[RoadLane, float],
-                            vot_mean: Dict[RoadLane, float],
-                            multiple: bool
+                            vot_mean: Dict[RoadLane, float]
                             ) -> Dict[Vehicle, float]:
+        """Returns the externality payment for this winning set.
 
-        payment: Dict[Vehicle, float] = {}
-        all_rls = frozenset(rl_to_leading_request.keys())
+        Note that the payment is the negative of the externality, because
+        winning vehicles are paying for the externality they impose.
+        """
 
-        if multiple:
-            # Sort all eligible sets by bid (sum VOT).
-            sets_by_vot = sorted(all_set_vot.items(), key=lambda kv: kv[1],
-                                 reverse=True)
+        payment: Dict[Vehicle, float] = DefaultDict(lambda: 0.)
 
-            # Find the intersection time consumed by the winning set.
-            t_winner = AuctionManager.t_occupied(winning_rls,
-                                                 rl_to_leading_request)
+        # Sort all eligible sets by bid (sum VOT).
+        sets_by_vot = sorted(all_set_vot.items(), key=lambda kv: kv[1],
+                             reverse=True)
 
-            # For each winning road lane, find the bid of the highest bidding
-            # set that doesn't contain this road lane so we can run a
-            # counterfactual to see who would've won if each individual vehicle
-            # in this road lane hadn't been there.
-            for rl in winning_rls:
-                winning_rls_without_rl: FrozenSet[RoadLane] = frozenset()
-                winning_vot_without_rl = 0.
-                for losing_set, losing_bid in sets_by_vot:
-                    if rl not in losing_set:
-                        if losing_bid > winning_vot_without_rl:
-                            winning_vot_without_rl = losing_bid
-                            winning_rls_without_rl = losing_set
-                        break
+        # Find the intersection time consumed by the winning set.
+        t_winner = AuctionManager.t_occupied(winning_rls,
+                                             rl_to_leading_request)
 
-                # Find the intersection time consumed by the set that would've
-                # won had the winning road lane we're looking at not been
-                # participating.
-                t_without_rl = AuctionManager.t_occupied(
-                    winning_rls_without_rl, rl_to_leading_request)
+        # For each winning road lane, find the bid of the highest bidding
+        # set that doesn't contain this road lane so we can run a
+        # counterfactual to see who would've won if each individual vehicle
+        # in this road lane hadn't been there.
+        winning_rls_without_rl: FrozenSet[RoadLane] = frozenset()
+        for rl in winning_rls:
+            winning_rls_without_rl = frozenset()
+            winning_vot_without_rl = 0.
+            for losing_set, losing_bid in sets_by_vot:
+                if rl not in losing_set:
+                    if losing_bid > winning_vot_without_rl:
+                        winning_vot_without_rl = losing_bid
+                        winning_rls_without_rl = losing_set
+                    break
 
-                # Find the payment for each vehicle in the winning road lane.
-                for vehicle_i in rl.vehicles[start_idx[rl]:]:
-                    payment[vehicle_i] = AuctionManager.calculate_externality(
-                        vehicle_i.vot, winning_vot, winning_vot_without_rl,
-                        winning_rls, winning_rls_without_rl, all_rls, t_winner,
-                        t_without_rl, sum_vot, vps_mean, vot_mean)
+            # Find the intersection time consumed by the set that would've
+            # won had the winning road lane we're looking at not been
+            # participating.
+            t_without_rl = AuctionManager.t_occupied(
+                winning_rls_without_rl, rl_to_leading_request)
 
-        elif len(winning_rls) > 0:
-            # Sequence. Winner and first loser are singular lanes.
-            if (len(winning_rls) > 1) or (len(first_losing_rls) > 1):
-                raise RuntimeError("Can't apply sequencing to a multiple "
-                                   "dispatch winning reservation.")
+            # Find the payment for each vehicle in the winning road lane.
+            for vehicle_i in rl.vehicles[start_idx[rl]:]:
+                payment[vehicle_i] = -AuctionManager.calculate_externality(
+                    vehicle_i.vot, winning_vot, winning_vot_without_rl,
+                    winning_rls, winning_rls_without_rl, all_rls, t_winner,
+                    t_without_rl, sum_vot, vps_mean, vot_mean)
+
+        if len(winning_rls) == 1:
+            # This might be a sequenced auction. We'll start the analysis at
+            # the second vehicle in the sequence, if there is one.
             rl = next(iter(winning_rls))
-            t_first_loser = 0.
+            request: Optional[Reservation] = rl_to_leading_request[rl]
+            assert request is not None
+            winning_vot -= request.vehicle.vot
+            idx_supporters = start_idx[rl] + 1
+
+            # Prepare to find how much additional time this next vehicle in the
+            # sequence will use, and to compare against the marginal additional
+            # time the first losing set would've used past the lane leading
+            # movement (if any).
+            assert request.exit_rear is not None
+            ts_previous_exit = request.exit_rear.t
+
+            # Prepare to determine if the first loser would've used more or
+            # less time in the intersection that this sequence length. Also
+            # find its bid.
+            ts_first_loser = SHARED.t
+            first_losing_vot = 0.
+            first_losing_rls = winning_rls_without_rl
             if len(first_losing_rls) > 0:
-                t_first_loser = AuctionManager.t_movement(
-                    rl_to_leading_request[next(iter(first_losing_rls))])
+                rl_first_loser = next(iter(first_losing_rls))
+                first_losing_vot = sum_vot[rl_first_loser]
+                request_first_loser = rl_to_leading_request[rl_first_loser]
+                assert request_first_loser.exit_rear is not None
+                ts_first_loser = request_first_loser.exit_rear.t
 
             # Iterate through the lane leading reservation for accepted
             # sequence lengths.
-            idx_supporters = start_idx[rl]
-            request: Optional[Reservation] = rl_to_leading_request[rl]
-            winning_bid = sum_vot[rl]
-            t_winner = 0.
-            t_previous_exit = SHARED.t
+            request = request.dependency
             while request is not None:
+                # Each successive sequence member has essentially won a mini-
+                # auction against the highest value set that doesn't include
+                # itself for the marginal additional time it uses, so we'll
+                # charge participating bidders accordingly by adjusting the
+                # t_winner and t_first_loser values in addition to the
+                # winning_vot.
 
-                # Calculate the time occupied in the intersection by the
-                # sequence so far, and prepare to find the value for the next
-                # sequence entry as well.
-                assert request.exit_rear is not None
-                t_winner += (request.exit_rear.t - t_previous_exit) * \
+                # Calculate the marginal additional time the first losing set
+                # would've used, if any.
+                t_first_loser = max(ts_first_loser - ts_previous_exit, 0) * \
                     SHARED.SETTINGS.TIMESTEP_LENGTH
-                t_previous_exit = request.exit_rear.t
 
-                # Calculate the externality payment for this next vehicle in
-                # the sequence.
-                payment[request.vehicle] = \
-                    AuctionManager.calculate_externality(
-                    request.vehicle.vot, winning_vot, first_losing_vot,
-                    winning_rls, first_losing_rls, all_rls, t_winner,
-                    t_first_loser, sum_vot, vps_mean, vot_mean)
+                # Calculate the marginal additional time used by this next
+                # vehicle in the sequence (and prepare to find the value for
+                # the next sequence member).
+                assert request.exit_rear is not None
+                t_winner = (request.exit_rear.t - ts_previous_exit) * \
+                    SHARED.SETTINGS.TIMESTEP_LENGTH
+                ts_previous_exit = request.exit_rear.t
+
+                # Calculate the externality payments for the mini-auction
+                # associated with the next vehicle in the sequence.
+                for vehicle_i in rl.vehicles[idx_supporters:]:
+                    payment[vehicle_i] += \
+                        -AuctionManager.calculate_externality(
+                        vehicle_i.vot, winning_vot, first_losing_vot,
+                        winning_rls, first_losing_rls, all_rls, t_winner,
+                        t_first_loser, sum_vot, vps_mean, vot_mean)
 
                 # Update our memory of where the sequence ends and the rest of
                 # the non-sequenced trailing vehicles in the lane begins, the
                 # remaining effective bid of these trailing vehicles, and set
                 # the request to look at the next one in the sequence.
                 idx_supporters += 1
-                winning_bid -= request.vehicle.vot
+                winning_vot -= request.vehicle.vot
                 request = request.dependency
-
-            # For the remaining vehicles in the lane but not in the sequence,
-            # calculate their externality payment.
-            for vehicle_i in rl.vehicles[idx_supporters:]:
-                payment[vehicle_i] = AuctionManager.calculate_externality(
-                    vehicle_i.vot, winning_vot, first_losing_vot,
-                    winning_rls, first_losing_rls, all_rls, t_winner,
-                    t_first_loser, sum_vot, vps_mean, vot_mean)
 
         return payment
 
@@ -682,18 +703,24 @@ class AuctionManager(IntersectionManager):
                     sum_vot: Dict[RoadLane, float],
                     vps_mean: Dict[RoadLane, float],
                     vot_mean: Dict[RoadLane, float]) -> float:
+        """Returns the externality of an individual vehicle.
 
-        t_diff = t_winner - t_erstwhile
+        Only applies if winning_rl and erstwhile_winning_rl don't share a
+        RoadLane. In that case, the externality would just be 0 since this
+        vehicle's presence had no effect on the outcome.
+        """
+
+        t_diff = t_erstwhile - t_winner
 
         vot_winner = sum(
-            sum_vot[rl] + vps_mean[rl]*vot_mean[rl]*t_erstwhile/2 for rl in
-            winning_rls) - vehicle_i_vot
+            sum_vot.get(rl, 0) + vps_mean[rl]*vot_mean[rl]*t_erstwhile/2 for rl
+            in winning_rls) - vehicle_i_vot
         vot_first_loser = sum(
-            sum_vot[rl] + vps_mean[rl]*vot_mean[rl]*t_winner/2 for rl in
-            erstwhile_winning_rls)
+            sum_vot.get(rl, 0) + vps_mean[rl]*vot_mean[rl]*t_winner/2 for rl
+            in erstwhile_winning_rls)
         vot_everyone_else = sum(
-            sum_vot[rl] + vps_mean[rl]*vot_mean[rl] * t_diff/2 for rl in
-            everyone_else)
+            sum_vot.get(rl, 0) + vps_mean[rl]*vot_mean[rl] * max(t_diff, 0)/2
+            for rl in everyone_else)
 
         return (vot_winner * t_erstwhile) - (vot_first_loser * t_winner) + \
             (vot_everyone_else * t_diff)
@@ -705,156 +732,5 @@ class AuctionManager(IntersectionManager):
         if self.floor and (payment < 0):
             payment = 0.
         vehicle.payment += payment
+        del self.payments[vehicle]
         return super().finish_exiting(vehicle)
-
-    # @staticmethod
-    # def find_sequences(winning_rls: FrozenSet[RoadLane],
-    #                    winning_bid: float, first_losing_bid: float,
-    #                    rl_to_leading_request: Dict[RoadLane, Reservation],
-    #                    sum_vot: Dict[RoadLane, float],
-    #                    incompatible_pairs: Set[FrozenSet[Reservation]],
-    #                    mechanism: Mechanism, realized: bool
-    #                    ) -> Tuple[Dict[RoadLane, List[float]],
-    #                               Dict[Vehicle, float]]:
-    #     """Codify sequences and find time used and bid per winning reservation.
-
-    #     The winning road lanes are decided solely by the lane leading
-    #     reservations, but each leading reservation can have trailing vehicle
-    #     reservations that haven't been confirmed to be compatible if the
-    #     self.sequence flag is enabled.
-
-    #     This method trims the trailing reservations so that only the maximum
-    #     value compatible reservations remain. In effect, it's extending the
-    #     reservation sequences from each lane from 1 to as many as possible that
-    #     doesn't cause a conflict.
-
-    #     Returns
-    #         Dict[RoadLane, List[float]]
-    #             Marginal time used by each road lane's sequence of length [0,
-    #             max sequence length and total value that is valid].
-    #         Dict[Vehicle, float]
-    #             First price bid by each vehicle, if mechanism is one of the
-    #             first or second price mechanisms.
-    #     """
-    #     raise NotImplementedError("TODO: Incomplete function.")
-
-    #     marginal_time: Dict[RoadLane, List[float]] = {}
-    #     total_time: Dict[RoadLane, float] = {}
-    #     next_in_sequence: List[Tuple[RoadLane, Reservation]] = []
-    #     confirmed_requests: Set[Reservation] = set()
-
-    #     # This is the amount personally contributed to the winning sum by an
-    #     # individual vehicle, in either realized real-value units or VOT units,
-    #     # and will decide what they pay in a first- and second-price mechanism.
-    #     bid_personal: Dict[Vehicle, float] = {}
-
-    #     # This is the amount in VOT units currently supporting the next
-    #     # sequenced reservation in this road lane, consisting of the VOT of the
-    #     # the current vehicle in the sequence plus all vehicles behind it.
-    #     vot_supporting: Dict[RoadLane, float] = {}
-
-    #     # Initialize with the already confirmed reservation leading each
-    #     # winning road lane.
-    #     for rl in winning_rls:
-
-    #         # Fetch the leading request from this road lane, add it to the set
-    #         # of confirmed requests, and calculate the bid associated with this
-    #         # vehicle only. If it doesn't have any dependencies, there's
-    #         # nothing more to do here.
-    #         request = rl_to_leading_request[rl]
-    #         confirmed_requests.add(request)
-    #         t_marginal = AuctionManager.t_movement(request)
-    #         marginal_time[rl] = [t_marginal]
-    #         total_time[rl] = t_marginal
-    #         # bid_personal[request.vehicle] = request.vehicle.vot
-    #         # if realized:
-    #         #     bid_personal[request.vehicle] *= t_marginal
-    #         if request.dependency is not None:
-    #             continue
-
-    #         # If this leading reservation has trailing reservations, calculate
-    #         # the (lower) VOT supporting this trailing reservation and add it
-    #         # to the list of trailing requests to consider.
-    #         vot_supporting[rl] = sum_vot[rl] - request.vehicle.vot
-    #         next_in_sequence.append((rl, request))
-
-    #     # While the sequence from all winning lanes have yet to be exhausted,
-    #     # loop through all winning lanes that still have additional sequenced
-    #     # vehicles to check.
-    #     while len(next_in_sequence) > 0:
-
-    #         # Search across the road lanes with next sequence candidates for
-    #         # the one with the highest supporting bid, checking eligibility
-    #         # along the way.
-    #         # (This is the greedy heuristic with a benchmark.)
-    #         candidate_bid_supporting: float = -1.
-    #         candidate_request: Reservation = next_in_sequence[0][1]
-    #         candidate_rl: RoadLane = next_in_sequence[0][0]
-    #         candidate_t_marginal: float = 0.
-    #         request_cleared_with: DefaultDict[Reservation, Set[Reservation]
-    #                                           ] = DefaultDict(lambda: set())
-    #         trim: List[Tuple[RoadLane, Reservation]] = []
-    #         for rl, request in next_in_sequence:
-    #             # Check the marginal additional tiles used by the candidate
-    #             # sequence reservation for conflicts with existing, confirmed
-    #             # reservations. If it does, or if it fails to exceed a
-    #             # mechanisms benchmark, this lane is exhausted.
-    #             requests_to_check_against = confirmed_requests.difference(
-    #                 request_cleared_with[request])
-    #             for potential_conflict in requests_to_check_against:
-    #                 if frozenset((request, potential_conflict)) in \
-    #                         incompatible_pairs:
-    #                     # This sequence is ineligible. Mark for trimming.
-    #                     trim.append((rl, request))
-    #                     continue
-
-    #             # Calculate the marginal additional time used by this request.
-    #             assert request.exit_rear is not None
-    #             assert request.dependent_on is not None
-    #             assert request.dependent_on.exit_rear is not None
-    #             t_marginal = (request.exit_rear.t -
-    #                           request.dependent_on.exit_rear.t
-    #                           ) * SHARED.SETTINGS.TIMESTEP_LENGTH
-
-    #             # Using the mechanism, calculate the marginal bid of this
-    #             # sequenced reservation, and check if it's high enough to be
-    #             # eligible for confirmation, which is only a concern when using
-    #             # non-marginal mechanisms.
-    #             bid_supporting_this = vot_supporting[rl]
-    #             if realized:
-    #                 bid_supporting_this *= t_marginal
-    #             raise NotImplementedError("TODO")
-
-    #             if bid_supporting_this > candidate_bid_supporting:
-    #                 candidate_bid_supporting = bid_supporting_this
-    #                 candidate_request = request
-    #                 candidate_t_marginal = t_marginal
-    #                 candidate_rl = rl
-
-    #         # Once all lanes have been looked at, trim out the sequence
-    #         # requests that have been shown to be ineligible for confirmation.
-    #         for rl, request in trim:
-    #             next_in_sequence.remove((rl, request))
-    #             request.dependency = None
-
-    #         # Confirm the marginal sequence with the highest passing bid,
-    #         # calculate supporting values, add its dependency (if there is one)
-    #         # to the consideration list, and restart while loop.
-    #         confirmed_requests.add(candidate_request)
-    #         marginal_time[candidate_rl].append(candidate_t_marginal)
-    #         total_time[candidate_rl] += candidate_t_marginal
-    #         vot_supporting[candidate_rl] -= candidate_request.vehicle.vot
-    #         next_in_sequence.remove((candidate_rl, candidate_request))
-    #         if candidate_request.dependency is not None:
-    #             next_in_sequence.append((candidate_rl,
-    #                                      candidate_request.dependency))
-
-    #     return marginal_time, bid_personal
-    #     # TODO: Remove bid_personal. It's findable using time_marginal and the
-    #     #       list of confirmed.
-
-    #     # TODO: Save each sequence confirm variant into set bid for use in
-    #     #       externality calc. Should be effectively the same process.
-
-    #     # TODO: After this is done, the only mechanism implementation necessary
-    #     #       for first and second price is to find the fraction of usage.
