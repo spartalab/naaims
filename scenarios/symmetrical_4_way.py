@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Tuple, Type
 
 from naaims.simulator import Simulator
-from naaims.vehicles import Vehicle, AutomatedVehicle
+from naaims.vehicles import AutomatedVehicle, HumanGuidedVehicle
 from naaims.endpoints.factories import GaussianVehicleFactory
 from naaims.util import Coord
 from naaims.trajectories import BezierTrajectory
@@ -19,10 +19,14 @@ class Symmetrical4Way(Simulator):
                  manager_type: Type[IntersectionManager] = StopSignManager,
                  tile_type: Type[Tile] = DeterministicTile,
                  tile_width: float = 4, vpm: float = 10,
-                 vehicle_type: Type[Vehicle] = AutomatedVehicle,
+                 av_percentage: float = 1.,
                  movement_model: str = 'deterministic',
                  acceptable_crash_mev: float = 0.,
-                 steps_per_second: int = 60):
+                 steps_per_second: int = 60,
+                 hgv_throttle_mn: float = 0.0752,
+                 hgv_throttle_sd: float = 0.1402,
+                 hgv_tracking_mn: float = -0.0888,
+                 hgv_tracking_sd: float = 0.0631):
         """Create an instance of a 4-way 3-lane intersection simulator.
 
         Destination
@@ -37,6 +41,9 @@ class Symmetrical4Way(Simulator):
 
         if num_lanes not in {1, 2, 3}:
             raise ValueError('Only 1 to 3 lanes supported.')
+
+        if (av_percentage < 0) or (av_percentage > 1):
+            raise ValueError('AV probability must be between 0 and 1')
 
         # Create IO roads
         traj_i_l = BezierTrajectory(Coord(-length, 10), Coord(0, 10),
@@ -92,8 +99,8 @@ class Symmetrical4Way(Simulator):
                 speed_limit=speed_limit
             ))
 
-        factory_spec_generic: Dict[str, Any] = dict(
-            vehicle_type=vehicle_type,
+        factory_spec_generic_av: Dict[str, Any] = dict(
+            vehicle_type=AutomatedVehicle,
             num_destinations=4,
             source_node_id=None,
             max_accel_mn=3,
@@ -104,25 +111,31 @@ class Symmetrical4Way(Simulator):
             length_sd=0,
             width_mn=3,
             width_sd=0,
-            throttle_mn_mn=0 if (vehicle_type is AutomatedVehicle) else 0.0752,
+            throttle_mn_mn=0,
             throttle_mn_sd=0,
-            throttle_sd_mn=0 if (vehicle_type is AutomatedVehicle) else 0.1402,
+            throttle_sd_mn=0,
             throttle_sd_sd=0,
-            tracking_mn_mn=0 if (vehicle_type is AutomatedVehicle) else
-            -0.0888,
+            tracking_mn_mn=0,
             tracking_mn_sd=0,
-            tracking_sd_mn=0 if (vehicle_type is AutomatedVehicle) else 0.0631,
+            tracking_sd_mn=0,
             tracking_sd_sd=0,
             vot_mn=0,
             vot_sd=0
         )
+        factory_spec_generic_hgv = factory_spec_generic_av.copy()
+        factory_spec_generic_hgv['vehicle_type'] = HumanGuidedVehicle
+        factory_spec_generic_hgv['throttle_mn_mn'] = hgv_throttle_mn
+        factory_spec_generic_hgv['throttle_sd_mn'] = hgv_throttle_sd
+        factory_spec_generic_hgv['tracking_mn_mn'] = hgv_tracking_mn
+        factory_spec_generic_hgv['tracking_sd_mn'] = hgv_tracking_sd
 
         spawner_specs: List[Dict[str, Any]] = []
-        factory_specs: List[Dict[str, Any]] = []
 
         # Form spawner and factory specs
         for i in range(4):
-            factory_spec = factory_spec_generic.copy()
+            factory_spec_av = factory_spec_generic_av.copy()
+            factory_spec_hgv = factory_spec_generic_hgv.copy()
+            factory_specs = [factory_spec_av, factory_spec_hgv]
             turn_ratio_list = list(turn_ratios)
             destination_ps: List[float]
             if i == 0:
@@ -130,16 +143,17 @@ class Symmetrical4Way(Simulator):
             else:
                 destination_ps = turn_ratio_list[len(turn_ratio_list)-i:] + \
                     [0] + turn_ratio_list[:len(turn_ratio_list)-i]
-            factory_spec['destination_probabilities'] = destination_ps
-            factory_spec['source_node_id'] = i
-            factory_specs.append(factory_spec)
+            for factory_spec in factory_specs:
+                factory_spec['destination_probabilities'] = destination_ps
+                factory_spec['source_node_id'] = i
             spawner_specs.append(dict(
                 id=i,
                 road_id=i,
                 vpm=vpm,
-                factory_selection_probabilities=[1],
-                factory_types=[GaussianVehicleFactory],
-                factory_specs=[factory_specs[i]]
+                factory_selection_probabilities=[av_percentage,
+                                                 1-av_percentage],
+                factory_types=[GaussianVehicleFactory, GaussianVehicleFactory],
+                factory_specs=factory_specs
             ))
 
         # Form remover specs

@@ -18,7 +18,7 @@ from naaims.archetypes import Facility, Upstream, Downstream
 from naaims.intersection import Intersection
 from naaims.road import Road
 from naaims.endpoints import VehicleSpawner, VehicleRemover
-from naaims.vehicles import Vehicle
+from naaims.vehicles import Vehicle, HumanGuidedVehicle
 
 
 class Simulator:
@@ -323,6 +323,7 @@ class Simulator:
             road_sep_color = '#ffd600'  # 'y'
             road_color = '#333f48'  # '.5'
             self.vehicle_color = '.9'  # '#ffffff'  # 'g'
+            self.human_vehicle_outline_color = 'yellow'
             self.reserved_color = '#FF00FF'
             self.permitted_color = '#EFFD5F'
             self.tile_color = {
@@ -585,9 +586,11 @@ class Simulator:
                     vehicle_color = self.permitted_color
                 else:
                     vehicle_color = self.vehicle_color
-                patch = Polygon(vehicle.get_outline(),
-                                facecolor=vehicle_color, alpha=1,
-                                edgecolor=None, zorder=5)
+                patch = Polygon(
+                    vehicle.get_outline(), facecolor=vehicle_color, alpha=1,
+                    edgecolor=self.human_vehicle_outline_color if
+                    (type(vehicle) is HumanGuidedVehicle) else None,
+                    zorder=5)
                 self.ax.add_patch(patch)
                 self.patches.append(patch)
                 changed.append(patch)
