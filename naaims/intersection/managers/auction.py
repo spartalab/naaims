@@ -75,11 +75,13 @@ class AuctionManager(IntersectionManager):
         # Unpack externality mechanism specific parameters.
         #   average vehicles per minute per lane, converted to per second units
         #   average VOT per vehicle per lane
-        vpm_mean = misc_spec.get('vpm_mean', DefaultDict(lambda: 0.))
-        self.vps_mean: Dict[RoadLane, float] = {veh: vpm/60 for (veh, vpm) in
-                                                vpm_mean.items()}
-        self.vot_mean: Dict[RoadLane, float] = misc_spec.get(
-            'vot_mean', DefaultDict(lambda: 0.))
+        vpm_mean = misc_spec.get('vpm_mean', {})
+        vot_mean = misc_spec.get('vot_mean', {})
+        self.vps_mean: Dict[RoadLane, float] = {}
+        self.vot_mean: Dict[RoadLane, float] = {}
+        for rl_coord, rl in incoming_road_lane_by_coord.items():
+            self.vps_mean[rl] = vpm_mean.get(rl_coord, 0.)/60
+            self.vot_mean[rl] = vot_mean.get(rl_coord, 0.)
 
         # Initialize log of vehicles' payments at this intersection.
         self.payments: DefaultDict[Vehicle, float] = DefaultDict(lambda: 0.)

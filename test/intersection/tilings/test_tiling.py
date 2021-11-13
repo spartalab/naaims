@@ -246,7 +246,7 @@ def test_mock_intersection_step_transfer(load_shared: None, sq: SquareTiling,
 
     # Step intersection
     assert not sq._mock_intersection_step_vehicles(  # type: ignore
-        il, orl, test_reservations, valid_reservations, test_t, False)
+        il, orl, test_reservations, valid_reservations, test_t)
 
     # Check if the vehicle with center in intersection is in is new position
     new_p = .5 + vehicle2.velocity*SHARED.SETTINGS.TIMESTEP_LENGTH + \
@@ -315,7 +315,7 @@ def test_mock_intersection_step_io_ok(load_shared: None, sq: SquareTiling,
 
     # Step intersection
     assert not sq._mock_intersection_step_vehicles(  # type: ignore
-        il, orl, test_reservations, valid_reservations, test_t, False)
+        il, orl, test_reservations, valid_reservations, test_t)
 
     # Check if the vehicle with center in intersection is in is new position
     new_p = .5 + vehicle2.velocity*SHARED.SETTINGS.TIMESTEP_LENGTH + \
@@ -393,7 +393,7 @@ def test_mock_intersection_step_block(load_shared: None, sq: SquareTiling,
 
     # Step intersection
     assert sq._mock_intersection_step_vehicles(  # type: ignore
-        il, orl, test_reservations, valid_reservations, test_t, False)
+        il, orl, test_reservations, valid_reservations, test_t)
 
     # Check if the exiting vehicle's reservation updated properly
     assert valid_reservations == OrderedDict({vehicle3: a_valid_res})
@@ -613,7 +613,7 @@ def test_all_pos(load_shared: None, sq: SquareTiling, vehicle: Vehicle,
 
     counter_new = sq._all_pos_to_tile(  # type: ignore
         il, irl, {}, test_reservations, valid_reservations,  counter, end_at,
-        test_t, False)
+        test_t)
     assert counter == counter_new
 
     for veh, res in test_reservations.items():
@@ -659,7 +659,7 @@ def test_all_pos_block(load_shared: None, sq: SquareTiling, vehicle: Vehicle,
 
     counter_new = sq._all_pos_to_tile(  # type: ignore
         il, irl, {}, test_reservations, valid_reservations,  counter, end_at,
-        test_t, False)
+        test_t)
     assert counter_new == -1
 
     assert valid_reservations[vehicle].dependency is None
@@ -681,7 +681,7 @@ def test_clone_spawn(load_shared: None, sq: SquareTiling, vehicle: Vehicle):
 
     complete, counter = sq._spawn_next_clone(  # type: ignore
         il, irl, originals, clone_to_original, test_reservations,
-        valid_reservations, next_exit, 0, 0, 1, test_t, il_original, False)
+        valid_reservations, next_exit, 0, 0, 1, test_t, il_original)
     assert not complete
     assert counter == 1
     assert len(clone_to_original) == 1
@@ -743,8 +743,7 @@ def test_clone_spawn_io_fail(load_shared: None, sq: SquareTiling,
 
     complete, counter = sq._spawn_next_clone(  # type: ignore
         il, irl, originals, clone_to_original, test_reservations,
-        valid_reservations, next_exit, 0, 0, end_at, test_t, il_original,
-        False)
+        valid_reservations, next_exit, 0, 0, end_at, test_t, il_original)
     assert complete
     assert counter == end_at
     assert valid_reservations == OrderedDict()
@@ -784,8 +783,7 @@ def test_clone_spawn_tile_fail(load_shared: None, sq: SquareTiling,
 
     complete, counter = sq._spawn_next_clone(  # type: ignore
         il, irl, originals, clone_to_original, test_reservations,
-        valid_reservations, next_exit, 0, 0, end_at, test_t, il_original,
-        False)
+        valid_reservations, next_exit, 0, 0, end_at, test_t, il_original)
     assert complete
     assert counter == end_at
     assert valid_reservations == OrderedDict()
@@ -1258,7 +1256,7 @@ def clean_request(load_shared: None) -> Tuple[
             sq._mock_step(  # type: ignore
                 counter, counter, end_at, test_t, new_exit, irl, il, orl,
                 clone_to_original, test_reservations, valid_reservations,
-                last_exit, originals, irl_og, il_og, False)
+                last_exit, originals, irl_og, il_og)
         if test_complete:
             break
 
@@ -1373,7 +1371,7 @@ def request_timeout_option(timeout: bool, p_back: float = .9) -> Tuple[
             sq._mock_step(  # type: ignore
                 counter, counter, end_at, test_t, new_exit, irl, il, orl,
                 clone_to_original, test_reservations, valid_reservations,
-                last_exit, originals, irl_og, il_og, False)
+                last_exit, originals, irl_og, il_og)
         if test_complete:
             break
 

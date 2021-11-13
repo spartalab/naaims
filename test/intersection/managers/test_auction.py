@@ -194,31 +194,40 @@ def test_init_multi_sequence(clean_shared: None):
 
 
 def test_init_2nd(clean_shared: None):
-    vot_mean = {Coord(0, 0): 10., Coord(1.1, 1.1): 5.}
+    vot_mean = {Coord(0, 6): 10., Coord(0, 10): 5.}
     inter = intersec(manager_misc_spec={
         'multiple': True, 'sequence': False, 'mechanism': 'second',
-        'vpm_mean': {Coord(0, 0): 60., Coord(1.1, 1.1): 30.6},
+        'vpm_mean': {Coord(0, 6): 60., Coord(0, 10): 30.6},
         'vot_mean': vot_mean})
     assert type(inter.manager) is AuctionManager
     assert inter.manager.multiple
     assert not inter.manager.sequence
     assert inter.manager.mechanism is Mechanism.SECOND_PRICE
     assert inter.manager.floor
-    assert inter.manager.vps_mean == {Coord(0, 0): 1., Coord(1.1, 1.1): .51}
-    assert inter.manager.vot_mean is vot_mean
+    assert inter.manager.vps_mean[inter.incoming_road_lane_by_coord[
+        Coord(0, 6)]] == 1.
+    assert inter.manager.vps_mean[inter.incoming_road_lane_by_coord[
+        Coord(0, 10)]] == .51
+    assert inter.manager.vot_mean[inter.incoming_road_lane_by_coord[
+        Coord(0, 6)]] == 10.
+    assert inter.manager.vot_mean[inter.incoming_road_lane_by_coord[
+        Coord(0, 10)]] == 5.
     assert len(inter.manager.payments) == 0
 
 
 def test_init_externality(clean_shared: None):
     inter = intersec(manager_misc_spec={
         'multiple': False, 'sequence': True, 'mechanism': 'externality',
-        'floor': False, 'vpm_mean': {Coord(0, 0): 24., Coord(1.1, 1.1): 600.}})
+        'floor': False, 'vpm_mean': {Coord(0, 6): 24., Coord(0, 10): 600.}})
     assert type(inter.manager) is AuctionManager
     assert not inter.manager.multiple
     assert inter.manager.sequence
     assert inter.manager.mechanism is Mechanism.EXTERNALITY
     assert not inter.manager.floor
-    assert inter.manager.vps_mean == {Coord(0, 0): .4, Coord(1.1, 1.1): 10.}
+    assert inter.manager.vps_mean[inter.incoming_road_lane_by_coord[
+        Coord(0, 6)]] == .4
+    assert inter.manager.vps_mean[inter.incoming_road_lane_by_coord[
+        Coord(0, 10)]] == 10.
     assert len(inter.manager.payments) == 0
 
 

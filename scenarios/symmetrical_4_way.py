@@ -1,8 +1,8 @@
-from typing import Any, Dict, List, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 from naaims.simulator import Simulator
 from naaims.vehicles import AutomatedVehicle, HumanGuidedVehicle
-from naaims.endpoints.factories import GaussianVehicleFactory
+from naaims.endpoints.factories import UniformVehicleFactory
 from naaims.util import Coord
 from naaims.trajectories import BezierTrajectory
 from naaims.intersection.managers import IntersectionManager, StopSignManager
@@ -26,7 +26,11 @@ class Symmetrical4Way(Simulator):
                  hgv_throttle_mn: float = 0.0752,
                  hgv_throttle_sd: float = 0.1402,
                  hgv_tracking_mn: float = -0.0888,
-                 hgv_tracking_sd: float = 0.0631):
+                 hgv_tracking_sd: float = 0.0631,
+                 vot_mn: float = .5,
+                 vot_range: float = 1.,
+                 multiple_sequence_none: Optional[bool] = None,
+                 mechanism: str = 'first'):
         """Create an instance of a 4-way 3-lane intersection simulator.
 
         Destination
@@ -104,23 +108,23 @@ class Symmetrical4Way(Simulator):
             num_destinations=4,
             source_node_id=None,
             max_accel_mn=3,
-            max_accel_sd=0,
+            max_accel_range=0,
             max_braking_mn=-3.4,
-            max_braking_sd=0,
+            max_braking_range=0,
             length_mn=4.5,
-            length_sd=0,
+            length_range=0,
             width_mn=3,
-            width_sd=0,
+            width_range=0,
             throttle_mn_mn=0,
-            throttle_mn_sd=0,
+            throttle_mn_range=0,
             throttle_sd_mn=0,
-            throttle_sd_sd=0,
+            throttle_sd_range=0,
             tracking_mn_mn=0,
-            tracking_mn_sd=0,
+            tracking_mn_range=0,
             tracking_sd_mn=0,
-            tracking_sd_sd=0,
-            vot_mn=0,
-            vot_sd=0
+            tracking_sd_range=0,
+            vot_mn=vot_mn,
+            vot_range=vot_range
         )
         factory_spec_generic_hgv = factory_spec_generic_av.copy()
         factory_spec_generic_hgv['vehicle_type'] = HumanGuidedVehicle
@@ -152,7 +156,7 @@ class Symmetrical4Way(Simulator):
                 vpm=vpm,
                 factory_selection_probabilities=[av_percentage,
                                                  1-av_percentage],
-                factory_types=[GaussianVehicleFactory, GaussianVehicleFactory],
+                factory_types=[UniformVehicleFactory, UniformVehicleFactory],
                 factory_specs=factory_specs
             ))
 
@@ -183,9 +187,18 @@ class Symmetrical4Way(Simulator):
                           (3, 6, False)  # up to right
                           ],
             manager_type=manager_type,
-            manager_spec=dict(tiling_type=SquareTiling, tiling_spec=dict(
-                tile_type=tile_type, misc_spec=dict(tile_width=tile_width),
-                timeout=True)),
+            manager_spec=dict(
+                tiling_type=SquareTiling,
+                tiling_spec=dict(
+                    tile_type=tile_type,
+                    misc_spec=dict(tile_width=tile_width),
+                    timeout=True
+                ),
+                misc_spec=dict(
+                    multiple=(multiple_sequence_none is True),
+                    sequence=(multiple_sequence_none is False),
+                    mechanism=mechanism
+                )),
             speed_limit=speed_limit,
             movement_model=movement_model
         )
@@ -247,6 +260,33 @@ class Symmetrical4Way(Simulator):
 
             # Left      up (3) to right (2)
             od_pair[(Coord(14.0, 32.0), 2)] = [Coord(32.0, 14.0)]
+
+            # Calculate the vehicles per minute for each approaching lane
+            vpm_through = turn_ratios[1] * vpm
+            vpm_left = turn_ratios[0] * vpm + vpm_through
+            vpm_right = turn_ratios[2] * vpm + vpm_through
+            intersection_spec['manager_spec']['misc_spec']['vpm_mean'] = {
+                # Left and through
+                Coord(0.0, 14.0): vpm_left,
+                Coord(18.0, -2.4492935982947064e-16): vpm_left,
+                Coord(32.0, 18.0): vpm_left,
+                Coord(14.0, 32.0): vpm_left,
+
+                # Right and through
+                Coord(0.0, 6.0): vpm_right,
+                Coord(26.0, 2.4492935982947064e-16): vpm_right,
+                Coord(32.0, 26.0): vpm_right,
+                Coord(6.0, 32.0): vpm_right,
+
+                # Through only
+                Coord(0.0, 10.0): vpm_through,
+                Coord(22.0, 0.0): vpm_through,
+                Coord(32.0, 22.0): vpm_through,
+                Coord(10.0, 32.0): vpm_through
+            }
+            intersection_spec['manager_spec']['misc_spec']['vot_mean'] = {
+                coord: vot_mn for coord in
+                intersection_spec['manager_spec']['misc_spec']['vpm_mean']}
 
         else:
             raise NotImplementedError("TODO: Hardcode other lane pathfinders.")

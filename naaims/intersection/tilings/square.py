@@ -151,8 +151,7 @@ class SquareTiling(Tiling):
 
     def pos_to_tiles(self, lane: IntersectionLane, t: int,
                      clone: Vehicle, reservation: Reservation,
-                     force: bool = False, mark: bool = False
-                     ) -> Optional[Dict[Tile, float]]:
+                     force: bool = False) -> Optional[Dict[Tile, float]]:
         """Return a vehicle's tiles and percentage used if it works.
 
         Given a vehicle with a test-updated position, its in-lane progress, and
@@ -181,11 +180,9 @@ class SquareTiling(Tiling):
             force: bool = False
                 If force, don't bother checking if a tile is compatible with
                 this vehicle's reservation before returning.
-            mark: bool = False
-                Whether to mark the tiles used with this potential reservation.
         """
         # Call super to extend the tile stack to cover up to t if necessary.
-        super().pos_to_tiles(lane, t, clone, reservation, force, mark)
+        super().pos_to_tiles(lane, t, clone, reservation, force)
 
         if self.threshold == 0:
             # Fetch the vehicle's outline as provided by the lane's stochastic
@@ -228,8 +225,6 @@ class SquareTiling(Tiling):
                     return None
 
                 tiles_covered[tile] = p
-
-        # TODO: (auction) incorporate force and mark
 
         return tiles_covered
 
@@ -499,7 +494,7 @@ class SquareTiling(Tiling):
 
     def io_tile_buffer(self, lane: IntersectionLane, t: int,
                        clone: Vehicle, reservation: Reservation,
-                       prepend: bool, force: bool = False, mark: bool = False
+                       prepend: bool, force: bool = False
                        ) -> Optional[Dict[int, Dict[Tile, float]]]:
         """Should return edge buffer tiles and percentages used if it works.
 
@@ -534,11 +529,8 @@ class SquareTiling(Tiling):
             force: bool = False
                 If force, don't bother checking if a tile is compatible with
                 this vehicle's reservation before returning.
-            mark: bool = False
-                Whether to mark the tiles used with this potential reservation.
         """
-        super().io_tile_buffer(lane, t, clone, reservation, prepend, force,
-                               mark)
+        super().io_tile_buffer(lane, t, clone, reservation, prepend, force)
 
         # Recall that the first tile layer represents the next timestep.
         t0 = SHARED.t + 1

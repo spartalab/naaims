@@ -500,6 +500,7 @@ class Simulator:
                     # TODO: (multiple) determine if a vehicle successfully
                     #       reached its destination. Will require adding an ID
                     #       property to VehicleRemovers.
+                    self.vehicle_log[exiting.vin]['payment'] = exiting.payment
 
                     # remove it from our tracker
                     self.vehicles_in_scope.remove(exiting)
@@ -537,7 +538,7 @@ class Simulator:
         with open(filename, 'w') as f:
             f.write("t_spawn,t_entry,t_exit,destination_target,"
                     "destination_actual,width,length,throttle_mn,throttle_sd,"
-                    "tracking_mn,tracking_sd,vot,type")
+                    "tracking_mn,tracking_sd,vot,payment,type\n")
             for _, vehicle_log in sorted(self.vehicle_log.items()):
                 f.write(f'{vehicle_log["t_spawn"]},'
                         f'{vehicle_log.get("t_entry", -1)},'
@@ -551,6 +552,7 @@ class Simulator:
                         f'{vehicle_log["tracking_mn"]},'
                         f'{vehicle_log["tracking_sd"]},'
                         f'{vehicle_log["vot"]},'
+                        f'{vehicle_log.get("payment", -1)},'
                         f'{vehicle_log["type"]}\n')
 
     def animate(self, frame_ratio: int = 1, max_timestep: int = 10*60

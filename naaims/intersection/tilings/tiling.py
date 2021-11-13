@@ -367,8 +367,7 @@ class Tiling(Configurable):
                                 test_reservations, valid_reservations,
                                 last_exit, originals,
                                 incoming_road_lane_original,
-                                intersection_lane_original,
-                                mark)
+                                intersection_lane_original)
             if test_complete:
                 break
 
@@ -381,10 +380,17 @@ class Tiling(Configurable):
                 round(min(.5*SHARED.SETTINGS.steps_per_second,
                           (leader_arrival - SHARED.t)/2))
 
-        # Return the reservation in the sequence and its vehicle's index in the
-        # incoming road lane, if there are any valid reservations.
-        return (next(iter(valid_reservations.values())), start) if \
-            (len(valid_reservations) > 0) else None
+        # Return the leading reservation in the sequence and its vehicle's
+        # index in the incoming road lane, if there are any valid reservations.
+        # Mark # potential reservations, if requested to.
+        if len(valid_reservations) == 0:
+            return None
+        leading_request = next(iter(valid_reservations.values()))
+        if mark:
+            for layer in leading_request.tiles.values():
+                for tile, p in layer.items():
+                    tile.mark(leading_request, p)
+        return leading_request, start
 
     def _mock_step(self, start: int, counter: int, end_at: int, test_t: int,
                    new_exit: Optional[ScheduledExit],
@@ -397,10 +403,9 @@ class Tiling(Configurable):
                    last_exit: Optional[ScheduledExit],
                    originals: List[Vehicle],
                    incoming_road_lane_original: RoadLane,
-                   intersection_lane_original: IntersectionLane,
-                   mark: bool = False) -> Tuple[bool, int, int,
-                                                Optional[ScheduledExit],
-                                                Optional[ScheduledExit]]:
+                   intersection_lane_original: IntersectionLane
+                   ) -> Tuple[bool, int, int, Optional[ScheduledExit],
+                              Optional[ScheduledExit]]:
         """Mock the simulation loop.
 
         Refer to simulator.step() for more details on the simulation loop. Note
@@ -437,7 +442,7 @@ class Tiling(Configurable):
         #     position in the intersection.
         test_complete = self._mock_intersection_step_vehicles(
             intersection_lane, outgoing_road_lane, test_reservations,
-            valid_reservations, test_t, mark)
+            valid_reservations, test_t)
         if test_complete:
             return True, -1, -1, None, None
 
@@ -457,7 +462,7 @@ class Tiling(Configurable):
                                         clone_to_original,
                                         test_reservations,
                                         valid_reservations, counter,
-                                        end_at, test_t, mark)
+                                        end_at, test_t)
         if counter < 0:
             return True, -1, -1, None, None
 
@@ -476,7 +481,7 @@ class Tiling(Configurable):
                     intersection_lane, incoming_road_lane, originals,
                     clone_to_original, test_reservations,
                     valid_reservations, new_exit, start, counter, end_at,
-                    test_t, intersection_lane_original, mark)
+                    test_t, intersection_lane_original)
                 new_exit = None
                 if test_complete:
                     return True, -1, -1, None, None
@@ -518,7 +523,7 @@ class Tiling(Configurable):
                                                                  Reservation],
                                          valid_reservations: OrderedDict[
                                              Vehicle, Reservation],
-                                         test_t: int, mark: bool) -> bool:
+                                         test_t: int) -> bool:
         """Handle progression on intersection lane, including transfers.
 
         Progress positions for clones in the intersection lane and transfer
@@ -541,7 +546,7 @@ class Tiling(Configurable):
                 # and check if these tiles are free.
                 edge_buffer_tiles = self.io_tile_buffer(
                     intersection_lane, test_t, clone, reservation,
-                    prepend=False, mark=mark)
+                    prepend=False)
                 if edge_buffer_tiles is None:
                     # Not only is this reservation not possible, all clones
                     # behind it also have invalid reservations, so we can
@@ -550,11 +555,6 @@ class Tiling(Configurable):
                     # request.
                     if reservation.dependent_on is not None:
                         reservation.dependent_on.dependency = None
-                    # Remove tile markings associated with invalid
-                    # test_reservations if they had any.
-                    if mark:
-                        for r in test_reservations.values():
-                            self.clear_marked_tiles(r)
                     return True
                 else:
                     # This reservation request is compatible with existing
@@ -605,7 +605,7 @@ class Tiling(Configurable):
                                                  Reservation],
                          valid_reservations: OrderedDict[Vehicle, Reservation],
                          counter: int, end_at: int,
-                         test_t: int, mark: bool) -> int:
+                         test_t: int) -> int:
         """Log the tiles used by all clones at this test_t.
 
         Check and log the tiles used by all clones still in the intersection
@@ -620,7 +620,7 @@ class Tiling(Configurable):
         for i, clone in enumerate(intersection_lane.vehicles):
             reservation = test_reservations[clone]
             tiles_used = self.pos_to_tiles(intersection_lane, test_t,
-                                           clone, reservation, mark=mark)
+                                           clone, reservation)
             if tiles_used is not None:
                 reservation.tiles[test_t] = tiles_used
             else:
@@ -634,13 +634,6 @@ class Tiling(Configurable):
                     if reservation.dependent_on is not None:
                         # Need to decouple from the last confirmed res.
                         reservation.dependent_on.dependency = None
-
-                    # Remove tile markings associated with all invalid test
-                    # reservations if there were any.
-                    if mark:
-                        for r in test_reservations.values():
-                            self.clear_marked_tiles(r)
-
                     return -1
                 # Otherwise we need to scrap the data for all clones at or
                 # behind this one with the rejected request. Start by
@@ -652,9 +645,6 @@ class Tiling(Configurable):
                 # unmarked their marked tiles if necessary.
                 to_remove += intersection_lane.vehicles[i:]
                 for clone_to_del in intersection_lane.vehicles[i:]:
-                    if mark:
-                        self.clear_marked_tiles(
-                            test_reservations[clone_to_del])
                     del clone_to_original[clone_to_del]
                     del test_reservations[clone_to_del]
 
@@ -690,8 +680,7 @@ class Tiling(Configurable):
                           new_exit: ScheduledExit,
                           start: int, counter: int, end_at: int,
                           test_t: int,
-                          intersection_lane_original: IntersectionLane,
-                          mark: bool
+                          intersection_lane_original: IntersectionLane
                           ) -> Tuple[bool, int]:
         """Spawn the next clone. Check and log its starting tiles.
 
@@ -712,9 +701,14 @@ class Tiling(Configurable):
         preceding_res: Optional[Reservation] = None
         predecessors: Set[Reservation] = set()
         if preceding_vehicle is not None:
-            preceding_res = test_reservations.get(preceding_vehicle)
+            # TODO: Alter clone_to_original as it's used for little else other
+            #       than this use case.
+            original_to_clone = {original: clone for clone, original in
+                                 clone_to_original.items()}
+            preceding_clone = original_to_clone[preceding_vehicle]
+            preceding_res = test_reservations.get(preceding_clone)
             if preceding_res is None:
-                preceding_res = valid_reservations.get(preceding_vehicle)
+                preceding_res = valid_reservations.get(preceding_clone)
             assert preceding_res is not None
             predecessors = set(preceding_res.predecessors)
             predecessors.add(preceding_res)
@@ -757,12 +751,10 @@ class Tiling(Configurable):
 
         # Check if its tiles work.
         edge_tiles_used = self.io_tile_buffer(
-            intersection_lane, test_t, clone, reservation,
-            prepend=True, mark=mark)
+            intersection_lane, test_t, clone, reservation, prepend=True)
         if edge_tiles_used is not None:
-            tiles_used = self.pos_to_tiles(intersection_lane, test_t,
-                                           clone, reservation,
-                                           mark=mark)
+            tiles_used = self.pos_to_tiles(intersection_lane, test_t, clone,
+                                           reservation)
         else:
             tiles_used = None
         if (edge_tiles_used is not None) and (tiles_used is not None):
@@ -802,8 +794,7 @@ class Tiling(Configurable):
     @abstractmethod
     def pos_to_tiles(self, lane: IntersectionLane, t: int,  # type: ignore
                      clone: Vehicle, reservation: Reservation,
-                     force: bool = False, mark: bool = False
-                     ) -> Optional[Dict[Tile, float]]:
+                     force: bool = False) -> Optional[Dict[Tile, float]]:
         """Return a vehicle's tiles and percentage used if it works.
 
         Given a vehicle with a test-updated position, its in-lane progress, and
@@ -826,11 +817,7 @@ class Tiling(Configurable):
             force: bool = False
                 If force, don't bother checking if a tile is compatible with
                 this vehicle's reservation before returning.
-            mark: bool = False
-                Whether to mark the tiles used with this potential reservation.
         """
-        if force and mark:
-            raise ValueError("Can't force and mark tiles at the same time.")
 
         # At this point in the cycle, everything is fully resolved at timestep
         # SHARED.t, so the first layer in the tile stack represents time
@@ -845,20 +832,12 @@ class Tiling(Configurable):
 
         # Find the tiles this vehicle is estimated to use at this timestep by
         # using the clone's properties and proportional progress along the
-        # intersection trajectory. Mark the tiles used by this reservation if
-        # mark is True. Ignore feasibility if force is True.
-
-        # TODO: Expand the number of tiles based on the vehicle's throttle
-        #       and tracking scores. Use tile.will_reservation_work() if not
-        #       force and tile.mark() if mark.
-        # TODO: (sequence) If the vehicle is following another in a sequence,
-        #       usage of a tile by a preceding vehicle shouldn't disqualify a
-        #       reservation. Tweak tile implementation to account for this.
+        # intersection trajectory. Ignore feasibility if force is True.
 
     @abstractmethod
     def io_tile_buffer(self, lane: IntersectionLane, t: int,  # type: ignore
                        clone: Vehicle, reservation: Reservation,
-                       prepend: bool, force: bool = False, mark: bool = False
+                       prepend: bool, force: bool = False
                        ) -> Optional[Dict[int, Dict[Tile, float]]]:
         """Should return edge buffer tiles and percentages used if it works.
 
@@ -893,13 +872,9 @@ class Tiling(Configurable):
             force: bool = False
                 If force, don't bother checking if a tile is compatible with
                 this vehicle's reservation before returning.
-            mark: bool = False
-                Whether to mark the tiles used with this potential reservation.
         """
         if t <= SHARED.t:
             raise ValueError("t must be a future timestep.")
-        if force and mark:
-            raise ValueError("Can't force and mark tiles at the same time.")
 
     @staticmethod
     def _exit_res_timesteps_forward(velocity: float) -> int:
