@@ -148,21 +148,9 @@ class AuctionManager(IntersectionManager):
         self.tiling.clear_potential_reservations()
 
     def check_empty(self) -> bool:
-        """Check if this intersection is empty."""
-
-        # Check by vehicles currently in the intersection.
-        for lane in self.lanes:
-            if len(lane.vehicles) > 0:
-                return False
-
-        # # Check by tiles used (stricter than above because it also checks
-        # # buffer tiles).
-        # if len(self.tiling.tiles) > 0:
-        #     for tile in self.tiling.tiles[0]:
-        #         if len(tile.reserved_by) > 0:
-        #             return False
-
-        return True
+        """Check if this intersection is empty and nothing is scheduled."""
+        return not ((len(self.tiling.active_reservations) > 0) or
+                    (len(self.tiling.queued_reservations) > 0))
 
     def get_leading_requests(self) -> Tuple[
             Dict[Reservation, RoadLane], Dict[RoadLane, Reservation],

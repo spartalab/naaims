@@ -298,19 +298,19 @@ if __name__ == "__main__":
            multiple_sequence_none=True, log_name='auction_1st_multiple')
     reload(SHARED)
     trials(5*60, n_trials=30, steps_per_second=15, manager_type=AuctionManager,
-           multiple_sequence_none=False, log_name='auction_1st_sequence')
-    reload(SHARED)
-    trials(5*60, n_trials=30, steps_per_second=15, manager_type=AuctionManager,
            mechanism='2nd', multiple_sequence_none=True,
            log_name='auction_2nd_multiple')
     reload(SHARED)
     trials(5*60, n_trials=30, steps_per_second=15, manager_type=AuctionManager,
-           mechanism='2nd', multiple_sequence_none=False,
-           log_name='auction_2nd_sequence')
-    reload(SHARED)
-    trials(5*60, n_trials=30, steps_per_second=15, manager_type=AuctionManager,
            mechanism='externality', multiple_sequence_none=True,
            log_name='auction_externality_multiple')
+    reload(SHARED)
+    trials(5*60, n_trials=30, steps_per_second=15, manager_type=AuctionManager,
+           multiple_sequence_none=False, log_name='auction_1st_sequence')
+    reload(SHARED)
+    trials(5*60, n_trials=30, steps_per_second=15, manager_type=AuctionManager,
+           mechanism='2nd', multiple_sequence_none=False,
+           log_name='auction_2nd_sequence')
     reload(SHARED)
     trials(5*60, n_trials=30, steps_per_second=15, manager_type=AuctionManager,
            mechanism='externality', multiple_sequence_none=False,

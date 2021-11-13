@@ -238,10 +238,17 @@ def intersection_clean(clean_shared: None):
 
 def test_check_empty(intersection_clean: Intersection, vehicle: Vehicle):
     intersection = intersection_clean
+    res = make_reservation(vehicle, 0, 0, intersection.lanes[0])
     assert type(intersection.manager) is AuctionManager
     assert intersection.manager.check_empty()
-    intersection.lanes[0].add_vehicle(vehicle)
+    intersection.manager.tiling.queued_reservations[vehicle] = res
     assert not intersection.manager.check_empty()
+    intersection.manager.tiling.active_reservations[vehicle] = res
+    assert not intersection.manager.check_empty()
+    del intersection.manager.tiling.queued_reservations[vehicle]
+    assert not intersection.manager.check_empty()
+    del intersection.manager.tiling.active_reservations[vehicle]
+    assert intersection.manager.check_empty()
 
 
 @fixture
