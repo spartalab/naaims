@@ -708,7 +708,7 @@ class Tiling(Configurable):
             preceding_clone = original_to_clone[preceding_vehicle]
             preceding_res = test_reservations.get(preceding_clone)
             if preceding_res is None:
-                preceding_res = valid_reservations.get(preceding_clone)
+                preceding_res = valid_reservations.get(preceding_vehicle)
             assert preceding_res is not None
             predecessors = set(preceding_res.predecessors)
             predecessors.add(preceding_res)
