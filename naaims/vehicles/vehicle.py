@@ -3,18 +3,19 @@ This module holds all vehicle types used in the AIM simulator.
 """
 
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Tuple, TypeVar, List, Optional
+from abc import abstractmethod
+from typing import Tuple, TypeVar, List, Optional, Dict, Any, Type
 from copy import copy
 from math import cos, pi, sin
 
 import naaims.shared as SHARED
 from naaims.util import Coord
+from naaims.archetypes import Configurable
 
 V = TypeVar('V', bound='Vehicle')
 
 
-class Vehicle(ABC):
+class Vehicle(Configurable):
     """
     Default vehicle behavior assumes full automation, which this abstract base
     class implements. Subclasses like semi-autonomous vehicles and human-
@@ -118,6 +119,28 @@ class Vehicle(ABC):
         self.__tracking_mn = tracking_mn
         self.__tracking_sd = tracking_sd
         self.__vot = vot
+
+    @staticmethod
+    def spec_from_str(spec_str: str) -> Dict[str, Any]:
+        """Reads a spec string into a manager spec dict."""
+        # TODO: (spec) Interpret the string into the spec dict.
+        raise NotImplementedError("TODO")
+
+    @classmethod
+    def from_spec(cls: Type[V], spec: Dict[str, Any]) -> V:
+        return cls(vin=spec['vin'],
+                   destination=spec['destination'],
+                   max_accel=spec.get('max_accel',
+                   SHARED.SETTINGS.min_acceleration),
+                   max_braking=spec.get('max_braking',
+                                        SHARED.SETTINGS.min_braking),
+                   length=spec['length'],
+                   width=spec['width'],
+                   throttle_mn=spec['throttle_mn'],
+                   throttle_sd=spec['throttle_sd'],
+                   tracking_mn=spec['tracking_mn'],
+                   tracking_sd=spec['tracking_sd'],
+                   vot=spec['vot'])
 
     @property
     def vin(self) -> int:

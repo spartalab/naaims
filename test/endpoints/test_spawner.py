@@ -110,7 +110,7 @@ def check_spawner_init_basics(spawner: VehicleSpawner, road: Road):
 
 
 def test_poisson_init(load_shared: None, road: Road):
-    spawner = VehicleSpawner(road, 1, [GaussianVehicleFactory],
+    spawner = VehicleSpawner(0, road, 1, [GaussianVehicleFactory],
                              [gvf_spec_0], [1])
     check_spawner_init_basics(spawner, road)
     assert len(spawner.predetermined_spawns) == 0
@@ -120,19 +120,19 @@ def test_poisson_init(load_shared: None, road: Road):
     assert isinstance(spawner.factories[0], VehicleFactory)
 
     with raises(ValueError):
-        VehicleSpawner(road, 1, [GaussianVehicleFactory], [gvf_spec_0], [])
+        VehicleSpawner(0, road, 1, [GaussianVehicleFactory], [gvf_spec_0], [])
 
     with raises(ValueError):
-        VehicleSpawner(road, 1, [GaussianVehicleFactory], [], [1])
+        VehicleSpawner(0, road, 1, [GaussianVehicleFactory], [], [1])
 
     with raises(ValueError):
-        VehicleSpawner(road, 1, [], [gvf_spec_0], [2])
+        VehicleSpawner(0, road, 1, [], [gvf_spec_0], [2])
 
 
 def test_predetermined_init(load_shared: None, road: Road, vehicle: Vehicle,
                             vehicle2: Vehicle, vehicle3: Vehicle):
-    spawner = VehicleSpawner(road, 0, [], [], [], [
-        (2.1, vehicle), (0.6, vehicle2), (9.9, vehicle3)])
+    spawner = VehicleSpawner(0, road, 0, [], [], [], [
+        (126, vehicle), (36, vehicle2), (594, vehicle3)])
     check_spawner_init_basics(spawner, road)
     assert spawner.spawn_probability == 0
     assert sum(spawner.factory_selection_probabilities) == 0
@@ -147,13 +147,14 @@ def test_predetermined_init(load_shared: None, road: Road, vehicle: Vehicle,
 
 
 def test_fastest_v_no_collision():
-    assert VehicleSpawner._fastest_v_no_collision(0, 0, 0) == 0
-    assert VehicleSpawner._fastest_v_no_collision(7, 5, -1) == 2
+    assert VehicleSpawner._fastest_v_no_collision(0, 0, 0) == 0  # type: ignore
+    assert VehicleSpawner._fastest_v_no_collision(7, 5, -1  # type: ignore
+                                                  ) == 2
 
 
 def test_poisson_spawn(load_shared_clean: None, road: Road,
                        set_pathfinder_straight: None):
-    spawner = VehicleSpawner(road, 99999, [GaussianVehicleFactory],
+    spawner = VehicleSpawner(0, road, 99999, [GaussianVehicleFactory],
                              [gvf_spec_0], [1])
     seed(0)
     spawned, entered = spawner.step_vehicles()
@@ -180,9 +181,10 @@ def test_poisson_spawn(load_shared_clean: None, road: Road,
 def test_predetermined_spawn(load_shared_clean: None, road: Road,
                              set_pathfinder_straight: None, vehicle: Vehicle,
                              vehicle2: Vehicle, vehicle3: Vehicle):
-    vehicle._Vehicle__destination = vehicle2._Vehicle__destination = 1
-    spawner = VehicleSpawner(road, 0, [], [], [], [
-        (0, vehicle), (0, vehicle2), (9.9, vehicle3)])
+    vehicle._Vehicle__destination = 1  # type: ignore
+    vehicle2._Vehicle__destination = 1  # type: ignore
+    spawner = VehicleSpawner(0, road, 0, [], [], [], [
+        (0, vehicle), (0, vehicle2), (594, vehicle3)])
     seed(0)
     assert len(spawner.predetermined_spawns) == 3
     assert len(spawner.queue) == 0
@@ -213,9 +215,10 @@ def test_predetermined_spawn(load_shared_clean: None, road: Road,
 def test_multi_spawn(load_shared_clean: None, road: Road,
                      set_pathfinder_straight: None, vehicle: Vehicle,
                      vehicle2: Vehicle, vehicle3: Vehicle):
-    vehicle._Vehicle__destination = vehicle2._Vehicle__destination = \
-        vehicle3._Vehicle__destination = 1
-    spawner = VehicleSpawner(road, 0, [], [], [], [
+    vehicle._Vehicle__destination = 1  # type: ignore
+    vehicle2._Vehicle__destination = 1  # type: ignore
+    vehicle3._Vehicle__destination = 1  # type: ignore
+    spawner = VehicleSpawner(0, road, 0, [], [], [], [
         (0, vehicle), (0, vehicle2), (0, vehicle3)])
     seed(0)
     assert len(spawner.predetermined_spawns) == 3
@@ -249,10 +252,10 @@ def test_multi_spawn(load_shared_clean: None, road: Road,
 def test_spawn_lane(load_shared_clean: None, road: Road,
                     set_pathfinder_split: None, vehicle: Vehicle,
                     vehicle2: Vehicle):
-    vehicle._Vehicle__destination = 1
-    vehicle2._Vehicle__destination = 2
-    spawner = VehicleSpawner(road, 0, [], [], [], [(0, vehicle),
-                                                   (0, vehicle2)])
+    vehicle._Vehicle__destination = 1  # type: ignore
+    vehicle2._Vehicle__destination = 2  # type: ignore
+    spawner = VehicleSpawner(0, road, 0, [], [], [], [(0, vehicle),
+                                                      (0, vehicle2)])
     seed(0)
     assert len(spawner.predetermined_spawns) == 2
     assert len(spawner.queue) == 0
@@ -271,9 +274,10 @@ def test_lane_spawn_block(load_shared_clean: None, road: Road,
 
     # Spawn two vehicles that want to use the same lane, and a third that
     # doesn't care.
-    vehicle._Vehicle__destination = vehicle2._Vehicle__destination = 1
-    vehicle3._Vehicle__destination = 2
-    spawner = VehicleSpawner(road, 0, [], [], [], [
+    vehicle._Vehicle__destination = 1  # type: ignore
+    vehicle2._Vehicle__destination = 1  # type: ignore
+    vehicle3._Vehicle__destination = 2  # type: ignore
+    spawner = VehicleSpawner(0, road, 0, [], [], [], [
         (0, vehicle), (0, vehicle2), (0, vehicle3)])
     seed(0)
     assert len(spawner.predetermined_spawns) == 3
@@ -317,9 +321,9 @@ def test_lane_preblock(load_shared_clean: None, road: Road,
 
     # Spawn a vehicle that wants to use the blocked lane and another that
     # doesn't care.
-    vehicle._Vehicle__destination = 1
-    vehicle2._Vehicle__destination = 2
-    spawner = VehicleSpawner(road, 0, [], [], [], [
+    vehicle._Vehicle__destination = 1  # type: ignore
+    vehicle2._Vehicle__destination = 2  # type: ignore
+    spawner = VehicleSpawner(0, road, 0, [], [], [], [
         (0, vehicle), (0, vehicle2)])
     seed(0)
     assert len(spawner.predetermined_spawns) == 2

@@ -465,9 +465,11 @@ class Simulator:
             incoming_packet = u.step_vehicles()
             if incoming_packet is not None:
                 spawned_vehicles, entering_vehicles = incoming_packet
+                assert type(u) is VehicleSpawner
                 for spawn in spawned_vehicles:
                     self.vehicle_log[spawn.vin] = {}
                     self.vehicle_log[spawn.vin]['t_spawn'] = SHARED.t
+                    self.vehicle_log[spawn.vin]['origin'] = u.id
                     self.vehicle_log[spawn.vin][
                         'destination_target'] = spawn.destination
                     self.vehicle_log[spawn.vin]['width'] = spawn.width
@@ -523,26 +525,29 @@ class Simulator:
                 (this will be the same as the spawn time unless the spawn lane
                 queue backs up past the length of the lane) and -1 if it has
                 yet to enter
-             3. simulation space exit time (seconds) if available
-             4. intended destination
-             5. actual destination, if it's exited (-1 if unavailable)
-             6. width in meters
-             7. length in meters
-             8. throttle mean
-             9. throttle sd
-            10. tracking mean
-            11. tracking sd
-            12. value of time (VOT) in units per second
-            13. vehicle type/class
+             3. origin / id of the spawner this vehicle came from
+             4. simulation space exit time (seconds) if available
+             5. intended destination
+             6. actual destination, if it's exited (-1 if unavailable)
+             7. width in meters
+             8. length in meters
+             9. throttle mean
+            10. throttle sd
+            11. tracking mean
+            12. tracking sd
+            13. value of time (VOT) in units per second
+            14. payment collected from this vehicle (by auction managers)
+            15. vehicle type/class
         """
         with open(filename, 'w') as f:
-            f.write("t_spawn,t_entry,t_exit,destination_target,"
+            f.write("t_spawn,t_entry,t_exit,origin,destination_target,"
                     "destination_actual,width,length,throttle_mn,throttle_sd,"
                     "tracking_mn,tracking_sd,vot,payment,type\n")
             for _, vehicle_log in sorted(self.vehicle_log.items()):
                 f.write(f'{vehicle_log["t_spawn"]},'
                         f'{vehicle_log.get("t_entry", -1)},'
                         f'{vehicle_log.get("t_exit", -1)},'
+                        f'{vehicle_log["origin"]},'
                         f'{vehicle_log["destination_target"]},'
                         f'{vehicle_log.get("destination_actual", -1)},'
                         f'{vehicle_log["width"]},'
@@ -553,7 +558,7 @@ class Simulator:
                         f'{vehicle_log["tracking_sd"]},'
                         f'{vehicle_log["vot"]},'
                         f'{vehicle_log.get("payment", -1)},'
-                        f'{vehicle_log["type"]}\n')
+                        f'{vehicle_log["type"]},\n')
 
     def animate(self, frame_ratio: int = 1, max_timestep: int = 10*60
                 ) -> FuncAnimation:  # type: ignore

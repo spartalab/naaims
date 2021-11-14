@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type, DefaultDict
 
 from naaims.simulator import Simulator
 from naaims.vehicles import AutomatedVehicle, HumanGuidedVehicle
@@ -30,7 +30,8 @@ class Symmetrical4Way(Simulator):
                  vot_mn: float = .5,
                  vot_range: float = 1.,
                  multiple_sequence_none: Optional[bool] = None,
-                 mechanism: str = 'first'):
+                 mechanism: str = 'first',
+                 predetermined_spawn_specs: List[Dict[str, Any]] = []):
         """Create an instance of a 4-way 3-lane intersection simulator.
 
         Destination
@@ -135,6 +136,14 @@ class Symmetrical4Way(Simulator):
 
         spawner_specs: List[Dict[str, Any]] = []
 
+        # Create fixed vehicle spawns and split them according to the spawner
+        # they're going to come from.
+        predetermined_spawns_for: Dict[int, List[Dict[str, Any]]] = \
+            DefaultDict(lambda: [])
+        for vehicle_spec in predetermined_spawn_specs:
+            predetermined_spawns_for[vehicle_spec['origin']].append(
+                vehicle_spec)
+
         # Form spawner and factory specs
         for i in range(4):
             factory_spec_av = factory_spec_generic_av.copy()
@@ -157,8 +166,14 @@ class Symmetrical4Way(Simulator):
                 factory_selection_probabilities=[av_percentage,
                                                  1-av_percentage],
                 factory_types=[UniformVehicleFactory, UniformVehicleFactory],
-                factory_specs=factory_specs
+                factory_specs=factory_specs,
+                predetermined_spawns=predetermined_spawns_for[i]
             ))
+            del predetermined_spawns_for[i]
+
+        if len(predetermined_spawns_for) > 0:
+            raise ValueError("Predetermined spawns provided for nonexistent "
+                             "spawner ID.")
 
         # Form remover specs
         remover_specs: List[Dict[str, Any]] = []

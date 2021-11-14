@@ -11,10 +11,11 @@ These archetypes enforce the main simulation loop:
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Optional, Any, List, Dict, Tuple
+from typing import TYPE_CHECKING, Optional, Any, List, Dict, Tuple
 
-from naaims.util import VehicleTransfer, SpeedUpdate
-from naaims.vehicles import Vehicle
+if TYPE_CHECKING:
+    from naaims.util import VehicleTransfer, SpeedUpdate
+    from naaims.vehicles import Vehicle
 
 
 class Configurable(ABC):

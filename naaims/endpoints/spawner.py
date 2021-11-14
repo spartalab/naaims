@@ -14,6 +14,7 @@ from naaims.archetypes import Configurable, Upstream
 from naaims.util import VehicleTransfer, MissingConnectionError, VehicleSection
 from naaims.endpoints.factories import (VehicleFactory,
                                         GaussianVehicleFactory)
+from naaims.vehicles import AutomatedVehicle, HumanGuidedVehicle
 
 if TYPE_CHECKING:
     from naaims.vehicles import Vehicle
@@ -23,12 +24,13 @@ if TYPE_CHECKING:
 class VehicleSpawner(Configurable, Upstream):
 
     def __init__(self,
+                 spawner_id: int,
                  downstream: Road,
                  vpm: float,  # vehicles per minute
                  factory_types: List[Type[VehicleFactory]],
                  factory_specs: List[Dict[str, Any]],
                  factory_selection_probabilities: List[float],
-                 predetermined_spawns: List[Tuple[float, Vehicle]] = []
+                 predetermined_spawns: List[Tuple[int, Vehicle]] = []
                  ) -> None:
         """Create a new vehicle spawner.
 
@@ -46,10 +48,10 @@ class VehicleSpawner(Configurable, Upstream):
                 spawns.
             factory_selection_probabilities: List[float]
                 The probability of using a specific VehicleFactory.
-            predetermind_spawns: List[Tuple[float, Vehicle]]
+            predetermind_spawns: List[Tuple[int, Vehicle]]
                 Specifies predetermined spawns that occur outside of the
                 Poisson process. The tuple details the spawn time in
-                seconds and the vehicle that will spawn.
+                timesteps and the vehicle that will spawn.
         """
 
         if len(factory_types) != len(factory_specs) != \
@@ -65,6 +67,7 @@ class VehicleSpawner(Configurable, Upstream):
                 raise ValueError("The generator probabilities must sum to 1, "
                                  "or 0 if there are predetermined spawns set.")
 
+        self.id = spawner_id
         self.downstream = downstream
 
         # Given vehicles per minute and a Poisson process, calculate the
@@ -87,8 +90,7 @@ class VehicleSpawner(Configurable, Upstream):
         # Adjust spawning logic if spawns are pre-determined. Make sure that
         # it's ordered by timestep.
         self.predetermined_spawns: List[Tuple[int, Vehicle]] = \
-            [(floor(s/SHARED.SETTINGS.TIMESTEP_LENGTH), v) for s, v in
-             predetermined_spawns]
+            [(ts, v) for ts, v in predetermined_spawns]
         self.predetermined_spawns.sort(key=lambda s: s[0])
 
         # Prepare a queued spawn to fill later.
@@ -135,14 +137,31 @@ class VehicleSpawner(Configurable, Upstream):
         The output of spec_from_str needs to get the actual downstream Road
         after it's created.
         """
+
+        predetermined_spawns: List[Tuple[int, Vehicle]] = []
+        predetermined_spawn_specs: List[Dict[str, Any]] = spec.get(
+            'predetermined_spawns', [])
+        for spawn_spec in predetermined_spawn_specs:
+            vehicle_type: Type[Vehicle]
+            vehicle_type_str: str = spawn_spec['type']
+            if vehicle_type_str == 'AutomatedVehicle':
+                vehicle_type = AutomatedVehicle
+            elif vehicle_type_str == 'HumanGuidedVehicle':
+                vehicle_type = HumanGuidedVehicle
+            else:
+                raise ValueError(f"Invalid vehicle type: {vehicle_type_str}")
+            predetermined_spawns.append(
+                (spawn_spec['t_spawn'], vehicle_type.from_spec(spawn_spec)))
+
         return cls(
+            spawner_id=spec['id'],
             downstream=spec['downstream'],
             vpm=spec['vpm'],
             factory_selection_probabilities=spec[
                 'factory_selection_probabilities'],
             factory_types=spec['factory_types'],
             factory_specs=spec['factory_specs'],
-            predetermined_spawns=spec.get('predetermined_spawns', [])
+            predetermined_spawns=predetermined_spawns
         )
 
     def step_vehicles(self) -> Tuple[List[Vehicle], List[Vehicle]]:
@@ -166,7 +185,7 @@ class VehicleSpawner(Configurable, Upstream):
         # Check if there are predetermined vehicle spawns this timestep.
         while len(self.predetermined_spawns) > 0:
             # Check if it's time for the next spawn.
-            if self.predetermined_spawns[0][0] <= 0:
+            if self.predetermined_spawns[0][0] <= SHARED.t:
                 # If so, take it out of the list and spawn it.
                 spawns_this_timestep.append(
                     self.predetermined_spawns.pop(0)[1])
