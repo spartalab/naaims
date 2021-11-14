@@ -541,7 +541,7 @@ class AuctionManager(IntersectionManager):
 
             # Find the payment for each vehicle in the winning road lane.
             for vehicle_i in rl.vehicles[start_idx[rl]:]:
-                payment[vehicle_i] = -AuctionManager.calculate_externality(
+                payment[vehicle_i] = AuctionManager.calculate_externality(
                     vehicle_i.vot, winning_vot, winning_vot_without_rl,
                     winning_rls, winning_rls_without_rl, all_rls, t_winner,
                     t_without_rl, sum_vot, vps_mean, vot_mean)
@@ -603,7 +603,7 @@ class AuctionManager(IntersectionManager):
                 # associated with the next vehicle in the sequence.
                 for vehicle_i in rl.vehicles[idx_supporters:]:
                     payment[vehicle_i] += \
-                        -AuctionManager.calculate_externality(
+                        AuctionManager.calculate_externality(
                         vehicle_i.vot, winning_vot, first_losing_vot,
                         winning_rls, first_losing_rls, all_rls, t_winner,
                         t_first_loser, sum_vot, vps_mean, vot_mean)
@@ -712,7 +712,7 @@ class AuctionManager(IntersectionManager):
             sum_vot.get(rl, 0) + vps_mean[rl]*vot_mean[rl] * max(t_diff, 0)/2
             for rl in everyone_else)
 
-        return (vot_winner * t_erstwhile) - (vot_first_loser * t_winner) + \
+        return (vot_first_loser * t_winner) - (vot_winner * t_erstwhile) + \
             (vot_everyone_else * t_diff)
 
     def finish_exiting(self, vehicle: Vehicle) -> None:

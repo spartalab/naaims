@@ -655,7 +655,7 @@ def test_externality(rls: List[RoadLane]):
         2, 5, 2, frozenset(rls[:1]), frozenset(rls[1:2]), frozenset(rls[2:3]),
         {rls[0]: 6, rls[1]: 5, rls[2]: 0},
         {rls[0]: .1, rls[1]: .2, rls[2]: .3}, DefaultDict(lambda: .01)) == \
-        (6 + .001*2/2 - 2)*2 - (5 + .002*5/2) * 5  # ~-17.023
+        (5 + .002*5/2) * 5 - (6 + .001*2/2 - 2)*2  # ~17.023
 
     # Removing vehicle i swaps the winning road lane set bid from 6 to 5.
     assert AuctionManager.externality(
@@ -663,8 +663,8 @@ def test_externality(rls: List[RoadLane]):
         {rls[0]: 3, rls[1]: 3, rls[2]: 2, rls[3]: 3, rls[4]: 4, rls[5]: .1},
         DefaultDict(lambda: .1),
         {rl: i+1 for i, rl in enumerate(rls[:6])}) == \
-        (6 + (.1+.2)*5/2 - 2)*5 - (5 + (.3+.4)*2/2)*2 + \
-        (4.1 + (.5+.6)*(5-2)/2)*(5-2)  # 29.6
+        approx((5 + (.3+.4)*2/2)*2 - (6 + (.1+.2)*5/2 - 2)*5 +
+               (4.1 + (.5+.6)*(5-2)/2)*(5-2))  # 4.9
 
 
 def test_calculate_externality(rls: List[RoadLane]):
@@ -682,7 +682,7 @@ def test_calculate_externality(rls: List[RoadLane]):
         2, 6, 5, frozenset(rls[:2]), frozenset(rls[2:4]), frozenset(rls[:6]),
         2, 5, {rls[0]: 3, rls[1]: 3, rls[2]: 2, rls[3]: 3, rls[4]: 4,
                rls[5]: .1}, DefaultDict(lambda: .1),
-        {rl: i+1 for i, rl in enumerate(rls[:6])}) == 29.6
+        {rl: i+1 for i, rl in enumerate(rls[:6])}) == approx(4.9)
 
 
 def test_payment_externality_multiple(rls: List[RoadLane], vehicle: Vehicle,
@@ -714,7 +714,7 @@ def test_payment_externality_multiple(rls: List[RoadLane], vehicle: Vehicle,
             }, DefaultDict(lambda: 0), sum_vot, vps_mean, vot_mean)
     assert len(payments) == 3
     assert payments[vehicle] == payments[vehicle3]
-    assert payments[vehicle] == -AuctionManager.calculate_externality(
+    assert payments[vehicle] == AuctionManager.calculate_externality(
         vehicle.vot, 6, 5, winning_rls, first_losing_rls, all_rls,
         5, 2, sum_vot, vps_mean, vot_mean)
     assert payments[vehicle2] == 0.
@@ -756,18 +756,18 @@ def test_payment_externality_sequence(
     t2_delta = request_sequence[1].exit_rear.t * \
         SHARED.SETTINGS.TIMESTEP_LENGTH - t1
     t2_loser = max(t_first_loser-t1, 0)
-    assert payments[vehicle] == -AuctionManager.calculate_externality(
+    assert payments[vehicle] == AuctionManager.calculate_externality(
         vehicle.vot, 17, 11, winning_rls, first_losing_rls, all_rls,
         t1, t_first_loser, sum_vot, vps_mean, vot_mean)
-    assert payments[vehicle2] == approx(-AuctionManager.calculate_externality(
+    assert payments[vehicle2] == approx(AuctionManager.calculate_externality(
         vehicle2.vot, 17, 11, winning_rls, first_losing_rls, all_rls,
-        t1, t_first_loser, sum_vot, vps_mean, vot_mean) -
+        t1, t_first_loser, sum_vot, vps_mean, vot_mean) +
         AuctionManager.calculate_externality(
             vehicle2.vot, 15, 11, winning_rls, first_losing_rls, all_rls,
             t2_delta, t2_loser, sum_vot, vps_mean, vot_mean))
-    assert payments[vehicle3] == approx(-AuctionManager.calculate_externality(
+    assert payments[vehicle3] == approx(AuctionManager.calculate_externality(
         vehicle3.vot, 17, 11, winning_rls, first_losing_rls, all_rls,
-        t1, t_first_loser, sum_vot, vps_mean, vot_mean) -
+        t1, t_first_loser, sum_vot, vps_mean, vot_mean) +
         AuctionManager.calculate_externality(
         vehicle3.vot, 15, 11, winning_rls, first_losing_rls, all_rls,
         t2_delta, t2_loser, sum_vot, vps_mean, vot_mean))
@@ -790,18 +790,18 @@ def test_payment_externality_sequence(
     t2_delta = request_sequence[1].exit_rear.t * \
         SHARED.SETTINGS.TIMESTEP_LENGTH - t1
     t2_loser = max(t_first_loser-t1, 0)
-    assert payments[vehicle] == -AuctionManager.calculate_externality(
+    assert payments[vehicle] == AuctionManager.calculate_externality(
         vehicle.vot, 17, 11, winning_rls, first_losing_rls, all_rls,
         t1, t_first_loser, sum_vot, vps_mean, vot_mean)
-    assert payments[vehicle2] == approx(-AuctionManager.calculate_externality(
+    assert payments[vehicle2] == approx(AuctionManager.calculate_externality(
         vehicle2.vot, 17, 11, winning_rls, first_losing_rls, all_rls,
-        t1, t_first_loser, sum_vot, vps_mean, vot_mean) -
+        t1, t_first_loser, sum_vot, vps_mean, vot_mean) +
         AuctionManager.calculate_externality(
             vehicle2.vot, 15, 11, winning_rls, first_losing_rls, all_rls,
             t2_delta, t2_loser, sum_vot, vps_mean, vot_mean))
-    assert payments[vehicle3] == approx(-AuctionManager.calculate_externality(
+    assert payments[vehicle3] == approx(AuctionManager.calculate_externality(
         vehicle3.vot, 17, 11, winning_rls, first_losing_rls, all_rls,
-        t1, t_first_loser, sum_vot, vps_mean, vot_mean) -
+        t1, t_first_loser, sum_vot, vps_mean, vot_mean) +
         AuctionManager.calculate_externality(
         vehicle3.vot, 15, 11, winning_rls, first_losing_rls, all_rls,
         t2_delta, t2_loser, sum_vot, vps_mean, vot_mean))
