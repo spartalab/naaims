@@ -8,7 +8,7 @@ from naaims.vehicles import Vehicle
 from naaims.intersection.tilings import Tiling, SquareTiling
 from naaims.intersection.reservation import Reservation
 from naaims.intersection import IntersectionLane
-from naaims.intersection.managers.signal import SignalsManager
+from naaims.intersection.managers.signal import SignalManager
 from naaims.intersection.managers.fcfs import FCFSManager
 
 if TYPE_CHECKING:
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from naaims.road import RoadLane
 
 
-class FCFSSignalsManager(SignalsManager, FCFSManager):
+class FCFSSignalManager(SignalManager, FCFSManager):
 
     def process_requests(self) -> None:
         # For FCFS-Light, resolve differently for human-driven vehicles and

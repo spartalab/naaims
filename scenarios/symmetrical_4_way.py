@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional, Tuple, Type, DefaultDict
+from math import ceil
 
 from naaims.simulator import Simulator
 from naaims.vehicles import AutomatedVehicle, HumanGuidedVehicle
@@ -252,7 +253,8 @@ class Symmetrical4Way(Simulator):
                 Coord(6.0, -7.347880794884119e-16)]
 
             # Left      left (0) to up (3)
-            od_pair[(Coord(0.0, 14.0), 3)] = [Coord(18.0, 32.0)]
+            od_pair[(Coord(0.0, 14.0), 3)] = [
+                Coord(4.898587196589413e-16, 18.0)]
 
             # Left      down (1) to left (0)
             od_pair[(Coord(18.0, -2.4492935982947064e-16), 0)
@@ -278,20 +280,22 @@ class Symmetrical4Way(Simulator):
 
             # Calculate the vehicles per minute for each approaching lane
             vpm_through = turn_ratios[1] * vpm
-            vpm_left = turn_ratios[0] * vpm + vpm_through
-            vpm_right = turn_ratios[2] * vpm + vpm_through
+            vpm_left = turn_ratios[0] * vpm
+            vpm_left_total = vpm_left + vpm_through
+            vpm_right = turn_ratios[2] * vpm
+            vpm_right_total = vpm_right + vpm_through
             intersection_spec['manager_spec']['misc_spec']['vpm_mean'] = {
                 # Left and through
-                Coord(0.0, 14.0): vpm_left,
-                Coord(18.0, -2.4492935982947064e-16): vpm_left,
-                Coord(32.0, 18.0): vpm_left,
-                Coord(14.0, 32.0): vpm_left,
+                Coord(0.0, 14.0): vpm_left_total,
+                Coord(18.0, -2.4492935982947064e-16): vpm_left_total,
+                Coord(32.0, 18.0): vpm_left_total,
+                Coord(14.0, 32.0): vpm_left_total,
 
                 # Right and through
-                Coord(0.0, 6.0): vpm_right,
-                Coord(26.0, 2.4492935982947064e-16): vpm_right,
-                Coord(32.0, 26.0): vpm_right,
-                Coord(6.0, 32.0): vpm_right,
+                Coord(0.0, 6.0): vpm_right_total,
+                Coord(26.0, 2.4492935982947064e-16): vpm_right_total,
+                Coord(32.0, 26.0): vpm_right_total,
+                Coord(6.0, 32.0): vpm_right_total,
 
                 # Through only
                 Coord(0.0, 10.0): vpm_through,
@@ -302,6 +306,70 @@ class Symmetrical4Way(Simulator):
             intersection_spec['manager_spec']['misc_spec']['vot_mean'] = {
                 coord: vot_mn for coord in
                 intersection_spec['manager_spec']['misc_spec']['vpm_mean']}
+
+            # Define the traffic plan for a phasing cycle that allows for
+            # through and left turns for each approach in sequence.
+
+            # vehicle length (veh/m) accounting for extension factor
+            vehicle_length = 4.5*1.2
+            # Saturation flow found by multiplying speed limit (m/s) by vehicle
+            # length and again by the number of lanes.
+            # Comes out to 32727 vph per approach for 15 m/s.
+            saturation_flow = speed_limit/vehicle_length*3  # veh/s
+            # 2.5x for left volume, 1.5x for right volume, from vpm to veh/s
+            design_flow = (vpm_left*2.5 + vpm_through + vpm_right*1.5) / 60
+
+            # 1s reaction time + full braking distance
+            max_stopping_dist = speed_limit*1 + speed_limit**2/2.6
+            t_intergreen = (max_stopping_dist + vehicle_length + 4*8) / \
+                speed_limit
+
+            # Intergreen time and flows are per approach, so multiply by 4.
+            t_cycle = (1.5*(4*t_intergreen) + 5) / \
+                (1 - 4*design_flow/saturation_flow)
+            ts_phase = ceil(t_cycle/4 * steps_per_second)
+
+            # Get intersection lanes coords by approach.
+            intersection_spec['manager_spec']['misc_spec']['cycle'] = (
+
+                # Left approach (0)
+                (frozenset((
+                    (Coord(0.0, 14.0), Coord(18.0, 32.0)),  # left
+                    (Coord(0.0, 10.0), Coord(32.0, 10.0)),  # through x3
+                    (Coord(0.0, 14.0), Coord(32.0, 14.0)),
+                    (Coord(0.0, 6.0), Coord(32.0, 6.0)),
+                    (Coord(0.0, 6.0), Coord(6.0, -7.347880794884119e-16)),
+                )), ts_phase),
+
+                # Down approach (1)
+                (frozenset((
+                    (Coord(18.0, -2.4492935982947064e-16),
+                     Coord(4.898587196589413e-16, 18.0)),
+                    (Coord(18.0, -2.4492935982947064e-16), Coord(18.0, 32.0)),
+                    (Coord(22.0, 0.0), Coord(22.0, 32.0)),
+                    (Coord(26.0, 2.4492935982947064e-16), Coord(26.0, 32.0)),
+                    (Coord(26.0, 2.4492935982947064e-16), Coord(32.0, 6.0))
+                )), ts_phase),
+
+                # Right approach (2)
+                (frozenset((
+                    (Coord(32.0, 18.0), Coord(14.0, 7.347880794884119e-16)),
+                    (Coord(32.0, 18.0), Coord(4.898587196589413e-16, 18.0)),
+                    (Coord(32.0, 22.0), Coord(0.0, 22.0)),
+                    (Coord(32.0, 26.0), Coord(-4.898587196589413e-16, 26.0)),
+                    (Coord(32.0, 26.0), Coord(26.0, 32.0))
+                )), ts_phase),
+
+                # Up approach (3)
+                (frozenset((
+                    (Coord(6.0, 32.0), Coord(-4.898587196589413e-16, 26.0)),
+                    (Coord(6.0, 32.0), Coord(6.0, -7.347880794884119e-16)),
+                    (Coord(14.0, 32.0), Coord(14.0, 7.347880794884119e-16)),
+                    (Coord(10.0, 32.0), Coord(10.0, 0.0)),
+                    (Coord(14.0, 32.0), Coord(32.0, 14.0))
+                )), ts_phase)
+
+            )
 
         else:
             raise NotImplementedError("TODO: Hardcode other lane pathfinders.")

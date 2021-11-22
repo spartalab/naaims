@@ -35,7 +35,8 @@ class StopSignManager(IntersectionManager):
                          lanes,
                          lanes_by_endpoints,
                          tiling_type,
-                         tiling_spec)
+                         tiling_spec,
+                         misc_spec)
         self.queue: List[RoadLane] = []
         self.intersection_is_empty = True
 

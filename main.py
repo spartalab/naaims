@@ -12,7 +12,7 @@ from pandas import read_csv
 import naaims.shared as SHARED
 from scenarios import Symmetrical4Way
 from naaims.intersection.managers import (IntersectionManager, FCFSManager,
-                                          AuctionManager)
+                                          SignalManager, AuctionManager)
 from naaims.intersection.tilings.tiles import (Tile, DeterministicTile,
                                                StochasticTile)
 
@@ -301,8 +301,11 @@ if __name__ == "__main__":
     # Test experimental setups for a single 4-way, 3-lane intersection.
     main(30, steps_per_second=15)
     reload(SHARED)
-    main(30, movement_model='one draw', tile_type=StochasticTile,
+    main(30, movement_model='one draw', manager_type=SignalManager,
          av_percentage=0., acceptable_crash_mev=.05, steps_per_second=15)
+    reload(SHARED)
+    main(30, movement_model='one draw', tile_type=StochasticTile,
+         av_percentage=.0, acceptable_crash_mev=.05, steps_per_second=15)
     reload(SHARED)
     main(30, movement_model='one draw', tile_type=StochasticTile,
          av_percentage=.5, acceptable_crash_mev=.05, steps_per_second=15)
@@ -344,6 +347,10 @@ if __name__ == "__main__":
 
     # Render video.
     main(2*60, vpm=30, mp4_filename='fcfs_deterministic')
+    reload(SHARED)
+    main(2*60, movement_model='one draw', manager_type=SignalManager,
+         av_percentage=0., acceptable_crash_mev=.05,
+         mp4_filename='signal_stochastic')
     reload(SHARED)
     main(2*60, movement_model='one draw', tile_type=StochasticTile,
          av_percentage=0., acceptable_crash_mev=.05,
@@ -401,6 +408,10 @@ if __name__ == "__main__":
 
     # Run large FCFS experiments.
     trials(5*60, n_trials=30, steps_per_second=15, log_name='deterministic')
+    reload(SHARED)
+    trials(5*60, n_trials=30, steps_per_second=15, movement_model='one draw',
+           manager_type=SignalManager, av_percentage=0.,
+           acceptable_crash_mev=.05, log_name='signal')
     reload(SHARED)
     trials(5*60, n_trials=30, steps_per_second=15, movement_model='one draw',
            tile_type=StochasticTile, av_percentage=0.,

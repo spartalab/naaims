@@ -146,18 +146,25 @@ def intersection(manager: Type[IntersectionManager] = StopSignManager,
         connectivity.extend([(road_i_lr, road_o_up, False),
                              (road_i_up, road_o_lr, False)])
 
-    intersection = Intersection([road_i_lr, road_i_up], [road_o_lr, road_o_up],
-                                connectivity, manager_type=manager,
-                                manager_spec={
-                                    'tiling_type': SquareTiling,
-                                    'tiling_spec': {
-                                        'tile_type': DeterministicTile,
-                                        'crash_probability_tolerance': 0,
-                                        'misc_spec': {
-                                            'tile_width': 5
-                                        }
-                                    }
-    }, speed_limit=SHARED.SETTINGS.speed_limit)
+    intersection = Intersection(
+        [road_i_lr, road_i_up], [road_o_lr, road_o_up], connectivity,
+        manager_type=manager, manager_spec={
+            'tiling_type': SquareTiling,
+            'tiling_spec': {
+                'tile_type': DeterministicTile,
+                'crash_probability_tolerance': 0,
+                'misc_spec': {
+                    'tile_width': 5
+                }
+            },
+            'misc_spec': {
+                'cycle': (
+                    ({(Coord(0, 12), Coord(24, 12)),
+                      (Coord(0, 12), Coord(12, 24))}, 600),
+                    ({(Coord(12, 0), Coord(12, 24)),
+                      (Coord(12, 0), Coord(24, 12))}, 600))
+            }
+        }, speed_limit=SHARED.SETTINGS.speed_limit)
 
     # Prepare Pathfinder
     od_pair: Dict[Tuple[Coord, int], List[Coord]] = {

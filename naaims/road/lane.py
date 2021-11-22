@@ -238,7 +238,7 @@ class RoadLane(Lane):
             targets: Optional[Set[Coord]]
                 If provided, specifies what exit Coords in the IntersectionLane
                 we're looking for.
-            sequence: Optional[bool]
+            sequence: bool
                 If provided, indicates if we should return a range of indices
                 corresponding to consecutive vehicles without permission to
                 enter with the same desired movement.
@@ -260,7 +260,7 @@ class RoadLane(Lane):
 
         # TODO: (performance) This ought to be cacheable.
 
-        if (targets is not None) and (sequence is not None):
+        if (targets is not None) and (sequence is True):
             raise ValueError("Both target and sequence is not intended usage.")
 
         # TODO: (low) Support actually using the feature where a vehicle can

@@ -819,6 +819,9 @@ class Tiling(Configurable):
                 this vehicle's reservation before returning.
         """
 
+        # TODO: (FCFS-Signal) Change so pos_to_tile isn't dependent on a
+        #       vehicle, for use with reserving intersection lanes.
+
         # At this point in the cycle, everything is fully resolved at timestep
         # SHARED.t, so the first layer in the tile stack represents time
         # SHARED.t+1. t > SHARED.t so we need to extend the tile stack to t. If
