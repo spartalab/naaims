@@ -411,9 +411,14 @@ if __name__ == "__main__":
            acceptable_crash_mev=.05,
            log_name='hard')
     reload(SHARED)
-    trials(5*60, n_trials=30, steps_per_second=15, movement_model='one draw',
-           tile_type=StochasticTile, av_percentage=.5,
-           acceptable_crash_mev=.05, log_name='soft_5050')
+    for i in range(10):
+        pc = i/10
+        if pc in {0., 1}:
+            continue
+        trials(5*60, n_trials=30, steps_per_second=15,
+               movement_model='one draw', tile_type=StochasticTile,
+               av_percentage=pc, acceptable_crash_mev=.05,
+               log_name=f'soft_av{pc}')
     reload(SHARED)
     trials(5*60, n_trials=30, steps_per_second=15, movement_model='one draw',
            tile_type=StochasticTile, av_percentage=0.,
