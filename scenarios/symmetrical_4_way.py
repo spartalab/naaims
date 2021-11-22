@@ -253,12 +253,11 @@ class Symmetrical4Way(Simulator):
                 Coord(6.0, -7.347880794884119e-16)]
 
             # Left      left (0) to up (3)
-            od_pair[(Coord(0.0, 14.0), 3)] = [
-                Coord(4.898587196589413e-16, 18.0)]
+            od_pair[(Coord(0.0, 14.0), 3)] = [Coord(18.0, 32.0)]
 
             # Left      down (1) to left (0)
             od_pair[(Coord(18.0, -2.4492935982947064e-16), 0)
-                    ] = [Coord(18.0, 32.0)]
+                    ] = [Coord(4.898587196589413e-16, 18.0)]
 
             # Right     down (1) to right (2)
             od_pair[(Coord(26.0, 2.4492935982947064e-16), 2)

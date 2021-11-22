@@ -349,8 +349,8 @@ if __name__ == "__main__":
     main(2*60, vpm=30, mp4_filename='fcfs_deterministic')
     reload(SHARED)
     main(2*60, movement_model='one draw', manager_type=SignalManager,
-         av_percentage=0., acceptable_crash_mev=.05,
-         mp4_filename='signal_stochastic')
+         av_percentage=1., acceptable_crash_mev=.05,
+         mp4_filename='signal_deterministic')
     reload(SHARED)
     main(2*60, movement_model='one draw', tile_type=StochasticTile,
          av_percentage=0., acceptable_crash_mev=.05,
@@ -410,7 +410,7 @@ if __name__ == "__main__":
     trials(5*60, n_trials=30, steps_per_second=15, log_name='deterministic')
     reload(SHARED)
     trials(5*60, n_trials=30, steps_per_second=15, movement_model='one draw',
-           manager_type=SignalManager, av_percentage=0.,
+           manager_type=SignalManager, av_percentage=1.,
            acceptable_crash_mev=.05, log_name='signal')
     reload(SHARED)
     trials(5*60, n_trials=30, steps_per_second=15, movement_model='one draw',
