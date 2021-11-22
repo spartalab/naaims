@@ -114,14 +114,14 @@ class SignalManager(IntersectionManager):
                     t_exit, v_exit = free_flow_exit(
                         v0, a, v_max, t_to_v_max,
                         x_over_constant_a(v0, a, t_to_v_max),
-                        i_lane.trajectory.length)
+                        i_lane.trajectory.length + vehicle.length_buffered)
                     ts_to_exit = ceil(SHARED.SETTINGS.steps_per_second *
                                       t_exit)
 
                     # TODO: (multiple) use v_exit to check for sufficient space
                     #       in the outgoing road lane.
 
-                    if ts_to_exit <= ts_left:
+                    if ts_to_exit + entrance_front.t <= ts_left + SHARED.t:
                         self.tiling.issue_permission(
                             vehicle, lane, SignalManager.entrance_rear(
                                 entrance_front, a, v_max, t_to_v_max))
