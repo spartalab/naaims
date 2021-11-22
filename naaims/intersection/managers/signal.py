@@ -115,13 +115,13 @@ class SignalManager(IntersectionManager):
                         v0, a, v_max, t_to_v_max,
                         x_over_constant_a(v0, a, t_to_v_max),
                         i_lane.trajectory.length)
-                    ts_exit = entrance_front.t + \
-                        ceil(SHARED.SETTINGS.steps_per_second * t_exit)
+                    ts_to_exit = ceil(SHARED.SETTINGS.steps_per_second *
+                                      t_exit)
 
                     # TODO: (multiple) use v_exit to check for sufficient space
                     #       in the outgoing road lane.
 
-                    if ts_exit <= ts_left:
+                    if ts_to_exit <= ts_left:
                         self.tiling.issue_permission(
                             vehicle, lane, SignalManager.entrance_rear(
                                 entrance_front, a, v_max, t_to_v_max))
@@ -131,7 +131,7 @@ class SignalManager(IntersectionManager):
 
                     counter += 1
 
-    def get_phase(self) -> Tuple[Set[IntersectionLane], int]:
+    def get_phase(self) -> Tuple[FrozenSet[IntersectionLane], int]:
         """Return the lanes allowed by the current signal phase and time left.
 
         That is, the intersection lanes allowed and timesteps left in the
@@ -141,7 +141,7 @@ class SignalManager(IntersectionManager):
         assert len(self.cycle) > 0
         ts_current = SHARED.t % self.cycle_ts
         ts_check = 0
-        allowed_lanes: Set[IntersectionLane] = set()
+        allowed_lanes: FrozenSet[IntersectionLane] = frozenset()
         for phase in self.cycle:
             ts_check += phase[1]
             if ts_check > ts_current:
