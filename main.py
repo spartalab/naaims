@@ -155,8 +155,11 @@ def trials(time: int = 10*60,
             raise RuntimeError(f"Trial retry attempts exhausted.")
     traversal_time_means: List[float] = []
     weighted_time_means: List[float] = []
+    cost_means: List[float] = []
     scale_one_weighted_ratio: List[float] = []
     scale_all_weighted_ratio: List[float] = []
+    scale_one_cost_ratio: List[float] = []
+    scale_all_cost_ratio: List[float] = []
 
     for i in range(n_trials):
         df = read_csv(f'output/logs/{log_name}_{i}{scaling_filename_addendum}'
@@ -172,6 +175,9 @@ def trials(time: int = 10*60,
         weighted_time = (traversal_time + df['payment']/df['vot'])
         weighted_time_mean: float = weighted_time.mean()  # type: ignore
         weighted_time_means.append(weighted_time_mean)
+        cost = (traversal_time*df['vot'] + df['payment'])
+        cost_mean: float = cost.mean()  # type: ignore
+        cost_means.append(cost_mean)
 
         if (vin_scaled is not None) or (scale_all != 1):
             df = read_csv(f'output/logs/{log_name}_{i}.csv', header=0,
@@ -181,6 +187,8 @@ def trials(time: int = 10*60,
                     inplace=True)
             weighted_time_original_series = (df['t_exit'] - df['t_spawn']) / \
                 steps_per_second + df['payment']/df['vot']
+            cost_original_series = (df['t_exit'] - df['t_spawn']) / \
+                steps_per_second * df['vot'] + df['payment']
 
             if vin_scaled is not None:
                 weighted_time_scaled: float = \
@@ -193,45 +201,78 @@ def trials(time: int = 10*60,
                 scale_one_weighted_ratio.append(
                     weighted_time_scaled / weighted_time_original
                 )  # type: ignore
+                cost_scaled: float = \
+                    cost[vin_scaled] if vin_scaled in \
+                    cost.index else float('inf')  # type: ignore
+                cost_original: float = cost_original_series[
+                    vin_scaled] if (vin_scaled in
+                                    cost_original_series.index) else \
+                    float('inf')  # type: ignore
+                scale_one_cost_ratio.append(cost_scaled / cost_original
+                                            )  # type: ignore
 
             if scale_all != 1:
                 scale_all_weighted_ratio.append(
                     weighted_time_mean /
                     weighted_time_original_series.mean())  # type: ignore
+                scale_all_cost_ratio.append(
+                    cost_mean /
+                    cost_original_series.mean())  # type: ignore
 
     sample_mean = mean(traversal_time_means)
     sample_sd = stdev(traversal_time_means)
     weighted_sample_mean = mean(weighted_time_means)
     weighted_sample_sd = stdev(weighted_time_means)
+    cost_sample_mean = mean(cost_means)
+    cost_sample_sd = stdev(cost_means)
 
     scale_one_weighted_ratio_mean: float = 0.
     scale_one_weighted_ratio_sd: float = 0.
+    scale_one_cost_ratio_mean: float = 0.
+    scale_one_cost_ratio_sd: float = 0.
     if vin_scaled is not None:
         scale_one_weighted_ratio = [
             n for n in scale_one_weighted_ratio if not (isnan(n) or
                                                         (n == float('inf')))]
         scale_one_weighted_ratio_mean = mean(scale_one_weighted_ratio)
         scale_one_weighted_ratio_sd = stdev(scale_one_weighted_ratio)
+        scale_one_cost_ratio = [
+            n for n in scale_one_cost_ratio if not (isnan(n) or
+                                                    (n == float('inf')))]
+        scale_one_cost_ratio_mean = mean(scale_one_cost_ratio)
+        scale_one_cost_ratio_sd = stdev(scale_one_cost_ratio)
 
     scale_all_weighted_ratio_mean: float = 0.
     scale_all_weighted_ratio_sd: float = 0.
+    scale_all_cost_ratio_mean: float = 0.
+    scale_all_cost_ratio_sd: float = 0.
     if scale_all != 1:
         scale_all_weighted_ratio = [
             n for n in scale_all_weighted_ratio if not (isnan(n) or
                                                         (n == float('inf')))]
         scale_all_weighted_ratio_mean = mean(scale_all_weighted_ratio)
         scale_all_weighted_ratio_sd = stdev(scale_all_weighted_ratio)
+        scale_all_cost_ratio = [
+            n for n in scale_all_cost_ratio if not (isnan(n) or
+                                                    (n == float('inf')))]
+        scale_all_cost_ratio_mean = mean(scale_all_cost_ratio)
+        scale_all_cost_ratio_sd = stdev(scale_all_cost_ratio)
 
     with open(f'output/logs/trials_{log_name}{scaling_filename_addendum}.txt',
               'w') as f:
         output = f'{sample_mean}\n{sample_sd}\n\n{n_trials}\n\n'\
-            f'{weighted_sample_mean}\n{weighted_sample_sd}\n'
+            f'{weighted_sample_mean}\n{weighted_sample_sd}\n\n'\
+            f'{cost_sample_mean}\n{cost_sample_sd}\n\n'
         if vin_scaled is not None:
             output += f'\n{scale_one_weighted_ratio_mean}\n'\
                 f'{scale_one_weighted_ratio_sd}\n'
+            output += f'\n{scale_one_cost_ratio_mean}\n'\
+                f'{scale_one_cost_ratio_sd}\n'
         if scale_all != 1:
             output += f'\n{scale_all_weighted_ratio_mean}\n'\
                 f'{scale_all_weighted_ratio_sd}\n'
+            output += f'\n{scale_all_cost_ratio_mean}\n'\
+                f'{scale_all_cost_ratio_sd}\n'
         f.write(output)
 
     return sample_mean, sample_sd, weighted_sample_mean, weighted_sample_sd
@@ -406,22 +447,25 @@ if __name__ == "__main__":
          mp4_filename='auction_externality_sequence')
     reload(SHARED)
 
-    # Run large FCFS experiments.
-    trials(5*60, n_trials=30, steps_per_second=15, log_name='deterministic')
-    reload(SHARED)
-    trials(5*60, n_trials=30, steps_per_second=15, movement_model='one draw',
-           manager_type=SignalManager, av_percentage=1.,
-           acceptable_crash_mev=.05, log_name='signal')
-    reload(SHARED)
-    trials(5*60, n_trials=30, steps_per_second=15, movement_model='one draw',
-           tile_type=StochasticTile, av_percentage=0.,
-           acceptable_crash_mev=.05, log_name='soft')
-    reload(SHARED)
-    trials(5*60, n_trials=30, steps_per_second=15, movement_model='one draw',
-           tile_type=DeterministicTile, av_percentage=0.,
-           acceptable_crash_mev=.05,
-           log_name='hard')
-    reload(SHARED)
+    # Run large experiments.
+    for vpm in (5, 10, 15):
+        trials(5*60, n_trials=30, steps_per_second=15,
+               vpm=vpm, log_name=f'deterministic_vpm{vpm}')
+        reload(SHARED)
+        trials(5*60, n_trials=30, steps_per_second=15,
+               manager_type=SignalManager, av_percentage=1.,
+               acceptable_crash_mev=.05, vpm=vpm, log_name=f'signal_vpm{vpm}')
+        reload(SHARED)
+        trials(5*60, n_trials=30, steps_per_second=15,
+               movement_model='one draw', tile_type=StochasticTile,
+               av_percentage=0., acceptable_crash_mev=.05, vpm=vpm,
+               log_name=f'soft_vpm{vpm}')
+        reload(SHARED)
+        trials(5*60, n_trials=30, steps_per_second=15,
+               movement_model='one draw', tile_type=DeterministicTile,
+               av_percentage=0., acceptable_crash_mev=.05,
+               vpm=vpm, log_name=f'hard_vpm{vpm}')
+        reload(SHARED)
     for i in range(10):
         pc = i/10
         if pc in {0., 1}:
@@ -443,36 +487,42 @@ if __name__ == "__main__":
     reload(SHARED)
 
     # Run auction experiments with misreporting VOT vehicle trials.
-    trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
-                         log_name='auction_1st', scale_one=.9)
-    reload(SHARED)
-    trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
-                         mechanism='2nd', log_name='auction_2nd', scale_one=.9)
-    reload(SHARED)
-    trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
-                         mechanism='externality',
-                         log_name='auction_externality', scale_one=.9)
-    reload(SHARED)
-    trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
-                         multiple_sequence_none=True,
-                         log_name='auction_1st_multiple', scale_one=.9)
-    reload(SHARED)
-    trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
-                         mechanism='2nd', multiple_sequence_none=True,
-                         log_name='auction_2nd_multiple', scale_one=.9)
-    reload(SHARED)
-    trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
-                         mechanism='externality', multiple_sequence_none=True,
-                         log_name='auction_externality_multiple', scale_one=.9)
-    reload(SHARED)
-    trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
-                         multiple_sequence_none=False,
-                         log_name='auction_1st_sequence', scale_one=.9)
-    reload(SHARED)
-    trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
-                         mechanism='2nd', multiple_sequence_none=False,
-                         log_name='auction_2nd_sequence', scale_one=.9)
-    reload(SHARED)
-    trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
-                         mechanism='externality', multiple_sequence_none=False,
-                         log_name='auction_externality_sequence', scale_one=.9)
+    for p in (.8, .9, 1.1):
+        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+                             log_name='auction_1st', scale_one=p)
+        reload(SHARED)
+        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+                             mechanism='2nd', log_name='auction_2nd',
+                             scale_one=p)
+        reload(SHARED)
+        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+                             mechanism='externality',
+                             log_name='auction_externality', scale_one=p)
+        reload(SHARED)
+        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+                             multiple_sequence_none=True,
+                             log_name='auction_1st_multiple', scale_one=p)
+        reload(SHARED)
+        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+                             mechanism='2nd', multiple_sequence_none=True,
+                             log_name='auction_2nd_multiple', scale_one=p)
+        reload(SHARED)
+        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+                             mechanism='externality',
+                             multiple_sequence_none=True,
+                             log_name='auction_externality_multiple',
+                             scale_one=p)
+        reload(SHARED)
+        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+                             multiple_sequence_none=False,
+                             log_name='auction_1st_sequence', scale_one=p)
+        reload(SHARED)
+        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+                             mechanism='2nd', multiple_sequence_none=False,
+                             log_name='auction_2nd_sequence', scale_one=p)
+        reload(SHARED)
+        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+                             mechanism='externality',
+                             multiple_sequence_none=False,
+                             log_name='auction_externality_sequence',
+                             scale_one=p)
