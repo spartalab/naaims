@@ -172,10 +172,14 @@ def trials(time: int = 10*60,
         traversal_time = (df['t_exit'] - df['t_spawn']) / \
             steps_per_second  # type: ignore
         traversal_time_means.append(traversal_time.mean())  # type: ignore
-        weighted_time = (traversal_time + df['payment']/df['vot'])
+        payment = df['payment'] if \
+            ('payment' in df.index) else float('inf')  # type: ignore
+        vot = df['vot'] if \
+            ('vot' in df.index) else float('inf')  # type: ignore
+        weighted_time = (traversal_time + payment/vot)
         weighted_time_mean: float = weighted_time.mean()  # type: ignore
         weighted_time_means.append(weighted_time_mean)
-        cost = (traversal_time*df['vot'] + df['payment'])
+        cost = (traversal_time*vot + payment)
         cost_mean: float = cost.mean()  # type: ignore
         cost_means.append(cost_mean)
 
