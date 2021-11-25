@@ -162,6 +162,16 @@ def trials(time: int = 10*60,
     scale_all_cost_ratio: List[float] = []
 
     for i in range(n_trials):
+
+        # Get VIN that was scaled, if any
+        if replicate_reference:
+            _, vin_scaled = read_output_to_replicate(
+                f'output/logs/{log_name}_{i}.csv', timesteps, scale_one,
+                scale_all)
+        else:
+            vin_scaled = None
+
+        # Read scaled
         df = read_csv(f'output/logs/{log_name}_{i}{scaling_filename_addendum}'
                       '.csv', header=0, index_col=False)
 
@@ -173,9 +183,9 @@ def trials(time: int = 10*60,
             steps_per_second  # type: ignore
         traversal_time_means.append(traversal_time.mean())  # type: ignore
         payment = df['payment'] if \
-            ('payment' in df.index) else float('inf')  # type: ignore
+            ('payment' in df.columns) else float('inf')  # type: ignore
         vot = df['vot'] if \
-            ('vot' in df.index) else float('inf')  # type: ignore
+            ('vot' in df.columns) else float('inf')  # type: ignore
         weighted_time = (traversal_time + payment/vot)
         weighted_time_mean: float = weighted_time.mean()  # type: ignore
         weighted_time_means.append(weighted_time_mean)
@@ -189,10 +199,12 @@ def trials(time: int = 10*60,
             # Drop vehicles that have yet to exit.
             df.drop(df.index[df['t_exit'] < 0], axis=0,   # type: ignore
                     inplace=True)
-            weighted_time_original_series = (df['t_exit'] - df['t_spawn']) / \
-                steps_per_second + df['payment']/df['vot']
-            cost_original_series = (df['t_exit'] - df['t_spawn']) / \
-                steps_per_second * df['vot'] + df['payment']
+            traversal_time_original_series = (df['t_exit'] - df['t_spawn'])\
+                / steps_per_second
+            weighted_time_original_series = traversal_time_original_series + \
+                df['payment']/df['vot']
+            cost_original_series = traversal_time_original_series * df['vot'] \
+                + df['payment']
 
             if vin_scaled is not None:
                 weighted_time_scaled: float = \
@@ -264,18 +276,28 @@ def trials(time: int = 10*60,
 
     with open(f'output/logs/trials_{log_name}{scaling_filename_addendum}.txt',
               'w') as f:
-        output = f'{sample_mean}\n{sample_sd}\n\n{n_trials}\n\n'\
+        output = f'trials\n{n_trials}\n\n'\
+            'Traversal time (mean, sd)\n'\
+            f'{sample_mean}\n{sample_sd}\n\n'\
+            'Weighted traversal time (mean, sd)\n'\
             f'{weighted_sample_mean}\n{weighted_sample_sd}\n\n'\
-            f'{cost_sample_mean}\n{cost_sample_sd}\n\n'
+            'Cost incurred (mean, sd)'\
+            f'\n{cost_sample_mean}\n{cost_sample_sd}\n'
         if vin_scaled is not None:
-            output += f'\n{scale_one_weighted_ratio_mean}\n'\
-                f'{scale_one_weighted_ratio_sd}\n'
-            output += f'\n{scale_one_cost_ratio_mean}\n'\
+            output += '\n\n[One liar]\n\n'\
+                'Weighted traversal time ratio (lying/true) (mean, sd)\n'\
+                f'{scale_one_weighted_ratio_mean}\n'\
+                f'{scale_one_weighted_ratio_sd}\n\n'\
+                'Cost incurred ratio (lying/true) (mean, sd)\n'\
+                f'{scale_one_cost_ratio_mean}\n'\
                 f'{scale_one_cost_ratio_sd}\n'
         if scale_all != 1:
-            output += f'\n{scale_all_weighted_ratio_mean}\n'\
-                f'{scale_all_weighted_ratio_sd}\n'
-            output += f'\n{scale_all_cost_ratio_mean}\n'\
+            output += '\n\n[All lying]\n\n'\
+                'Weighted traversal time ratio (lying/true) (mean, sd)\n'\
+                f'{scale_all_weighted_ratio_mean}\n'\
+                f'{scale_all_weighted_ratio_sd}\n\n'\
+                'Cost incurred ratio (lying/true) (mean, sd)\n'\
+                f'{scale_all_cost_ratio_mean}\n'\
                 f'{scale_all_cost_ratio_sd}\n'
         f.write(output)
 
@@ -491,41 +513,41 @@ if __name__ == "__main__":
     reload(SHARED)
 
     # Run auction experiments with misreporting VOT vehicle trials.
-    for p in (.8, .9, 1.1):
-        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+    for p in (.8, .85, .9, .95, 1.05, 1.1):
+        trials_vot_misreport(5*60, n_trials=100, steps_per_second=15,
                              log_name='auction_1st', scale_one=p)
         reload(SHARED)
-        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+        trials_vot_misreport(5*60, n_trials=100, steps_per_second=15,
                              mechanism='2nd', log_name='auction_2nd',
                              scale_one=p)
         reload(SHARED)
-        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+        trials_vot_misreport(5*60, n_trials=100, steps_per_second=15,
                              mechanism='externality',
                              log_name='auction_externality', scale_one=p)
         reload(SHARED)
-        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+        trials_vot_misreport(5*60, n_trials=100, steps_per_second=15,
                              multiple_sequence_none=True,
                              log_name='auction_1st_multiple', scale_one=p)
         reload(SHARED)
-        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+        trials_vot_misreport(5*60, n_trials=100, steps_per_second=15,
                              mechanism='2nd', multiple_sequence_none=True,
                              log_name='auction_2nd_multiple', scale_one=p)
         reload(SHARED)
-        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+        trials_vot_misreport(5*60, n_trials=100, steps_per_second=15,
                              mechanism='externality',
                              multiple_sequence_none=True,
                              log_name='auction_externality_multiple',
                              scale_one=p)
         reload(SHARED)
-        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+        trials_vot_misreport(5*60, n_trials=100, steps_per_second=15,
                              multiple_sequence_none=False,
                              log_name='auction_1st_sequence', scale_one=p)
         reload(SHARED)
-        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+        trials_vot_misreport(5*60, n_trials=100, steps_per_second=15,
                              mechanism='2nd', multiple_sequence_none=False,
                              log_name='auction_2nd_sequence', scale_one=p)
         reload(SHARED)
-        trials_vot_misreport(5*60, n_trials=30, steps_per_second=15,
+        trials_vot_misreport(5*60, n_trials=100, steps_per_second=15,
                              mechanism='externality',
                              multiple_sequence_none=False,
                              log_name='auction_externality_sequence',
