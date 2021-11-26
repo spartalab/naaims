@@ -7,7 +7,7 @@ from os.path import exists
 from warnings import warn
 
 from matplotlib.animation import FFMpegFileWriter
-from pandas import read_csv
+from pandas import read_csv, DataFrame, Series
 
 import naaims.shared as SHARED
 from scenarios import Symmetrical4Way
@@ -103,7 +103,7 @@ def trials(time: int = 10*60,
            mechanism: str = 'first',
            replicate_reference: bool = False,
            scale_one: float = 1,
-           scale_all: float = 1):
+           scale_all: float = 1) -> None:
     """Run several trials, record their output, and return average delay.
 
     See main for parameter descriptions.
@@ -153,8 +153,8 @@ def trials(time: int = 10*60,
                 reload(SHARED)
         else:
             raise RuntimeError(f"Trial retry attempts exhausted.")
-    traversal_time_means: List[float] = []
-    weighted_time_means: List[float] = []
+    delay_means: List[float] = []
+    weighted_delay_means: List[float] = []
     cost_means: List[float] = []
     scale_one_weighted_ratio: List[float] = []
     scale_all_weighted_ratio: List[float] = []
@@ -179,17 +179,16 @@ def trials(time: int = 10*60,
         df.drop(df.index[df['t_exit'] < 0], axis=0,   # type: ignore
                 inplace=True)
 
-        traversal_time = (df['t_exit'] - df['t_spawn']) / \
-            steps_per_second  # type: ignore
-        traversal_time_means.append(traversal_time.mean())  # type: ignore
+        delay = find_delay(df, steps_per_second)
+        delay_means.append(delay.mean())  # type: ignore
         payment = df['payment'] if \
             ('payment' in df.columns) else float('inf')  # type: ignore
         vot = df['vot'] if \
             ('vot' in df.columns) else float('inf')  # type: ignore
-        weighted_time = (traversal_time + payment/vot)
-        weighted_time_mean: float = weighted_time.mean()  # type: ignore
-        weighted_time_means.append(weighted_time_mean)
-        cost = (traversal_time*vot + payment)
+        weighted_delay = (delay + payment/vot)  # type: ignore
+        weighted_delay_mean: float = weighted_delay.mean()  # type: ignore
+        weighted_delay_means.append(weighted_delay_mean)
+        cost = (delay*vot + payment)  # type: ignore
         cost_mean: float = cost.mean()  # type: ignore
         cost_means.append(cost_mean)
 
@@ -199,24 +198,24 @@ def trials(time: int = 10*60,
             # Drop vehicles that have yet to exit.
             df.drop(df.index[df['t_exit'] < 0], axis=0,   # type: ignore
                     inplace=True)
-            traversal_time_original_series = (df['t_exit'] - df['t_spawn'])\
-                / steps_per_second
-            weighted_time_original_series = traversal_time_original_series + \
-                df['payment']/df['vot']
-            cost_original_series = traversal_time_original_series * df['vot'] \
-                + df['payment']
+            delay_original_series = find_delay(df, steps_per_second)
+            weighted_delay_original_series: Series[float] = \
+                delay_original_series + df['payment']/df['vot']  # type: ignore
+            cost_original_series: Series[float] = delay_original_series * \
+                df['vot'] + df['payment']  # type: ignore
 
             if vin_scaled is not None:
-                weighted_time_scaled: float = \
-                    weighted_time[vin_scaled] if vin_scaled in \
-                    weighted_time.index else float('inf')  # type: ignore
-                weighted_time_original: float = weighted_time_original_series[
-                    vin_scaled] if (vin_scaled in
-                                    weighted_time_original_series.index) else \
-                    float('inf')  # type: ignore
+                weighted_delay_scaled: float = \
+                    weighted_delay[vin_scaled] if vin_scaled in \
+                    weighted_delay.index else float('inf')  # type: ignore
+                weighted_delay_original: float = \
+                    weighted_delay_original_series[vin_scaled] if (
+                        vin_scaled in weighted_delay_original_series.index
+                    ) else float('inf')  # type: ignore
                 scale_one_weighted_ratio.append(
-                    weighted_time_scaled / weighted_time_original
+                    weighted_delay_scaled / weighted_delay_original
                 )  # type: ignore
+
                 cost_scaled: float = \
                     cost[vin_scaled] if vin_scaled in \
                     cost.index else float('inf')  # type: ignore
@@ -229,18 +228,19 @@ def trials(time: int = 10*60,
 
             if scale_all != 1:
                 scale_all_weighted_ratio.append(
-                    weighted_time_mean /
-                    weighted_time_original_series.mean())  # type: ignore
+                    weighted_delay_mean /
+                    weighted_delay_original_series.mean())  # type: ignore
+
                 scale_all_cost_ratio.append(
                     cost_mean /
                     cost_original_series.mean())  # type: ignore
 
-    sample_mean = mean(traversal_time_means)
-    sample_sd = stdev(traversal_time_means)
-    weighted_sample_mean = mean(weighted_time_means)
-    weighted_sample_sd = stdev(weighted_time_means)
-    cost_sample_mean = mean(cost_means)
-    cost_sample_sd = stdev(cost_means)
+    sample_delay_mean = mean(delay_means)
+    sample_delay_sd = stdev(delay_means)
+    sample_weighted_delay_mean = mean(weighted_delay_means)
+    sample_weighted_delay_sd = stdev(weighted_delay_means)
+    sample_cost_mean = mean(cost_means)
+    sample_cost_sd = stdev(cost_means)
 
     scale_one_weighted_ratio_mean: float = 0.
     scale_one_weighted_ratio_sd: float = 0.
@@ -277,15 +277,15 @@ def trials(time: int = 10*60,
     with open(f'output/logs/trials_{log_name}{scaling_filename_addendum}.txt',
               'w') as f:
         output = f'trials\n{n_trials}\n\n'\
-            'Traversal time (mean, sd)\n'\
-            f'{sample_mean}\n{sample_sd}\n\n'\
-            'Weighted traversal time (mean, sd)\n'\
-            f'{weighted_sample_mean}\n{weighted_sample_sd}\n\n'\
-            'Cost incurred (mean, sd)'\
-            f'\n{cost_sample_mean}\n{cost_sample_sd}\n'
+            'Delay (mean, sd)\n'\
+            f'{sample_delay_mean}\n{sample_delay_sd}\n\n'\
+            'Weighted delay (mean, sd)\n'\
+            f'{sample_weighted_delay_mean}\n{sample_weighted_delay_sd}\n\n'\
+            'Cost incurred (mean, sd)\n'\
+            f'{sample_cost_mean}\n{sample_cost_sd}\n'
         if vin_scaled is not None:
             output += '\n\n[One liar]\n\n'\
-                'Weighted traversal time ratio (lying/true) (mean, sd)\n'\
+                'Weighted delay ratio (lying/true) (mean, sd)\n'\
                 f'{scale_one_weighted_ratio_mean}\n'\
                 f'{scale_one_weighted_ratio_sd}\n\n'\
                 'Cost incurred ratio (lying/true) (mean, sd)\n'\
@@ -293,7 +293,7 @@ def trials(time: int = 10*60,
                 f'{scale_one_cost_ratio_sd}\n'
         if scale_all != 1:
             output += '\n\n[All lying]\n\n'\
-                'Weighted traversal time ratio (lying/true) (mean, sd)\n'\
+                'Weighted delay ratio (lying/true) (mean, sd)\n'\
                 f'{scale_all_weighted_ratio_mean}\n'\
                 f'{scale_all_weighted_ratio_sd}\n\n'\
                 'Cost incurred ratio (lying/true) (mean, sd)\n'\
@@ -301,7 +301,27 @@ def trials(time: int = 10*60,
                 f'{scale_all_cost_ratio_sd}\n'
         f.write(output)
 
-    return sample_mean, sample_sd, weighted_sample_mean, weighted_sample_sd
+
+def find_delay(df: DataFrame, steps_per_second: int, speed_limit: float = 15,
+               length: float = 50) -> Series[float]:
+    """Calculate delay relative to the free flow case."""
+
+    # First, subtract approach and outgoing lane traversal times assuming that
+    # the vehicle is traveling at the fastest speed possible
+    delay: Series[float] = (df['t_exit'] - df['t_spawn']) / \
+        steps_per_second - 2*length/speed_limit  # type: ignore
+
+    # Next, subtract the lengths of the intersection lanes by using the
+    # difference between the origin and destination IDs
+    od = df['destination_target'] - df['origin']
+    # Through
+    delay[od.abs() == 2] -= 32  # type: ignore
+    # Right turn
+    delay[(od == 1) | (od == -3)] -= 9.73935/speed_limit  # type: ignore
+    # Left turn
+    delay[(od == -1) | (od == 3)] -= 29.218/speed_limit  # type: ignore
+
+    return delay
 
 
 def read_output_to_replicate(filename: str, timesteps: int,
