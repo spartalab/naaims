@@ -303,7 +303,7 @@ def trials(time: int = 10*60,
 
 
 def find_delay(df: DataFrame, steps_per_second: int, speed_limit: float = 15,
-               length: float = 50) -> Series[float]:
+               length: float = 50):
     """Calculate delay relative to the free flow case."""
 
     # First, subtract approach and outgoing lane traversal times assuming that
@@ -315,7 +315,7 @@ def find_delay(df: DataFrame, steps_per_second: int, speed_limit: float = 15,
     # difference between the origin and destination IDs
     od = df['destination_target'] - df['origin']
     # Through
-    delay[od.abs() == 2] -= 32  # type: ignore
+    delay[od.abs() == 2] -= 32/speed_limit  # type: ignore
     # Right turn
     delay[(od == 1) | (od == -3)] -= 9.73935/speed_limit  # type: ignore
     # Left turn
