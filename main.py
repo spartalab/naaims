@@ -494,7 +494,7 @@ if __name__ == "__main__":
     reload(SHARED)
 
     # Run large experiments.
-    for vpm in (5, 10, 15):
+    for vpm in (2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20):
         trials(5*60, n_trials=30, steps_per_second=15,
                vpm=vpm, log_name=f'deterministic_vpm{vpm}')
         reload(SHARED)
