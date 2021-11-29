@@ -122,7 +122,7 @@ def trials(time: int = 10*60,
                 '.csv'
         if exists(logname):
             continue
-        for _ in range(retry_attempts):
+        for i_attempt in range(retry_attempts):
             try:
                 sim = Symmetrical4Way(
                     length=50, manager_type=manager_type, tile_type=tile_type,
@@ -144,8 +144,8 @@ def trials(time: int = 10*60,
                 )
                 for _ in range(timesteps):
                     sim.step()
-            except RuntimeError:
-                warn(f"Encountered runtime error in this trial, attempt {i}")
+            except (RuntimeError, ValueError):
+                warn(f"Encountered error in this trial, attempt {i_attempt}")
             else:
                 sim.save_log(logname)
                 break
@@ -188,16 +188,20 @@ def trials(time: int = 10*60,
         weighted_delay = (delay + payment/vot)  # type: ignore
         weighted_delay_mean: float = weighted_delay.mean()  # type: ignore
         weighted_delay_means.append(weighted_delay_mean)
-        cost = (delay*vot + payment)  # type: ignore
+        cost = delay*vot + payment  # type: ignore
         cost_mean: float = cost.mean()  # type: ignore
         cost_means.append(cost_mean)
 
         if (vin_scaled is not None) or (scale_all != 1):
+
+            # Get original scenario before VOT scaling
             df = read_csv(f'output/logs/{log_name}_{i}.csv', header=0,
                           index_col=False)
+
             # Drop vehicles that have yet to exit.
             df.drop(df.index[df['t_exit'] < 0], axis=0,   # type: ignore
                     inplace=True)
+
             delay_original_series = find_delay(df, steps_per_second)
             weighted_delay_original_series: Series[float] = \
                 delay_original_series + df['payment']/df['vot']  # type: ignore
@@ -205,9 +209,17 @@ def trials(time: int = 10*60,
                 df['vot'] + df['payment']  # type: ignore
 
             if vin_scaled is not None:
-                weighted_delay_scaled: float = \
-                    weighted_delay[vin_scaled] if vin_scaled in \
-                    weighted_delay.index else float('inf')  # type: ignore
+                # Get the true VOT for this VIN and recalculate their effective
+                # delay and incurred cost based on it, and compare it to the
+                # scenario where they reported their true VOT.
+                vot_true: float = df.loc[vin_scaled, 'vot']  # type: ignore
+
+                delay_scaled = delay[vin_scaled] if vin_scaled in delay.index \
+                    else float('inf')
+                payment_scaled: float = payment[vin_scaled] if (
+                    (type(payment) is Series) and (vin_scaled in payment.index)
+                ) else float('inf')  # type: ignore
+                weighted_delay_scaled = delay_scaled + payment_scaled/vot_true
                 weighted_delay_original: float = \
                     weighted_delay_original_series[vin_scaled] if (
                         vin_scaled in weighted_delay_original_series.index
@@ -216,9 +228,7 @@ def trials(time: int = 10*60,
                     weighted_delay_scaled / weighted_delay_original
                 )  # type: ignore
 
-                cost_scaled: float = \
-                    cost[vin_scaled] if vin_scaled in \
-                    cost.index else float('inf')  # type: ignore
+                cost_scaled = delay_scaled*vot_true + payment_scaled
                 cost_original: float = cost_original_series[
                     vin_scaled] if (vin_scaled in
                                     cost_original_series.index) else \
@@ -242,32 +252,18 @@ def trials(time: int = 10*60,
     sample_cost_mean = mean(cost_means)
     sample_cost_sd = stdev(cost_means)
 
-    scale_one_weighted_ratio_mean: float = 0.
-    scale_one_weighted_ratio_sd: float = 0.
     scale_one_cost_ratio_mean: float = 0.
     scale_one_cost_ratio_sd: float = 0.
     if vin_scaled is not None:
-        scale_one_weighted_ratio = [
-            n for n in scale_one_weighted_ratio if not (isnan(n) or
-                                                        (n == float('inf')))]
-        scale_one_weighted_ratio_mean = mean(scale_one_weighted_ratio)
-        scale_one_weighted_ratio_sd = stdev(scale_one_weighted_ratio)
         scale_one_cost_ratio = [
             n for n in scale_one_cost_ratio if not (isnan(n) or
                                                     (n == float('inf')))]
         scale_one_cost_ratio_mean = mean(scale_one_cost_ratio)
         scale_one_cost_ratio_sd = stdev(scale_one_cost_ratio)
 
-    scale_all_weighted_ratio_mean: float = 0.
-    scale_all_weighted_ratio_sd: float = 0.
     scale_all_cost_ratio_mean: float = 0.
     scale_all_cost_ratio_sd: float = 0.
     if scale_all != 1:
-        scale_all_weighted_ratio = [
-            n for n in scale_all_weighted_ratio if not (isnan(n) or
-                                                        (n == float('inf')))]
-        scale_all_weighted_ratio_mean = mean(scale_all_weighted_ratio)
-        scale_all_weighted_ratio_sd = stdev(scale_all_weighted_ratio)
         scale_all_cost_ratio = [
             n for n in scale_all_cost_ratio if not (isnan(n) or
                                                     (n == float('inf')))]
@@ -276,7 +272,8 @@ def trials(time: int = 10*60,
 
     with open(f'output/logs/trials_{log_name}{scaling_filename_addendum}.txt',
               'w') as f:
-        output = f'trials\n{n_trials}\n\n'\
+        output = '[Base trials]\n'\
+            f'n={n_trials}\n\n'\
             'Delay (mean, sd)\n'\
             f'{sample_delay_mean}\n{sample_delay_sd}\n\n'\
             'Weighted delay (mean, sd)\n'\
@@ -284,18 +281,14 @@ def trials(time: int = 10*60,
             'Cost incurred (mean, sd)\n'\
             f'{sample_cost_mean}\n{sample_cost_sd}\n'
         if vin_scaled is not None:
-            output += '\n\n[One liar]\n\n'\
-                'Weighted delay ratio (lying/true) (mean, sd)\n'\
-                f'{scale_one_weighted_ratio_mean}\n'\
-                f'{scale_one_weighted_ratio_sd}\n\n'\
+            output += '\n\n[One liar subtrials]\n'\
+                f'n={len(scale_one_weighted_ratio)}\n\n'\
                 'Cost incurred ratio (lying/true) (mean, sd)\n'\
                 f'{scale_one_cost_ratio_mean}\n'\
                 f'{scale_one_cost_ratio_sd}\n'
         if scale_all != 1:
-            output += '\n\n[All lying]\n\n'\
-                'Weighted delay ratio (lying/true) (mean, sd)\n'\
-                f'{scale_all_weighted_ratio_mean}\n'\
-                f'{scale_all_weighted_ratio_sd}\n\n'\
+            output += '\n\n[All lying subtrials]\n'\
+                f'n={len(scale_all_weighted_ratio)}\n\n'\
                 'Cost incurred ratio (lying/true) (mean, sd)\n'\
                 f'{scale_all_cost_ratio_mean}\n'\
                 f'{scale_all_cost_ratio_sd}\n'
@@ -307,9 +300,11 @@ def find_delay(df: DataFrame, steps_per_second: int, speed_limit: float = 15,
     """Calculate delay relative to the free flow case."""
 
     # First, subtract approach and outgoing lane traversal times assuming that
-    # the vehicle is traveling at the fastest speed possible
+    # the vehicle is traveling at the fastest speed possible, excluding the
+    # distance the vehicle spawns forward on the approach lane and when it
+    # despawns early at the end of the outgoing lane.
     delay: Series[float] = (df['t_exit'] - df['t_spawn']) / \
-        steps_per_second - 2*length/speed_limit  # type: ignore
+        steps_per_second - 2*(length-4.5*1.2/2)/speed_limit  # type: ignore
 
     # Next, subtract the lengths of the intersection lanes by using the
     # difference between the origin and destination IDs
@@ -329,7 +324,7 @@ def read_output_to_replicate(filename: str, timesteps: int,
                              ) -> Tuple[List[Dict[str, Any]], Optional[int]]:
 
     # Identify which vin/index to scale for scale_one.
-    key_t_spawn: int = timesteps//3
+    key_t_spawn: int = timesteps//4
     one_vin_scaled: Optional[int] = None
 
     predetermined_spawns: List[Dict[str, Any]] = []
@@ -349,10 +344,16 @@ def read_output_to_replicate(filename: str, timesteps: int,
             spawn_spec["tracking_mn"] = float(info[10])
             spawn_spec["tracking_sd"] = float(info[11])
             spawn_spec["vot"] = float(info[12]) * scale_all
+
+            # Choose this vehicle to scale the VOT of if we haven't chosen a
+            # vehicle to scale yet, we've passed the timstep breakpoint, and
+            # this vehicle exited in the original sim.
             if (one_vin_scaled is None) and \
-                    (spawn_spec["t_spawn"] > key_t_spawn):
+                    (spawn_spec["t_spawn"] > key_t_spawn) and \
+                    (int(info[2]) >= 0):
                 spawn_spec["vot"] *= scale_one/scale_all
                 one_vin_scaled = vin
+
             spawn_spec["type"] = info[14]
             predetermined_spawns.append(spawn_spec)
     return predetermined_spawns, one_vin_scaled
@@ -494,7 +495,7 @@ if __name__ == "__main__":
     reload(SHARED)
 
     # Run large experiments.
-    for vpm in (2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20):
+    for vpm in (2.5, 5, 7.5, 10, 12.5, 15):
         trials(5*60, n_trials=30, steps_per_second=15,
                vpm=vpm, log_name=f'deterministic_vpm{vpm}')
         reload(SHARED)
