@@ -532,6 +532,12 @@ if __name__ == "__main__":
            acceptable_crash_mev=.05, hgv_tracking_mn=0., hgv_tracking_sd=0.,
            log_name='soft_0_tracking')
     reload(SHARED)
+    for i in range(-7, 3):
+        if i != -2:
+            trials(5*60, n_trials=30, steps_per_second=15,
+                   movement_model='one draw', tile_type=StochasticTile,
+                   av_percentage=0., acceptable_crash_mev=5**i,
+                   log_name=f'soft_mev_5e{i}')
 
     # Run auction experiments with misreporting VOT vehicle trials.
     for p in (.8, .85, .9, .95, 1.05, 1.1):
